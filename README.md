@@ -1,5 +1,7 @@
 # Cantastorie
 
+[![CI](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml)
+
 > Bedtime stories your child steers, in the languages your family speaks. Told aloud, painted in watercolor, and approved by you before a single word reaches little ears.
 
 The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived carefully: one warm narrator voice, soft watercolor pages, and a child's finger choosing the path — with a parent as the piazza's gatekeeper.
@@ -43,6 +45,24 @@ No violence beyond the mildest peril. No monsters, darkness-as-threat, or abando
 ## Status
 
 In design and early build. The product is fully specified and the architecture is settled; the first vertical slice — one Italian story, told aloud with watercolor pages — is next.
+
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/), Node.js 20+, and Python 3.12 (uv installs it automatically).
+
+```bash
+make install        # uv sync + npm install
+make install-hooks  # pre-commit hooks (lint, format, types, secrets, commit style)
+make dev            # run the FastAPI app at http://localhost:8000
+make dev-css        # watch and compile Tailwind CSS (run alongside make dev)
+make test           # all tests (pytest + Vitest)
+make check          # lint + format check + strict mypy
+make help           # list every target
+```
+
+Copy `.env.example` to `.env` for pipeline work (OpenRouter + ElevenLabs keys); the player needs no keys at story time. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit.
+
+Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Deployment targets Render via [render.yaml](render.yaml), following habla-hermano's pattern.
 
 ## Documentation
 

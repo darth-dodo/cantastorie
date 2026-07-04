@@ -1,0 +1,36 @@
+# =============================================================================
+# Render Blueprint for the Cantastorie FastAPI Application
+# =============================================================================
+# Documentation: https://render.com/docs/blueprint-spec
+#
+# Deployment Instructions:
+# 1. Connect the GitHub repository to Render.com
+# 2. Create a new "Blueprint" and point to this render.yaml
+# 3. Deploy — the app needs no secrets; pipeline keys stay local
+#
+# Runs the Dockerfile, whose first stage compiles the Tailwind stylesheet.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Primary Web Service - FastAPI Application (player page + parent area)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: cantastorie
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+
+    # Auto-deploy on push to main branch
+    autoDeploy: true
+
+    # Health Check Configuration
+    healthCheckPath: /health
+
+    envVars:
+      # The web app serves static shells only; no API keys required.
+      # OPENROUTER_API_KEY / ELEVENLABS_API_KEY belong to the local pipeline
+      # environment and are added here only when Phase 2 factory routes land.
+      - key: PYTHON_VERSION
+        value: "3.12"
