@@ -20,14 +20,14 @@ install-hooks: ## Install pre-commit hooks
 # Development
 # =============================================================================
 
-dev: ## Serve the static player at http://localhost:8000
-	uv run python -m http.server 8000 --directory static
+dev: ## Run the FastAPI app at http://localhost:8000
+	uv run uvicorn src.api.main:app --reload --port 8000
 
 dev-css: ## Watch and compile Tailwind CSS
-	npx @tailwindcss/cli -i ./static/css/input.css -o ./static/css/output.css --watch
+	npx @tailwindcss/cli -i ./src/static/css/input.css -o ./src/static/css/output.css --watch
 
 build-css: ## Compile Tailwind CSS once (minified)
-	npx @tailwindcss/cli -i ./static/css/input.css -o ./static/css/output.css --minify
+	npx @tailwindcss/cli -i ./src/static/css/input.css -o ./src/static/css/output.css --minify
 
 # =============================================================================
 # Testing
@@ -89,7 +89,7 @@ clean: ## Remove build artifacts and caches
 
 clean-all: clean ## Remove all generated files including node_modules
 	rm -rf node_modules/
-	rm -f static/css/output.css
+	rm -f src/static/css/output.css
 
 # =============================================================================
 # Help
