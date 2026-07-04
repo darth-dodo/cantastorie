@@ -1,5 +1,8 @@
 # cantastorie
 
+[![CI](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml)
+[![Deploy](https://github.com/darth-dodo/cantastorie/actions/workflows/deploy.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/deploy.yml)
+
 Bedtime stories your child steers, in the languages your family speaks. Told aloud, painted in watercolor, and approved by you before a single word reaches little ears.
 
 See [docs/product.md](docs/product.md) for the full product specification.
@@ -38,6 +41,10 @@ make help           # list every target
 ```
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit.
+
+## CI/CD
+
+Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, and a Tailwind build ([ci.yml](.github/workflows/ci.yml)). Pushes to `main` deploy the player to [darth-dodo.github.io/cantastorie](https://darth-dodo.github.io/cantastorie/) via GitHub Pages ([deploy.yml](.github/workflows/deploy.yml)).
 
 ## License
 
