@@ -97,7 +97,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 
 ## A Story Night, Start to Finish
 
-1. **Open the app.** The shelf greets the child aloud: *"Ciao! Quale storia ascoltiamo oggi?"*
+1. **Open the app.** The first tap anywhere on the shelf wakes the sound and the shelf greets the child aloud: *"Ciao! Quale storia ascoltiamo oggi?"* (Browsers allow no audio before a touch — the two-tap budget includes this one.)
 2. **Tap a cover.** *"Si parte!"* — and page 1 narration begins. At most **two taps** stand between opening the app and hearing a story, and no more than 4 seconds.
 3. **Listen.** Pages turn themselves within 500 ms of the audio ending, with a gentle crossfade. One 120 px play-pause button is the only control; pausing and resuming continues from the exact position.
 4. **Choose.** On a choice page, the choice overlay opens instead of a page turn (see [The Picture-Choice Pattern](#the-picture-choice-pattern)).
@@ -191,7 +191,7 @@ Every child-facing prompt is recorded per language at launch. English is the sou
 
 | Prompt | When It Plays | English | Italiano | Español |
 |--------|---------------|---------|----------|---------|
-| **Shelf greeting** | Opening the shelf; after a language switch | Hello! Which story shall we hear today? | Ciao! Quale storia ascoltiamo oggi? | ¡Hola! ¿Qué cuento escuchamos hoy? |
+| **Shelf greeting** | First tap on the shelf; after a language switch | Hello! Which story shall we hear today? | Ciao! Quale storia ascoltiamo oggi? | ¡Hola! ¿Qué cuento escuchamos hoy? |
 | **Resume offer** | Reopening an unfinished story | Welcome back! Keep going, or start again? | Rieccoci! Continuiamo o ricominciamo? | ¡Hola de nuevo! ¿Seguimos o empezamos otra vez? |
 | **Choice nudge** | 30 seconds idle on a choice | Which one do you choose? Tap a picture! | Quale scegli? Tocca una figura! | ¿Cuál eliges? ¡Toca un dibujo! |
 | **End prompt** | Story-end screen | The end! Again, or another story? | Fine! Ancora, o un'altra storia? | ¡Fin! ¿Otra vez, u otro cuento? |
@@ -327,7 +327,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | **Parent gate** | Hold circle fills over 3 seconds, then addition on a keypad; lockout shows the teapot |
 | **Parent dashboard** | Language tabs, story rows with unpublish toggles, kill switch |
 | **Review queue** | Full text, per-page audio players, image strip, approve / reject / regenerate with the cap noted |
-| **Settings** | Language multi-select, PIN change, reading mode toggle |
+| **Settings** | Language multi-select, reading mode toggle |
 | **Export-import** | Inline validation errors |
 
 ---
@@ -366,14 +366,15 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 
 ## Technical Architecture
 
-Settled by the decision log; detailed in the technical design (forthcoming):
+One FastAPI app on Render with three faces, in the habla-hermano mold:
 
-- **Player**: a static web app; story assets stream straight from a public bucket
-- **State**: IndexedDB only — no server-side state, no cookies, no accounts
-- **Content**: an authoring pipeline generates story text, narration audio, watercolor images, karaoke timings, and gloss maps offline; approved output is published as static files
+- **Player**: a lean full-screen page of vanilla ES modules and Web Audio; at story time it talks only to Cloudflare R2 (bucket-direct assets) and IndexedDB — no cookies, no server calls with child data
+- **Parent area**: server-rendered Jinja2 + HTMX behind the gate
+- **Factory**: a plain-Python authoring pipeline (Pydantic AI over OpenRouter for stories, safety verdicts, glosses, and images; ElevenLabs for one narrator voice across all five languages, timestamps included) — a local CLI in Phase 1, the same functions behind routes in Phase 2
+- **State**: IndexedDB only — no server-side state, no accounts
 - **Shelves**: a per-language manifest of launch content, plus a token-keyed overlay per family for approved packs
 
-See [Architecture Documentation](architecture.md) *(forthcoming)* for the concrete stack, schemas, and pipeline design.
+See the [Architecture Documentation](architecture.md) for the pipeline design, storage layout, caching, and risks.
 
 ---
 
@@ -384,6 +385,8 @@ See [Architecture Documentation](architecture.md) *(forthcoming)* for the concre
 | **Phase 1** | The player: shelf, story playback, choices, resume, parent gate, settings, export/import — with the 19 bundled launch stories from a manual pipeline run | ⏳ Planned |
 | **Phase 2** | The factory: pack requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing | ⏳ Planned |
 | **Phase 3** | Autonomy, guarded: the automatic safety gate, unanimous-pass publishing, audit log, kill switch | ⏳ Planned |
+
+Phase 1 ships in seven vertical slices — each ends with a child hearing something new, from "one story plays" through "reading mode" and "portability". The slice-by-slice table lives in the [architecture doc](architecture.md#build-slices).
 
 ### Future Ideas
 
@@ -416,8 +419,8 @@ See [Architecture Documentation](architecture.md) *(forthcoming)* for the concre
 
 ## Documentation
 
-- [Architecture](architecture.md) — Technical design, schemas, and pipeline *(forthcoming)*
-- [Implementation Plan](plans/) — Phase-by-phase tasks *(forthcoming)*
+- [Architecture](architecture.md) — Technical design, pipeline, storage layout, and risks
+- [Implementation Plan](plans/) — Slice-by-slice tasks *(forthcoming)*
 
 ---
 
