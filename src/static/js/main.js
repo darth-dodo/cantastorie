@@ -1,10 +1,13 @@
-// Boot: theme, manifest, store, audio unlock, render loop, and the page
-// timer that stands in for narration until real story audio lands.
+// Boot: theme, manifest, store, audio unlock, render loop, and the
+// playback loop that lets narration drive the story. The page timer only
+// stands in for covers whose stories the pipeline hasn't produced yet.
 
-import { createStore } from "./store.js";
+import { createStore, PAGE_COUNT, CHOICE_PAGE } from "./store.js";
 import { load, save } from "./storage.js";
 import { createAudioEngine } from "./audio-engine.js";
-import { shelf as fallbackShelf } from "./story.js";
+import { createPlayback } from "./playback.js";
+import { createPrefetcher } from "./prefetch.js";
+import { loadStory, shelf as fallbackShelf } from "./story.js";
 import {
   buildShelf,
   buildPlayer,
@@ -12,6 +15,7 @@ import {
   buildChoiceOverlay,
   buildResumeOverlay,
   buildEnd,
+  playerView,
 } from "./screens.js";
 
 const PAGE_SECONDS = 3.8;
@@ -35,7 +39,10 @@ async function fetchManifest(assetBase, fetchFn) {
   }
 }
 
-export async function init(root = document, { fetchFn = globalThis.fetch?.bind(globalThis) } = {}) {
+export async function init(
+  root = document,
+  { fetchFn = globalThis.fetch?.bind(globalThis), engine = null } = {},
+) {
   const app = root.querySelector("#app");
   if (!app) return null;
 
@@ -49,8 +56,32 @@ export async function init(root = document, { fetchFn = globalThis.fetch?.bind(g
   const stories = manifest?.stories ?? fallbackShelf;
 
   const store = createStore(load());
-  const engine = createAudioEngine();
+  engine ??= createAudioEngine();
+  const prefetcher = createPrefetcher({ engine, fetchFn });
+  const playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
   const greeting = theme === "dusk" ? "Buonasera!" : "Ciao!";
+
+  // The open cover's loaded story.json, if it has one; covers without a
+  // published story keep the mock captions and the page timer.
+  let activeStory = null;
+  const storyCache = new Map();
+
+  async function openCover(entry) {
+    if (entry?.story && fetchFn) {
+      try {
+        const loaded = storyCache.get(entry.story) ?? (await loadStory(entry.story, fetchFn));
+        storyCache.set(entry.story, loaded);
+        activeStory = loaded;
+        await playback.openStory(loaded);
+        return;
+      } catch (err) {
+        console.warn("story unavailable, using the page timer", err);
+      }
+    }
+    activeStory = null;
+    playback.clearStory();
+    store.openStory({ pageCount: PAGE_COUNT, choicePage: CHOICE_PAGE });
+  }
 
   // The first tap anywhere wakes the sound; if it isn't already the cover
   // tap, the shelf greets aloud. Browsers allow no audio before a gesture.
@@ -85,13 +116,19 @@ export async function init(root = document, { fetchFn = globalThis.fetch?.bind(g
       state.choiceOpen !== shown.choiceOpen ||
       state.resumeOpen !== shown.resumeOpen;
 
+    const view = activeStory ? playerView(activeStory) : undefined;
+
     if (structural) {
       app.replaceChildren();
       if (state.screen === "shelf") {
         playerScreen = null;
-        app.appendChild(buildShelf(store, greeting, stories));
+        app.appendChild(
+          buildShelf(store, greeting, stories, (entry) => {
+            openCover(entry).catch((err) => console.warn("cover tap failed", err));
+          }),
+        );
       } else if (state.screen === "player") {
-        playerScreen = buildPlayer(store);
+        playerScreen = buildPlayer(store, view);
         app.appendChild(playerScreen);
         if (state.choiceOpen) playerScreen.appendChild(buildChoiceOverlay(store));
         if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store));
@@ -102,16 +139,27 @@ export async function init(root = document, { fetchFn = globalThis.fetch?.bind(g
       shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen };
     }
 
-    if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state);
+    if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state, view);
   }
 
   store.subscribe(render);
   render(store.state);
 
+  // The page timer stands in for narration only while no real story is
+  // loaded — a published story turns its own pages on audio end.
   const seconds = Number(params.get("speed")) || PAGE_SECONDS;
-  const timer = setInterval(() => store.advance(), seconds * 1000);
+  const timer = setInterval(() => {
+    if (!playback.hasStory()) store.advance();
+  }, seconds * 1000);
 
-  const shell = { store, engine, manifestLoaded: manifest !== null, stop: () => clearInterval(timer) };
+  const shell = {
+    store,
+    engine,
+    playback,
+    prefetcher,
+    manifestLoaded: manifest !== null,
+    stop: () => clearInterval(timer),
+  };
   if (root.defaultView) root.defaultView.__shell = shell;
   return shell;
 }

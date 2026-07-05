@@ -5,6 +5,25 @@
 import { story, shelf } from "./story.js";
 import { PAGE_COUNT } from "./store.js";
 
+// What the player screen shows for the open story. The mock backs covers
+// whose stories the pipeline hasn't produced yet; playerView() derives a
+// view from a loaded story.json.
+const mockView = {
+  pageCount: PAGE_COUNT,
+  captions: story.captions,
+  beadColors: story.beadColors,
+  images: null,
+};
+
+export function playerView(loaded) {
+  return {
+    pageCount: loaded.pages.length,
+    captions: loaded.pages.map((page) => page.text),
+    beadColors: loaded.pages.map((_, i) => story.beadColors[i % story.beadColors.length]),
+    images: loaded.pages.map((page) => page.imageUrl),
+  };
+}
+
 function el(tag, className, attrs = {}) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -37,7 +56,7 @@ function iconShelf() {
   return grid;
 }
 
-export function buildShelf(store, greeting, stories = shelf) {
+export function buildShelf(store, greeting, stories = shelf, onOpen = () => store.openStory()) {
   const screen = el("div", "screen shelf");
 
   if (document.documentElement.dataset.theme === "dusk") {
@@ -59,13 +78,13 @@ export function buildShelf(store, greeting, stories = shelf) {
   header.append(mascot, text);
 
   const covers = el("div", "covers");
-  stories.forEach(({ title, label, wash }) => {
-    const name = title ?? label;
-    const cover = el("button", `cover ${wash}`, { "aria-label": name });
+  stories.forEach((entry) => {
+    const name = entry.title ?? entry.label;
+    const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
     const caption = el("span");
     caption.textContent = name;
     cover.appendChild(caption);
-    cover.addEventListener("click", () => store.openStory());
+    cover.addEventListener("click", () => onOpen(entry));
     covers.appendChild(cover);
   });
 
@@ -80,11 +99,21 @@ export function buildShelf(store, greeting, stories = shelf) {
   return screen;
 }
 
-export function buildPlayer(store) {
+export function buildPlayer(store, view = mockView) {
   const screen = el("div", "screen player night");
 
-  for (let i = 0; i < PAGE_COUNT; i++) {
-    screen.appendChild(el("div", `page-wash wash-p${i}`, { "data-page": i }));
+  for (let i = 0; i < view.pageCount; i++) {
+    screen.appendChild(el("div", `page-wash wash-p${i % PAGE_COUNT}`, { "data-page": i }));
+  }
+
+  // Full-bleed page art from the published story, layered over the washes;
+  // it crossfades with the same gentle opacity ramp.
+  if (view.images) {
+    view.images.forEach((imageUrl, i) => {
+      const art = el("div", "page-art", { "data-page": i });
+      if (imageUrl) art.style.backgroundImage = `url("${imageUrl}")`;
+      screen.appendChild(art);
+    });
   }
 
   const stars = el("div", "stars");
@@ -97,7 +126,7 @@ export function buildPlayer(store) {
   screen.appendChild(caption);
 
   const beads = el("div", "beads");
-  story.beadColors.forEach((color, i) => {
+  view.beadColors.forEach((color, i) => {
     const bead = el("div", "bead", { "data-bead": i });
     bead.style.background = color;
     beads.appendChild(bead);
@@ -118,11 +147,14 @@ export function buildPlayer(store) {
   return screen;
 }
 
-export function updatePlayer(screen, state) {
+export function updatePlayer(screen, state, view = mockView) {
   screen.querySelectorAll(".page-wash").forEach((wash, i) => {
     wash.classList.toggle("current", i === state.page);
   });
-  screen.querySelector(".caption span").textContent = story.captions[state.page];
+  screen.querySelectorAll(".page-art").forEach((art, i) => {
+    art.classList.toggle("current", i === state.page);
+  });
+  screen.querySelector(".caption span").textContent = view.captions[state.page] ?? "";
   screen.querySelectorAll(".bead").forEach((bead, i) => {
     bead.classList.toggle("current", i === state.page);
     bead.classList.toggle("past", i < state.page);
