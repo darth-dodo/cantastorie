@@ -23,7 +23,8 @@ from src.config import Settings
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.content_rules import check_story
 from src.pipeline.models import SAFETY_RULES, Story
-from src.pipeline.steps.write import StoryDraft, write_story
+from src.pipeline.steps.safety import SAFETY_MODEL_SETTINGS, safety_gate
+from src.pipeline.steps.write import StoryDraft, story_from_draft, write_story
 
 # Five words per sentence; eight sentences per page; eight pages = 320 words.
 SENTENCE = "The water sings {word} {word}."
@@ -152,3 +153,62 @@ def test_rerunning_write_with_unchanged_inputs_makes_zero_model_calls(
 
     assert first == second
     assert model.calls == 1
+
+
+# --- safety gate --------------------------------------------------------------
+
+
+def _story(draft: StoryDraft | None = None, story_id: str = "story-1") -> Story:
+    return story_from_draft(
+        draft or good_draft(), story_id=story_id, theme="the_sleepy_sea", language="it"
+    )
+
+
+def test_the_safety_gate_verdicts_all_nine_rules_at_temperature_zero(
+    tmp_path: Path,
+) -> None:
+    """Given a written story,
+    When the safety gate judges it (product.md "Safety" enforcement: the
+    safety node verdicts each story per rule at temperature 0),
+    Then the typed report covers all nine rules and the model call carried
+    temperature 0 — asserted on the settings the model actually received.
+    """
+    judge = JudgeModel(report_args())
+    report = safety_gate(_story(), _settings(), _cache(tmp_path), model=judge)
+
+    assert sorted(v.rule for v in report.verdicts) == sorted(SAFETY_RULES)
+    assert report.passed
+    assert judge.seen_temperatures == [0.0]
+    assert SAFETY_MODEL_SETTINGS["temperature"] == 0.0
+
+
+def test_a_failed_verdict_names_its_rule_and_reason(tmp_path: Path) -> None:
+    """Given a judge that fails one rule,
+    When the safety gate reports,
+    Then the report fails overall and the failing verdict carries the rule
+    and the judge's reason — precise enough to drive a targeted revise.
+    """
+    judge = JudgeModel(report_args({"no_brands": "page 3 names a licensed character"}))
+    report = safety_gate(_story(), _settings(), _cache(tmp_path), model=judge)
+
+    assert not report.passed
+    failed = [v for v in report.verdicts if not v.passed]
+    assert [(v.rule, v.reason) for v in failed] == [
+        ("no_brands", "page 3 names a licensed character")
+    ]
+
+
+def test_rerunning_the_gate_on_an_unchanged_story_makes_zero_model_calls(
+    tmp_path: Path,
+) -> None:
+    """Given a safety report already persisted for this exact story,
+    When the gate runs again on the unchanged story,
+    Then the judge is never invoked — the verdict is served from disk.
+    """
+    judge = JudgeModel(report_args())
+    cache = _cache(tmp_path)
+    first = safety_gate(_story(), _settings(), cache, model=judge)
+    second = safety_gate(_story(), _settings(), cache, model=judge)
+
+    assert first == second
+    assert judge.calls == 1
