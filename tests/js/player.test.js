@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import { init } from "../../static/js/main.js";
+import { init } from "../../src/static/js/main.js";
 
 // Vitest runs with cwd at the project root; import.meta.url is an http://
-// URL inside the jsdom environment, so resolve from cwd instead.
-const indexHtml = readFileSync("static/index.html", "utf-8");
+// URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
+// shell serves this template at "/" and mounts the modules under "/static".
+const indexHtml = readFileSync("src/templates/index.html", "utf-8");
 
 let running = null;
 
@@ -18,8 +19,8 @@ describe("player shell", () => {
   it("index.html mounts an #app root and the design-system stylesheets", () => {
     document.documentElement.innerHTML = indexHtml;
     expect(document.querySelector("#app")).not.toBeNull();
-    expect(document.querySelector('link[href="css/tokens.css"]')).not.toBeNull();
-    expect(document.querySelector('link[href="css/player.css"]')).not.toBeNull();
+    expect(document.querySelector('link[href="/static/css/tokens.css"]')).not.toBeNull();
+    expect(document.querySelector('link[href="/static/css/player.css"]')).not.toBeNull();
   });
 
   it("boots to the shelf with four story covers", () => {

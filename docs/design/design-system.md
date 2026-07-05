@@ -10,10 +10,10 @@ records how those foundations live in code.
 
 | Layer | File |
 |-------|------|
-| Tokens (color, type, motion, shape) | [`static/css/tokens.css`](../../static/css/tokens.css) |
-| Screens & components | [`static/css/player.css`](../../static/css/player.css) |
-| State machine | [`static/js/store.js`](../../static/js/store.js) |
-| Rendering | [`static/js/screens.js`](../../static/js/screens.js) |
+| Tokens (color, type, motion, shape) | [`src/static/css/tokens.css`](../../src/static/css/tokens.css) |
+| Screens & components | [`src/static/css/player.css`](../../src/static/css/player.css) |
+| State machine | [`src/static/js/store.js`](../../src/static/js/store.js) |
+| Rendering | [`src/static/js/screens.js`](../../src/static/js/screens.js) |
 
 ## The rules, briefly
 
