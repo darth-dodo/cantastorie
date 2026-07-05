@@ -37,7 +37,7 @@ function iconShelf() {
   return grid;
 }
 
-export function buildShelf(store, greeting) {
+export function buildShelf(store, greeting, stories = shelf) {
   const screen = el("div", "screen shelf");
 
   if (document.documentElement.dataset.theme === "dusk") {
@@ -59,10 +59,11 @@ export function buildShelf(store, greeting) {
   header.append(mascot, text);
 
   const covers = el("div", "covers");
-  shelf.forEach(({ label, wash }) => {
-    const cover = el("button", `cover ${wash}`, { "aria-label": label });
+  stories.forEach(({ title, label, wash }) => {
+    const name = title ?? label;
+    const cover = el("button", `cover ${wash}`, { "aria-label": name });
     const caption = el("span");
-    caption.textContent = label;
+    caption.textContent = name;
     cover.appendChild(caption);
     cover.addEventListener("click", () => store.openStory());
     covers.appendChild(cover);

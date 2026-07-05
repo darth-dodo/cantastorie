@@ -1,0 +1,12 @@
+{
+  "language": "it",
+  "prompts": {
+    "greeting": "content/it/prompts/greeting.wav"
+  },
+  "stories": [
+    { "id": "la-barchetta", "title": "la barchetta", "wash": "wash-barchetta" },
+    { "id": "panetteria", "title": "panetteria", "wash": "wash-panetteria" },
+    { "id": "il-bosco", "title": "il bosco", "wash": "wash-bosco" },
+    { "id": "il-guanto", "title": "il guanto", "wash": "wash-guanto" }
+  ]
+}

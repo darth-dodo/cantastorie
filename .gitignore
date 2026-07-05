@@ -93,3 +93,7 @@ temp/
 .claude/
 .serena/
 .playwright-mcp/
+
+# Playwright test artifacts
+test-results/
+playwright-report/
