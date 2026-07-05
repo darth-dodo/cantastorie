@@ -11,6 +11,10 @@ export function initialState() {
     playing: true,
     choiceOpen: false,
     resumeOpen: false,
+    // The open story's shape; a loaded story.json reconfigures both on
+    // openStory(). The defaults keep the design-shell mock behavior.
+    pageCount: PAGE_COUNT,
+    choicePage: CHOICE_PAGE,
   };
 }
 
@@ -36,22 +40,40 @@ export function createStore(saved = null) {
     },
 
     // A cover was tapped. A story left unfinished offers the resume choice.
-    openStory() {
-      const unfinished = state.page > 0 && state.page < PAGE_COUNT;
+    // A loaded story.json passes its shape; no config keeps the mock's.
+    openStory(config = null) {
+      const pageCount = config?.pageCount ?? state.pageCount;
+      const choicePage = config ? (config.choicePage ?? null) : state.choicePage;
+      const unfinished = state.page > 0 && state.page < pageCount;
       if (unfinished) {
-        set({ screen: "player", resumeOpen: true, playing: false, choiceOpen: false });
+        set({
+          screen: "player",
+          pageCount,
+          choicePage,
+          resumeOpen: true,
+          playing: false,
+          choiceOpen: false,
+        });
       } else {
-        set({ screen: "player", page: 0, playing: true, choiceOpen: false, resumeOpen: false });
+        set({
+          screen: "player",
+          pageCount,
+          choicePage,
+          page: 0,
+          playing: true,
+          choiceOpen: false,
+          resumeOpen: false,
+        });
       }
     },
 
-    // Narration for the current page ended (timer stands in for audio).
+    // Narration for the current page ended (or the timer stood in for it).
     advance() {
       if (state.screen !== "player" || !state.playing) return;
       if (state.choiceOpen || state.resumeOpen) return;
-      if (state.page === CHOICE_PAGE) {
+      if (state.choicePage !== null && state.page === state.choicePage) {
         set({ choiceOpen: true });
-      } else if (state.page >= PAGE_COUNT - 1) {
+      } else if (state.page >= state.pageCount - 1) {
         set({ screen: "end" });
       } else {
         set({ page: state.page + 1 });
@@ -59,7 +81,7 @@ export function createStore(saved = null) {
     },
 
     choose() {
-      set({ choiceOpen: false, page: CHOICE_PAGE + 1 });
+      set({ choiceOpen: false, page: state.choicePage + 1 });
     },
 
     togglePlay() {
