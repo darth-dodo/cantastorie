@@ -15,14 +15,20 @@ dependencies = [
     # Configuration
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
+    # Pipeline
+    "pydantic-ai>=0.4.0",
+    "typer>=0.15.0",
+    "httpx>=0.28.0",
 ]
+
+[project.scripts]
+cantastorie = "src.pipeline.cli:app"
 
 [project.optional-dependencies]
 dev = [
     # Testing
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
-    "httpx>=0.28.0",
 
     # Linting & Formatting
     "ruff>=0.8.0",
