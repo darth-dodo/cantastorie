@@ -1,0 +1,199 @@
+// Screen rendering. Each build* function returns a detached element;
+// render() swaps what #app shows based on store state. No framework —
+// the whole child UI is four screens and two overlays.
+
+import { story, shelf } from "./story.js";
+import { PAGE_COUNT } from "./store.js";
+
+function el(tag, className, attrs = {}) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
+  return node;
+}
+
+function blobOption({ label, icon, onTap }) {
+  const option = el("button", "option", { "aria-label": label });
+  const blob = el("div", "blob-button");
+  blob.appendChild(icon);
+  const pill = el("div", "pill");
+  pill.textContent = label;
+  option.append(blob, pill);
+  option.addEventListener("click", onTap);
+  return option;
+}
+
+function iconPlay() {
+  return el("div", "icon-play");
+}
+
+function iconReplay() {
+  return el("div", "icon-replay");
+}
+
+function iconShelf() {
+  const grid = el("div", "icon-shelf");
+  for (let i = 0; i < 4; i++) grid.appendChild(el("div"));
+  return grid;
+}
+
+export function buildShelf(store, greeting) {
+  const screen = el("div", "screen shelf");
+
+  if (document.documentElement.dataset.theme === "dusk") {
+    const stars = el("div", "stars");
+    stars.style.top = "88px";
+    stars.style.right = "56px";
+    screen.appendChild(stars);
+  }
+
+  const header = el("div", "greeting");
+  const mascot = el("div", "mascot");
+  mascot.appendChild(el("div", "smile"));
+  const text = el("div");
+  const hello = el("h1");
+  hello.textContent = greeting;
+  const sub = el("p");
+  sub.textContent = "Quale storia oggi?";
+  text.append(hello, sub);
+  header.append(mascot, text);
+
+  const covers = el("div", "covers");
+  shelf.forEach(({ label, wash }) => {
+    const cover = el("button", `cover ${wash}`, { "aria-label": label });
+    const caption = el("span");
+    caption.textContent = label;
+    cover.appendChild(caption);
+    cover.addEventListener("click", () => store.openStory());
+    covers.appendChild(cover);
+  });
+
+  const language = el("div", "language-sticker");
+  language.appendChild(el("div", "flag"));
+  language.appendChild(document.createTextNode("Italiano"));
+
+  const parent = el("div", "parent-corner");
+  parent.textContent = "parent";
+
+  screen.append(header, covers, language, parent);
+  return screen;
+}
+
+export function buildPlayer(store) {
+  const screen = el("div", "screen player night");
+
+  for (let i = 0; i < PAGE_COUNT; i++) {
+    screen.appendChild(el("div", `page-wash wash-p${i}`, { "data-page": i }));
+  }
+
+  const stars = el("div", "stars");
+  stars.style.top = "120px";
+  stars.style.left = "70px";
+  screen.appendChild(stars);
+
+  const caption = el("div", "caption");
+  caption.appendChild(el("span"));
+  screen.appendChild(caption);
+
+  const beads = el("div", "beads");
+  story.beadColors.forEach((color, i) => {
+    const bead = el("div", "bead", { "data-bead": i });
+    bead.style.background = color;
+    beads.appendChild(bead);
+  });
+  screen.appendChild(beads);
+
+  const exit = el("button", "exit", { "aria-label": "torna alle storie" });
+  const grid = el("div", "grid");
+  for (let i = 0; i < 4; i++) grid.appendChild(el("div"));
+  exit.appendChild(grid);
+  exit.addEventListener("click", () => store.exitStory());
+  screen.appendChild(exit);
+
+  const playPause = el("button", "play-pause", { "aria-label": "play" });
+  playPause.addEventListener("click", () => store.togglePlay());
+  screen.appendChild(playPause);
+
+  return screen;
+}
+
+export function updatePlayer(screen, state) {
+  screen.querySelectorAll(".page-wash").forEach((wash, i) => {
+    wash.classList.toggle("current", i === state.page);
+  });
+  screen.querySelector(".caption span").textContent = story.captions[state.page];
+  screen.querySelectorAll(".bead").forEach((bead, i) => {
+    bead.classList.toggle("current", i === state.page);
+    bead.classList.toggle("past", i < state.page);
+  });
+
+  const playPause = screen.querySelector(".play-pause");
+  playPause.replaceChildren(
+    state.playing ? (() => {
+      const pause = el("div", "icon-pause");
+      pause.append(el("div"), el("div"));
+      return pause;
+    })() : iconPlay(),
+  );
+  playPause.setAttribute("aria-label", state.playing ? "pausa" : "play");
+}
+
+export function buildChoiceOverlay(store) {
+  const overlay = el("div", "overlay");
+  const prompt = el("div", "prompt");
+  prompt.textContent = story.choice.prompt;
+  const options = el("div", "options");
+  story.choice.options.forEach(({ label, wash }) => {
+    const option = el("button", "option", { "aria-label": label });
+    const card = el("div", `choice-card ${wash}`);
+    const caption = el("span");
+    caption.textContent = label;
+    card.appendChild(caption);
+    const pill = el("div", "pill");
+    pill.textContent = label;
+    option.append(card, pill);
+    option.addEventListener("click", () => store.choose());
+    options.appendChild(option);
+  });
+  overlay.append(prompt, options);
+  return overlay;
+}
+
+export function buildResumeOverlay(store) {
+  const overlay = el("div", "overlay");
+  const prompt = el("div", "prompt");
+  const title = el("strong");
+  title.textContent = "Rieccoci!";
+  const sub = el("small");
+  sub.textContent = "Continuiamo o ricominciamo?";
+  prompt.append(title, sub);
+
+  const options = el("div", "options");
+  options.append(
+    blobOption({ label: "Continuiamo", icon: iconPlay(), onTap: () => store.resumeContinue() }),
+    blobOption({ label: "Ricominciamo", icon: iconReplay(), onTap: () => store.resumeRestart() }),
+  );
+  overlay.append(prompt, options);
+  return overlay;
+}
+
+export function buildEnd(store) {
+  const screen = el("div", "screen end night");
+
+  const stars = el("div", "stars");
+  stars.style.top = "120px";
+  stars.style.left = "70px";
+  screen.appendChild(stars);
+
+  const title = el("h2");
+  title.textContent = "Fine!";
+
+  const options = el("div", "options");
+  options.append(
+    blobOption({ label: "Ancora!", icon: iconReplay(), onTap: () => store.replay() }),
+    blobOption({ label: "Un'altra storia", icon: iconShelf(), onTap: () => store.toShelf() }),
+  );
+
+  screen.append(title, options);
+  return screen;
+}

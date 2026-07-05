@@ -1,0 +1,59 @@
+/* Cantastorie design tokens — the sticker-book system, v1.
+   Source of truth: Claude Design "Cantastorie Foundations" (locked from
+   explorations 3a + 3b). Two modes: light (warm cream) and dusk (lamplit
+   charcoal). Sage = confirm; terracotta = primary action; never alarm-red. */
+
+:root {
+  /* Light — warm cream */
+  --surface: #faf3e7;
+  --sticker: #fffdf7;
+  --ink: #4a3b2e;
+  --ink-soft: #9a8977;
+  --terracotta: #c9714f;
+  --honey: #e8b44c;
+  --sage: #8fa37e;
+  --sea: #7fa6a8;
+  --greeting-sub: #b3906b;
+
+  /* Shared */
+  --font-app: "Baloo 2", sans-serif;
+  --font-story: "Literata", serif;
+  --karaoke: rgba(229, 183, 94, 0.45);
+
+  /* Motion: slow crossfades only — nothing snaps, flashes, or bounces */
+  --fade: 900ms ease;
+  --fade-quick: 600ms ease;
+  --settle: 250ms ease;
+
+  /* Shape */
+  --sticker-ring: 0 0 0 7px var(--sticker);
+  --card-shadow: 0 10px 24px rgba(74, 59, 46, 0.16);
+}
+
+[data-theme="dusk"] {
+  /* Dusk — lamplit charcoal. Glow-by-halo replaces glow-by-lightness. */
+  --surface: #2a2119;
+  --card: #3b3022;
+  --ink: #f3e9da;
+  --ink-soft: #9e8d77;
+  --terracotta: #d98b66;
+  --moonlight: #f2d8a7;
+  --sage: #98a583;
+  --honey: #e8b75a;
+  --greeting-sub: #9e8d77;
+
+  --sticker-ring: 0 0 0 7px rgba(243, 233, 218, 0.14);
+  --card-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+}
+
+/* The player itself always lives at dusk — stories are bedtime. */
+.night {
+  --card: #3b3022;
+  --ink: #f3e9da;
+  --ink-soft: #9e8d77;
+  --terracotta: #d98b66;
+  --moonlight: #f2d8a7;
+  --sage: #98a583;
+  --honey: #e8b75a;
+  --prompt: #f5dfae;
+}

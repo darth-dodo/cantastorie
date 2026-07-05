@@ -17,7 +17,8 @@ def test_player_page_serves_shell() -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert 'id="app"' in response.text
-    assert "/static/css/output.css" in response.text
+    assert "/static/css/tokens.css" in response.text
+    assert "/static/css/player.css" in response.text
 
 
 def test_static_mount_serves_js() -> None:
