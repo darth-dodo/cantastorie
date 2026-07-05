@@ -68,7 +68,14 @@ coverage/
 # =============================================================================
 # Build
 # =============================================================================
-static/css/output.css
+src/static/css/output.css
+
+# =============================================================================
+# Pipeline working folders (generated story artifacts)
+# =============================================================================
+# Root-level only: the pipeline writes here. Committed dev fixtures under
+# src/static/content/ (e.g. the manifest + greeting chime) must stay tracked.
+/content/
 
 # =============================================================================
 # OS

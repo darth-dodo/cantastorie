@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Pipeline settings; the static player reads nothing from here."""
+    """Pipeline settings; the player needs no keys at story time."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -14,7 +14,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
+    elevenlabs_api_key: str = ""
 
 
 @lru_cache

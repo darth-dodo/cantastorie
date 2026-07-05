@@ -1,7 +1,7 @@
 {
   "language": "it",
   "prompts": {
-    "greeting": "content/it/prompts/greeting.wav"
+    "greeting": "/static/content/it/prompts/greeting.wav"
   },
   "stories": [
     { "id": "la-barchetta", "title": "la barchetta", "wash": "wash-barchetta" },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createStore, CHOICE_PAGE, PAGE_COUNT } from "../../static/js/store.js";
+import { createStore, CHOICE_PAGE, PAGE_COUNT } from "../../src/static/js/store.js";
 
 function playThrough(store, pages) {
   for (let i = 0; i < pages; i++) store.advance();

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createAudioEngine } from "../../static/js/audio-engine.js";
+import { createAudioEngine } from "../../src/static/js/audio-engine.js";
 
 // A fake Web Audio context that records what the engine asks of it.
 // jsdom has no AudioContext; the engine takes injected factories precisely

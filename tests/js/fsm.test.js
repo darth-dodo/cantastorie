@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMachine, interpret } from "../../static/js/fsm.js";
+import { createMachine, interpret } from "../../src/static/js/fsm.js";
 
 const machine = createMachine({
   initial: "idle",

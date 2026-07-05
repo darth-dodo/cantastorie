@@ -2,7 +2,7 @@
 
 A soft two-note chime (~0.9 s) standing in for the recorded shelf greeting
 until the pipeline produces real utterance audio. Committed output lives at
-static/content/it/prompts/greeting.wav; rerun this script to regenerate.
+src/static/content/it/prompts/greeting.wav; rerun this script to regenerate.
 """
 
 import math
@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-OUT = Path(__file__).resolve().parent.parent / "static" / "content" / "it" / "prompts"
+OUT = Path(__file__).resolve().parent.parent / "src" / "static" / "content" / "it" / "prompts"
 
 
 def tone(freq: float, seconds: float, volume: float) -> list[float]:

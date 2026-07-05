@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import { init } from "../../static/js/main.js";
+import { init } from "../../src/static/js/main.js";
 
 // Vitest runs with cwd at the project root; import.meta.url is an http://
-// URL inside the jsdom environment, so resolve from cwd instead.
-const indexHtml = readFileSync("static/index.html", "utf-8");
-const manifest = JSON.parse(readFileSync("static/content/it/manifest.json", "utf-8"));
+// URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
+// shell serves this template at "/" and mounts the assets under "/static".
+const indexHtml = readFileSync("src/templates/index.html", "utf-8");
+const manifest = JSON.parse(readFileSync("src/static/content/it/manifest.json", "utf-8"));
 
 const manifestFetch = async () => ({ ok: true, json: async () => manifest });
 const brokenFetch = async () => ({ ok: false, status: 503 });
@@ -22,9 +23,9 @@ describe("player shell", () => {
   it("index.html mounts an #app root, the stylesheets, and the asset base", () => {
     document.documentElement.innerHTML = indexHtml;
     expect(document.querySelector("#app")).not.toBeNull();
-    expect(document.querySelector('link[href="css/tokens.css"]')).not.toBeNull();
-    expect(document.querySelector('link[href="css/player.css"]')).not.toBeNull();
-    expect(document.querySelector('meta[name="asset-base"]').content).toBe("content");
+    expect(document.querySelector('link[href="/static/css/tokens.css"]')).not.toBeNull();
+    expect(document.querySelector('link[href="/static/css/player.css"]')).not.toBeNull();
+    expect(document.querySelector('meta[name="asset-base"]').content).toBe("/static/content");
   });
 
   it("boots a manifest-driven shelf", async () => {
