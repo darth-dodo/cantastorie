@@ -73,7 +73,9 @@ src/static/css/output.css
 # =============================================================================
 # Pipeline working folders (generated story artifacts)
 # =============================================================================
-content/
+# Root-level only: the pipeline writes here. Committed dev fixtures under
+# src/static/content/ (e.g. the manifest + greeting chime) must stay tracked.
+/content/
 
 # =============================================================================
 # OS
@@ -98,3 +100,7 @@ temp/
 .claude/
 .serena/
 .playwright-mcp/
+
+# Playwright test artifacts
+test-results/
+playwright-report/
