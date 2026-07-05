@@ -1,10 +1,17 @@
 {
   "language": "it",
   "prompts": {
-    "greeting": "/static/content/it/prompts/greeting.wav"
+    "greeting": "/static/content/it/prompts/greeting.wav",
+    "story_start": "/static/content/it/prompts/story-start.wav",
+    "end": "/static/content/it/prompts/end.wav"
   },
   "stories": [
-    { "id": "la-barchetta", "title": "la barchetta", "wash": "wash-barchetta" },
+    {
+      "id": "la-barchetta-e-la-luna",
+      "title": "La barchetta e la luna",
+      "wash": "wash-barchetta",
+      "story": "/static/content/it/stories/la-barchetta-e-la-luna/story.json"
+    },
     { "id": "panetteria", "title": "panetteria", "wash": "wash-panetteria" },
     { "id": "il-bosco", "title": "il bosco", "wash": "wash-bosco" },
     { "id": "il-guanto", "title": "il guanto", "wash": "wash-guanto" }

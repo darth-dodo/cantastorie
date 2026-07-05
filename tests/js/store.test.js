@@ -76,3 +76,41 @@ describe("story state machine", () => {
     expect(store.state).toMatchObject({ screen: "player", page: 0, playing: true });
   });
 });
+
+describe("story-configured playback (a loaded story.json sets the shape)", () => {
+  it("a linear story never opens the choice overlay: pages turn straight to the end", () => {
+    // Given a loaded linear story (every page's choice is null)...
+    const store = createStore();
+    store.openStory({ pageCount: 8, choicePage: null });
+    // ...when narration ends on every page in turn...
+    playThrough(store, PAGE_COUNT - 1);
+    // ...then no choice ever opened and the last turn reaches the end screen.
+    expect(store.state.choiceOpen).toBe(false);
+    expect(store.state.page).toBe(PAGE_COUNT - 1);
+    store.advance();
+    expect(store.state.screen).toBe("end");
+  });
+
+  it("a story with a choice page still opens the choice there (AI-370 stays possible)", () => {
+    const store = createStore();
+    store.openStory({ pageCount: 8, choicePage: 4 });
+    playThrough(store, 5);
+    expect(store.state).toMatchObject({ page: 4, choiceOpen: true });
+    store.choose();
+    expect(store.state).toMatchObject({ page: 5, choiceOpen: false });
+  });
+
+  it("a shorter story ends after its own page count, not the mock's", () => {
+    const store = createStore();
+    store.openStory({ pageCount: 3, choicePage: null });
+    playThrough(store, 3);
+    expect(store.state.screen).toBe("end");
+  });
+
+  it("opening without a config keeps the design-shell mock shape", () => {
+    const store = createStore();
+    store.openStory();
+    playThrough(store, CHOICE_PAGE + 1);
+    expect(store.state.choiceOpen).toBe(true);
+  });
+});

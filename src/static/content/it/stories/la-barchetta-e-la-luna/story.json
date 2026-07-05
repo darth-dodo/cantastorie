@@ -1,0 +1,386 @@
+{
+  "schema_version": 1,
+  "id": "la-barchetta-e-la-luna",
+  "language": "it",
+  "title": "La barchetta e la luna",
+  "theme": "the_sleepy_sea",
+  "shape": "linear",
+  "pages": [
+    {
+      "id": "p1",
+      "text": "la barchetta Nina dondola nel porto della sera",
+      "audio": {
+        "file": "p1.2cbfac47.wav",
+        "timings": [
+          {
+            "word": "la",
+            "start_s": 0.0,
+            "end_s": 0.15
+          },
+          {
+            "word": "barchetta",
+            "start_s": 0.15,
+            "end_s": 0.3
+          },
+          {
+            "word": "Nina",
+            "start_s": 0.3,
+            "end_s": 0.45
+          },
+          {
+            "word": "dondola",
+            "start_s": 0.45,
+            "end_s": 0.6
+          },
+          {
+            "word": "nel",
+            "start_s": 0.6,
+            "end_s": 0.75
+          },
+          {
+            "word": "porto",
+            "start_s": 0.75,
+            "end_s": 0.9
+          },
+          {
+            "word": "della",
+            "start_s": 0.9,
+            "end_s": 1.05
+          },
+          {
+            "word": "sera",
+            "start_s": 1.05,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p1.c90cff65.webp",
+      "next_page": "p2",
+      "choice": null
+    },
+    {
+      "id": "p2",
+      "text": "l'acqua fa shh, shh",
+      "audio": {
+        "file": "p2.58aac2bb.wav",
+        "timings": [
+          {
+            "word": "l'acqua",
+            "start_s": 0.0,
+            "end_s": 0.3
+          },
+          {
+            "word": "fa",
+            "start_s": 0.3,
+            "end_s": 0.6
+          },
+          {
+            "word": "shh,",
+            "start_s": 0.6,
+            "end_s": 0.9
+          },
+          {
+            "word": "shh",
+            "start_s": 0.9,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p2.c90cff65.webp",
+      "next_page": "p3",
+      "choice": null
+    },
+    {
+      "id": "p3",
+      "text": "un gabbiano assonnato si posa sulla prua",
+      "audio": {
+        "file": "p3.6342aa9b.wav",
+        "timings": [
+          {
+            "word": "un",
+            "start_s": 0.0,
+            "end_s": 0.171
+          },
+          {
+            "word": "gabbiano",
+            "start_s": 0.171,
+            "end_s": 0.343
+          },
+          {
+            "word": "assonnato",
+            "start_s": 0.343,
+            "end_s": 0.514
+          },
+          {
+            "word": "si",
+            "start_s": 0.514,
+            "end_s": 0.686
+          },
+          {
+            "word": "posa",
+            "start_s": 0.686,
+            "end_s": 0.857
+          },
+          {
+            "word": "sulla",
+            "start_s": 0.857,
+            "end_s": 1.029
+          },
+          {
+            "word": "prua",
+            "start_s": 1.029,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p3.c90cff65.webp",
+      "next_page": "p4",
+      "choice": null
+    },
+    {
+      "id": "p4",
+      "text": "il faro fa buonanotte: uno, due",
+      "audio": {
+        "file": "p4.5e5dada1.wav",
+        "timings": [
+          {
+            "word": "il",
+            "start_s": 0.0,
+            "end_s": 0.2
+          },
+          {
+            "word": "faro",
+            "start_s": 0.2,
+            "end_s": 0.4
+          },
+          {
+            "word": "fa",
+            "start_s": 0.4,
+            "end_s": 0.6
+          },
+          {
+            "word": "buonanotte:",
+            "start_s": 0.6,
+            "end_s": 0.8
+          },
+          {
+            "word": "uno,",
+            "start_s": 0.8,
+            "end_s": 1.0
+          },
+          {
+            "word": "due",
+            "start_s": 1.0,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p4.c90cff65.webp",
+      "next_page": "p5",
+      "choice": null
+    },
+    {
+      "id": "p5",
+      "text": "Nina vuole un'ultima piccola onda",
+      "audio": {
+        "file": "p5.f166c374.wav",
+        "timings": [
+          {
+            "word": "Nina",
+            "start_s": 0.0,
+            "end_s": 0.24
+          },
+          {
+            "word": "vuole",
+            "start_s": 0.24,
+            "end_s": 0.48
+          },
+          {
+            "word": "un'ultima",
+            "start_s": 0.48,
+            "end_s": 0.72
+          },
+          {
+            "word": "piccola",
+            "start_s": 0.72,
+            "end_s": 0.96
+          },
+          {
+            "word": "onda",
+            "start_s": 0.96,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p5.c90cff65.webp",
+      "next_page": "p6",
+      "choice": null
+    },
+    {
+      "id": "p6",
+      "text": "la luna posa un sentiero d'argento sul mare",
+      "audio": {
+        "file": "p6.121edc38.wav",
+        "timings": [
+          {
+            "word": "la",
+            "start_s": 0.0,
+            "end_s": 0.15
+          },
+          {
+            "word": "luna",
+            "start_s": 0.15,
+            "end_s": 0.3
+          },
+          {
+            "word": "posa",
+            "start_s": 0.3,
+            "end_s": 0.45
+          },
+          {
+            "word": "un",
+            "start_s": 0.45,
+            "end_s": 0.6
+          },
+          {
+            "word": "sentiero",
+            "start_s": 0.6,
+            "end_s": 0.75
+          },
+          {
+            "word": "d'argento",
+            "start_s": 0.75,
+            "end_s": 0.9
+          },
+          {
+            "word": "sul",
+            "start_s": 0.9,
+            "end_s": 1.05
+          },
+          {
+            "word": "mare",
+            "start_s": 1.05,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p6.c90cff65.webp",
+      "next_page": "p7",
+      "choice": null
+    },
+    {
+      "id": "p7",
+      "text": "Nina lo percorre, piano piano, fino al suo posto",
+      "audio": {
+        "file": "p7.6015e6d9.wav",
+        "timings": [
+          {
+            "word": "Nina",
+            "start_s": 0.0,
+            "end_s": 0.133
+          },
+          {
+            "word": "lo",
+            "start_s": 0.133,
+            "end_s": 0.267
+          },
+          {
+            "word": "percorre,",
+            "start_s": 0.267,
+            "end_s": 0.4
+          },
+          {
+            "word": "piano",
+            "start_s": 0.4,
+            "end_s": 0.533
+          },
+          {
+            "word": "piano,",
+            "start_s": 0.533,
+            "end_s": 0.667
+          },
+          {
+            "word": "fino",
+            "start_s": 0.667,
+            "end_s": 0.8
+          },
+          {
+            "word": "al",
+            "start_s": 0.8,
+            "end_s": 0.933
+          },
+          {
+            "word": "suo",
+            "start_s": 0.933,
+            "end_s": 1.067
+          },
+          {
+            "word": "posto",
+            "start_s": 1.067,
+            "end_s": 1.2
+          }
+        ]
+      },
+      "image": "p7.c90cff65.webp",
+      "next_page": "p8",
+      "choice": null
+    },
+    {
+      "id": "p8",
+      "text": "il gabbiano nasconde la testa; l'acqua dice shh",
+      "audio": {
+        "file": "p8.8ebb418c.wav",
+        "timings": [
+          {
+            "word": "il",
+            "start_s": 0.0,
+            "end_s": 0.2
+          },
+          {
+            "word": "gabbiano",
+            "start_s": 0.2,
+            "end_s": 0.4
+          },
+          {
+            "word": "nasconde",
+            "start_s": 0.4,
+            "end_s": 0.6
+          },
+          {
+            "word": "la",
+            "start_s": 0.6,
+            "end_s": 0.8
+          },
+          {
+            "word": "testa;",
+            "start_s": 0.8,
+            "end_s": 1.0
+          },
+          {
+            "word": "l'acqua",
+            "start_s": 1.0,
+            "end_s": 1.2
+          },
+          {
+            "word": "dice",
+            "start_s": 1.2,
+            "end_s": 1.4
+          },
+          {
+            "word": "shh",
+            "start_s": 1.4,
+            "end_s": 1.6
+          }
+        ]
+      },
+      "image": "p8.c90cff65.webp",
+      "next_page": null,
+      "choice": null
+    }
+  ],
+  "gloss": {
+    "barchetta": "little boat",
+    "luna": "moon",
+    "piano": "gently"
+  }
+}
