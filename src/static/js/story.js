@@ -7,9 +7,16 @@
 // walk for now — branch following is the choice overlay's slice (AI-370).
 export function orderPages(storyJson) {
   const byId = new Map(storyJson.pages.map((page) => [page.id, page]));
+  const referenced = new Set();
+  for (const page of storyJson.pages) {
+    if (page.next_page) referenced.add(page.next_page);
+    for (const option of page.choice?.options ?? []) referenced.add(option.next_page);
+  }
+  const entry = storyJson.pages.find((page) => !referenced.has(page.id)) ?? storyJson.pages[0];
+
   const ordered = [];
   const seen = new Set();
-  let current = storyJson.pages[0];
+  let current = entry;
   while (current && !seen.has(current.id)) {
     ordered.push(current);
     seen.add(current.id);
