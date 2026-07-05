@@ -4,7 +4,8 @@ Settings back the **Plain Python pipeline** (docs/architecture.md): two API
 keys total, living only in the pipeline environment — never logged.
 """
 
-from pydantic import SecretStr
+import pytest
+from pydantic import SecretStr, ValidationError
 
 from src.config import Settings, get_settings
 
@@ -55,3 +56,17 @@ def test_safety_judge_defaults_to_a_different_model_family_than_the_writer() -> 
     writer_family = settings.write_model.split("/")[0]
     safety_family = settings.safety_model.split("/")[0]
     assert writer_family != safety_family
+
+
+def test_same_family_writer_and_judge_is_refused_outright() -> None:
+    """Given an env that points writer and safety judge at the same model family,
+    When Settings load,
+    Then validation fails — the cross-family judging invariant is enforced by
+    the config itself, not just by a development-time test.
+    """
+    with pytest.raises(ValidationError, match="different model family"):
+        Settings(
+            _env_file=None,
+            write_model="anthropic/claude-sonnet-4.5",
+            safety_model="anthropic/claude-haiku-4.5",
+        )

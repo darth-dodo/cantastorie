@@ -2,8 +2,9 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Self
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +35,16 @@ class Settings(BaseSettings):
     elevenlabs_tts_model: str = "eleven_multilingual_v2"
 
     content_dir: Path = Path("content")
+
+    @model_validator(mode="after")
+    def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
+        # A shared writer/judge blind spot is the failure mode that matters
+        # (docs/architecture.md → "Model roles"); refuse the config outright.
+        if self.write_model.split("/")[0] == self.safety_model.split("/")[0]:
+            raise ValueError(
+                "safety_model must come from a different model family than write_model"
+            )
+        return self
 
 
 @lru_cache
