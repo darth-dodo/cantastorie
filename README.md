@@ -68,6 +68,7 @@ Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security
 
 - [Product Specification](docs/product.md) — vision, behaviors, content rules, decision log
 - [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, and the authoring pipeline
+- [System Overview](docs/system-overview.md) — the code as built: module map, state machines, and seams
 
 ## License
 
