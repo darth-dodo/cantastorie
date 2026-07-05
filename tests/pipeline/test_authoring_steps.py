@@ -14,6 +14,7 @@ test_same_family_writer_and_judge_is_refused_outright) — not duplicated here.
 
 from pathlib import Path
 
+import pytest
 from pydantic import SecretStr
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
@@ -23,6 +24,7 @@ from src.config import Settings
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.content_rules import check_story
 from src.pipeline.models import SAFETY_RULES, Story
+from src.pipeline.steps.revise import MAX_REVISIONS, StoryRejectedError, author_story
 from src.pipeline.steps.safety import SAFETY_MODEL_SETTINGS, safety_gate
 from src.pipeline.steps.write import StoryDraft, story_from_draft, write_story
 
@@ -62,10 +64,12 @@ class DraftModel(FunctionModel):
 
     def __init__(self, *drafts: StoryDraft) -> None:
         self.calls = 0
+        self.seen_prompts: list[str] = []
         queue = list(drafts)
 
-        def respond(_messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
             self.calls += 1
+            self.seen_prompts.append(str(messages))
             draft = queue.pop(0) if len(queue) > 1 else queue[0]
             return _output_call(info, draft.model_dump())
 
@@ -212,3 +216,122 @@ def test_rerunning_the_gate_on_an_unchanged_story_makes_zero_model_calls(
 
     assert first == second
     assert judge.calls == 1
+
+
+# --- revise and the bounded loop ----------------------------------------------
+
+
+def test_a_safe_story_passes_the_gate_without_any_revision(tmp_path: Path) -> None:
+    """Given a writer whose story passes every content limit and safety rule,
+    When the authoring loop runs,
+    Then the written story comes back with a passing report and the reviser
+    is never invoked — the all-pass path goes straight through.
+    """
+    writer = DraftModel(good_draft())
+    judge = JudgeModel(report_args())
+    reviser = DraftModel(good_draft("hush"))
+
+    story, report = author_story(
+        "the_sleepy_sea",
+        "it",
+        _settings(),
+        _cache(tmp_path),
+        write_model=writer,
+        safety_model=judge,
+        revise_model=reviser,
+    )
+
+    assert report.passed
+    assert "shh" in story.pages[0].text
+    assert writer.calls == 1
+    assert judge.calls == 1
+    assert reviser.calls == 0
+
+
+def test_a_failed_safety_verdict_routes_to_a_targeted_revise_then_passes(
+    tmp_path: Path,
+) -> None:
+    """Given a judge that fails one rule on the first pass and passes the
+    revision (product.md "Safety": any fail routes to revise),
+    When the authoring loop runs,
+    Then exactly one revision happens, the reviser is shown the failing
+    rule's reason (targeted rewrite), and the revised story is returned.
+    """
+    writer = DraftModel(good_draft())
+    judge = JudgeModel(
+        report_args({"no_brands": "page 2 names a licensed character"}),
+        report_args(),
+    )
+    reviser = DraftModel(good_draft("hush"))
+
+    story, report = author_story(
+        "the_sleepy_sea",
+        "it",
+        _settings(),
+        _cache(tmp_path),
+        write_model=writer,
+        safety_model=judge,
+        revise_model=reviser,
+    )
+
+    assert report.passed
+    assert "hush" in story.pages[0].text  # the revised story, not the original
+    assert reviser.calls == 1
+    assert judge.calls == 2
+    assert "page 2 names a licensed character" in reviser.seen_prompts[0]
+
+
+def test_two_failed_revisions_reject_the_story(tmp_path: Path) -> None:
+    """Given a judge that keeps failing a rule no matter the rewrite
+    (product.md "Safety": two fails reject),
+    When the authoring loop runs,
+    Then after exactly two failed revisions the story is rejected with the
+    surviving failures named — a bounded loop, never an unbounded retry.
+    """
+    writer = DraftModel(good_draft())
+    judge = JudgeModel(report_args({"no_fear_reinforcement": "page 5 uses darkness as a threat"}))
+    reviser = DraftModel(good_draft("hush"), good_draft("plum"))
+
+    with pytest.raises(StoryRejectedError) as excinfo:
+        author_story(
+            "the_sleepy_sea",
+            "it",
+            _settings(),
+            _cache(tmp_path),
+            write_model=writer,
+            safety_model=judge,
+            revise_model=reviser,
+        )
+
+    assert reviser.calls == MAX_REVISIONS == 2
+    assert judge.calls == 3  # the original and both revisions were each judged
+    assert "no_fear_reinforcement" in str(excinfo.value)
+
+
+def test_a_story_violating_a_content_limit_routes_to_revise_even_when_the_judge_passes_it(
+    tmp_path: Path,
+) -> None:
+    """Given a writer that breaks the 12-word sentence cap while the judge
+    passes everything,
+    When the authoring loop runs,
+    Then code validation — not prompt hope — routes the story to revise with
+    the violation named, and the conforming revision is returned.
+    """
+    writer = DraftModel(draft_with_long_sentence())
+    judge = JudgeModel(report_args())
+    reviser = DraftModel(good_draft("hush"))
+
+    story, report = author_story(
+        "the_sleepy_sea",
+        "it",
+        _settings(),
+        _cache(tmp_path),
+        write_model=writer,
+        safety_model=judge,
+        revise_model=reviser,
+    )
+
+    assert report.passed
+    assert check_story(story) == []
+    assert reviser.calls == 1
+    assert "sentence" in reviser.seen_prompts[0]  # the violation reached the reviser
