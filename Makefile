@@ -20,8 +20,8 @@ install-hooks: ## Install pre-commit hooks
 # Development
 # =============================================================================
 
-dev: ## Serve the static player at http://localhost:8000
-	uv run python -m http.server 8000 --directory static
+dev: ## Serve the app (player + assets) at http://localhost:8000
+	uv run uvicorn src.api.main:app --reload --port 8000
 
 dev-css: ## Watch and compile Tailwind CSS
 	npx @tailwindcss/cli -i ./static/css/input.css -o ./static/css/output.css --watch
@@ -39,6 +39,9 @@ test: ## Run all tests (Python + JS)
 
 test-js: ## Run JavaScript tests with Vitest
 	npx vitest run
+
+test-e2e: ## Run Playwright end-to-end tests (starts the app itself)
+	npx playwright test
 
 test-js-watch: ## Run JavaScript tests in watch mode
 	npx vitest

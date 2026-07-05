@@ -5,6 +5,10 @@ import { init } from "../../static/js/main.js";
 // Vitest runs with cwd at the project root; import.meta.url is an http://
 // URL inside the jsdom environment, so resolve from cwd instead.
 const indexHtml = readFileSync("static/index.html", "utf-8");
+const manifest = JSON.parse(readFileSync("static/content/it/manifest.json", "utf-8"));
+
+const manifestFetch = async () => ({ ok: true, json: async () => manifest });
+const brokenFetch = async () => ({ ok: false, status: 503 });
 
 let running = null;
 
@@ -15,23 +19,34 @@ afterEach(() => {
 });
 
 describe("player shell", () => {
-  it("index.html mounts an #app root and the design-system stylesheets", () => {
+  it("index.html mounts an #app root, the stylesheets, and the asset base", () => {
     document.documentElement.innerHTML = indexHtml;
     expect(document.querySelector("#app")).not.toBeNull();
     expect(document.querySelector('link[href="css/tokens.css"]')).not.toBeNull();
     expect(document.querySelector('link[href="css/player.css"]')).not.toBeNull();
+    expect(document.querySelector('meta[name="asset-base"]').content).toBe("content");
   });
 
-  it("boots to the shelf with four story covers", () => {
+  it("boots a manifest-driven shelf", async () => {
     document.body.innerHTML = '<main id="app"></main>';
-    running = init();
+    running = await init(document, { fetchFn: manifestFetch });
+    expect(running.manifestLoaded).toBe(true);
+    const covers = [...document.querySelectorAll(".shelf .cover")];
+    expect(covers.map((c) => c.getAttribute("aria-label"))).toEqual(
+      manifest.stories.map((s) => s.title),
+    );
+  });
+
+  it("falls back to the built-in covers when the manifest is unreachable", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: brokenFetch });
+    expect(running.manifestLoaded).toBe(false);
     expect(document.querySelectorAll(".shelf .cover")).toHaveLength(4);
-    expect(document.querySelector(".greeting h1").textContent).toMatch(/Ciao!|Buonasera!/);
   });
 
-  it("a cover tap opens the player with beads and the play-pause control", () => {
+  it("a cover tap opens the player with beads and the play-pause control", async () => {
     document.body.innerHTML = '<main id="app"></main>';
-    running = init();
+    running = await init(document, { fetchFn: manifestFetch });
     document.querySelector(".cover").click();
     expect(document.querySelector(".player")).not.toBeNull();
     expect(document.querySelectorAll(".bead")).toHaveLength(8);
