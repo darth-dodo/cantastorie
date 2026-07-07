@@ -192,6 +192,10 @@ published/
 
 Phase 2 adds a private `pending/` prefix (separate credentials, never listed in any manifest) for generated-but-unapproved packs, plus token-keyed family overlay manifests.
 
+### Serving
+
+The player fetches published assets bucket-direct: the web service injects `ASSET_BASE` (the bucket's public URL plus the `/published` prefix) into the shell, and the player appends `/{lang}/manifest.json`. The bucket has **public read, access logs off, and CORS scoped to the player origin** (`deploy/r2-cors.json`) — nothing about the child ever leaves the browser, so there is nothing to log. Deploy steps and verification live in [`docs/setup.md`](setup.md).
+
 ### IndexedDB (the child's side)
 
 | Store | Contents |
@@ -287,7 +291,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | Item | Status |
 |------|--------|
 | **Safari storage eviction** — ~7 days of non-use can wipe IndexedDB for non-installed sites (progress, settings, eventually the token) | Accepted; export/import is the designed backstop; "add to home screen" guidance is a cheap future mitigation |
-| **Render cold starts** — can eat the 4-second budget on first open | Ops decision at slice 1 deploy: paid always-on instance vs. accepting a slow first open |
+| **Render cold starts** — can eat the 4-second budget on first open | **Decided (slice 1): paid always-on.** A bedtime app is opened fresh daily, so the free tier's 15-min idle spin-down makes nearly every first open a ~50s cold boot. Render Starter (always-on, ~$7/mo) is set in `render.yaml`. Story assets are bucket-direct from R2, so only the static shell depends on the instance staying warm. |
 | **Kill-switch scope** (family vs. operator-global) | Deferred to Phase 2 design |
 | **Pending-bucket auth & pack-request rate limiting** | Deferred to Phase 2 design |
 | **Export file schema** | Pinned in slice 7, not before |

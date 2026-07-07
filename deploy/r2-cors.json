@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://cantastorie.onrender.com",
+      "http://localhost:8000"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range"],
+    "ExposeHeaders": ["Content-Length", "Content-Range", "ETag", "Content-Type"],
+    "MaxAgeSeconds": 3600
+  }
+]

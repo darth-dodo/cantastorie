@@ -36,6 +36,12 @@ class Settings(BaseSettings):
 
     content_dir: Path = Path("content")
 
+    # Where the player fetches published story assets. Local dev serves them
+    # from the static mount; production points ASSET_BASE at the R2 public URL
+    # (e.g. https://pub-<hash>.r2.dev/published) so playback is bucket-direct.
+    # No trailing slash — the player appends "/{lang}/manifest.json".
+    asset_base: str = "/static/content"
+
     @model_validator(mode="after")
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
         # A shared writer/judge blind spot is the failure mode that matters

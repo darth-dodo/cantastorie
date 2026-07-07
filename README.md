@@ -62,13 +62,14 @@ make help           # list every target
 
 Copy `.env.example` to `.env` for pipeline work (OpenRouter + ElevenLabs keys); the player needs no keys at story time. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit.
 
-Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Deployment targets Render via [render.yaml](render.yaml), following habla-hermano's pattern.
+Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Deployment targets Render via [render.yaml](render.yaml), following habla-hermano's pattern; the Cloudflare R2 bucket and Render setup are documented in [docs/setup.md](docs/setup.md).
 
 ## Documentation
 
 - [Product Specification](docs/product.md) — vision, behaviors, content rules, decision log
 - [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, and the authoring pipeline
 - [System Overview](docs/system-overview.md) — the code as built: module map, state machines, and seams
+- [Setup & Deploy](docs/setup.md) — R2 bucket, CORS, and the Render blueprint
 
 ## License
 
