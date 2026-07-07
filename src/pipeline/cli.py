@@ -1,14 +1,17 @@
 """Typer CLI: generate, publish, audit.
 
-Scaffold only — each command validates its inputs against the locked
-vocabularies and points at the issue that delivers its behavior.
+generate runs the whole authoring pass and stages a story for review; publish
+uploads a staged story to R2. audit is still a scaffold pointing at AI-378.
 """
 
-from typing import get_args
+from typing import cast, get_args
 
 import typer
 
+from src.config import get_settings
+from src.pipeline.generate import generate_story
 from src.pipeline.models import Language, Theme
+from src.pipeline.publish import publish_story
 
 app = typer.Typer(help="Cantastorie authoring pipeline", no_args_is_help=True)
 
@@ -27,7 +30,7 @@ def generate(
     language: str = typer.Option(..., help="Story language: it, es, en, el, de"),
     shape: str = typer.Option("linear", help="linear or branching"),
 ) -> None:
-    """Generate a story end to end (write → safety → narrate → illustrate → assemble)."""
+    """Generate a story end to end (write → safety → narrate → illustrate → assemble → stage)."""
     if language not in _LANGUAGES:
         typer.echo(f"Unknown language {language!r}; locked set: {', '.join(_LANGUAGES)}")
         raise typer.Exit(1)
@@ -37,14 +40,19 @@ def generate(
     if shape not in ("linear", "branching"):
         typer.echo(f"Unknown shape {shape!r}; linear or branching")
         raise typer.Exit(1)
-    _not_yet("AI-358")
+
+    staged = generate_story(cast("Theme", theme), cast("Language", language), get_settings())
+    typer.echo(f"Staged {staged.name} for review at {staged}")
 
 
 @app.command()
 def publish(story_id: str = typer.Option(..., help="Story working-folder id")) -> None:
-    """Upload an approved story to R2 and update the manifest."""
-    del story_id
-    _not_yet("AI-361")
+    """Upload an approved, staged story to R2 and update its manifest."""
+    result = publish_story(story_id, get_settings())
+    typer.echo(
+        f"Published {result.story_id}: {len(result.uploaded)} uploaded, "
+        f"{len(result.skipped)} unchanged; manifest lists {len(result.manifest_story_ids)}."
+    )
 
 
 @app.command()

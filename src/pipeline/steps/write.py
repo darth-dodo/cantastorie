@@ -84,6 +84,24 @@ def story_from_draft(
     )
 
 
+def _write_inputs(theme: Theme, language: Language, settings: Settings) -> dict[str, object]:
+    return {
+        "theme": theme,
+        "language": language,
+        "model": settings.write_model,
+        "prompt_version": PROMPT_VERSION,
+    }
+
+
+def derive_story_id(theme: Theme, language: Language, settings: Settings) -> str:
+    """The story's stable id — a slug plus a hash of the write inputs.
+
+    Deterministic from theme + language + writer model, so the CLI can name the
+    working folder content/{story-id}/ before the story is written.
+    """
+    return f"{theme.replace('_', '-')}-{language}-{cache_key(_write_inputs(theme, language, settings))[:8]}"
+
+
 def write_story(
     theme: Theme,
     language: Language,
@@ -94,13 +112,8 @@ def write_story(
 ) -> Story:
     """Author a native-language story; unchanged inputs cost zero API calls."""
     llm = model if model is not None else build_model(settings.write_model, settings)
-    inputs = {
-        "theme": theme,
-        "language": language,
-        "model": settings.write_model,
-        "prompt_version": PROMPT_VERSION,
-    }
-    story_id = f"{theme.replace('_', '-')}-{language}-{cache_key(inputs)[:8]}"
+    inputs = _write_inputs(theme, language, settings)
+    story_id = derive_story_id(theme, language, settings)
 
     def produce() -> bytes:
         prompt = (
