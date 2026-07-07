@@ -61,7 +61,7 @@ No accounts, no tracking, no analytics. Progress lives in the browser (IndexedDB
 
 ## For Developers
 
-Cantastorie is one FastAPI app (a vanilla-JS child player plus a server-rendered parent area) alongside a plain-Python authoring pipeline in the same repository. The stack mirrors the sibling project [habla-hermano](../habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+Cantastorie is one FastAPI app (a vanilla-JS child player plus a server-rendered parent area) alongside a plain-Python authoring pipeline in the same repository. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
 
 ### Tech Stack
 

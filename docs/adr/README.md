@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This directory holds Cantastorie's **Architecture Decision Records (ADRs)** — short documents that capture a significant technical decision, the options weighed, and the reasoning behind the choice. The format follows the sibling project [habla-hermano](../../../habla-hermano/docs/adr/), adapted to Cantastorie.
+This directory holds Cantastorie's **Architecture Decision Records (ADRs)** — short documents that capture a significant technical decision, the options weighed, and the reasoning behind the choice. The format follows the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano/tree/main/docs/adr), adapted to Cantastorie.
 
 An ADR is the durable answer to "why is it built this way?" Code shows *what* the system does; ADRs record *why* a settled decision was made, so the reasoning survives after the discussion is forgotten.
 
