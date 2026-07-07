@@ -97,7 +97,9 @@ Thumbs.db
 tmp/
 temp/
 .worktrees/
-.claude/
+# Personal Claude Code state stays local, but shared project skills are tracked
+.claude/*
+!.claude/skills/
 .serena/
 .playwright-mcp/
 
