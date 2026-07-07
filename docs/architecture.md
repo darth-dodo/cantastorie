@@ -12,6 +12,7 @@
 - [The Authoring Pipeline](#the-authoring-pipeline)
 - [Content Storage](#content-storage)
 - [The Player](#the-player)
+- [Narration / Audio](#narration--audio)
 - [The Parent Area](#the-parent-area)
 - [Privacy Architecture](#privacy-architecture)
 - [Testing](#testing)
@@ -35,13 +36,11 @@ graph LR
     R2["Cloudflare R2<br/>audio · images · manifests"]
     F["FastAPI on Render<br/>player page · parent area"]
     P["Pipeline CLI<br/>plain Python + Pydantic AI"]
-    EL["ElevenLabs<br/>narration + timestamps"]
-    OR["OpenRouter<br/>story · safety · glosses · images"]
+    OR["OpenRouter<br/>story · safety · glosses · images · narration"]
 
     B -- "bucket-direct fetch" --> R2
     B -- "page load, parent HTMX" --> F
     P -- "publish" --> R2
-    P --> EL
     P --> OR
 ```
 
@@ -51,7 +50,8 @@ graph LR
 - **Bucket-direct playback** — story bytes never pass through the app server; the player fetches immutable assets straight from R2
 - **Plain Python pipeline** — the filesystem working folder is the checkpoint store; no graph framework (see [The Authoring Pipeline](#the-authoring-pipeline))
 - **Web Audio, not `<audio>` tags** — iOS makes media-element volume read-only, which would kill the mandated gentle crossfades; decoded buffers + gain nodes work everywhere
-- **Everything precomputed** — narration, timestamps, images, and glosses are generated at authoring time; a played story costs zero API calls
+- **Everything precomputed** — narration, images, and glosses are generated at authoring time; a played story costs zero API calls
+- **One key, one gateway** — narration now runs through OpenRouter too (see [Narration / Audio](#narration--audio) and [ADR-002](adr/ADR-002-narration-provider.md)), so the pipeline needs only the OpenRouter key to run end to end
 
 ---
 
@@ -63,14 +63,14 @@ graph LR
 | Parent UI | Jinja2 + HTMX + Tailwind | Server-driven UI, minimal JS — hermano's pattern |
 | Player UI | Vanilla ES modules + Web Audio API | Full-screen audio-driven experience; FSM-managed states; crossfades that work on iOS |
 | Pipeline | Plain Python + Pydantic AI | Typed step functions; validated structured outputs (safety verdicts as models), retries, per-step model config via OpenRouter |
-| LLMs & images | OpenRouter | One gateway, per-step model choice — including a different model family for the safety judge than the story writer |
-| Narration | ElevenLabs | One voice identity across all five languages; character-level timestamps captured with every call |
+| LLMs, images & narration | OpenRouter | One gateway, per-step model choice — a different model family for the safety judge than the writer, and narration TTS on the same key (see [Narration / Audio](#narration--audio)) |
+| Narration | Voxtral Mini TTS via OpenRouter (`mistralai/voxtral-mini-tts-2603`) to start | One key / one gateway and ~10× cheaper than ElevenLabs; per-language voices, no timestamps yet. ElevenLabs (native timestamps, one voice) is deferred and under evaluation — see [ADR-002](adr/ADR-002-narration-provider.md) |
 | Asset storage | Cloudflare R2 | Zero egress fees, access logs off, public bucket for published content |
 | App hosting | Render | Hermano's render.yaml precedent |
 | Child persistence | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
 | Testing | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows verified in a real browser |
 
-Two API keys total: ElevenLabs and OpenRouter. Both live only in the pipeline environment (and later the Phase 2 service) — never in the browser, never needed at story time.
+**One key to run the pipeline: `OPENROUTER_API_KEY`.** With narration on Voxtral via OpenRouter, the whole pipeline — story, safety, glosses, images, and narration — runs on the single OpenRouter key. An `ELEVENLABS_API_KEY` is optional and only needed if narration falls back to ElevenLabs (deferred; see [ADR-002](adr/ADR-002-narration-provider.md)). Keys live only in the pipeline environment (and later the Phase 2 service) — never in the browser, never needed at story time.
 
 ---
 
@@ -91,7 +91,7 @@ src/
 │   │   ├── safety.py       Per-rule verdicts, different model family, temperature 0
 │   │   ├── revise.py       Bounded revise loop (two failed revisions → reject)
 │   │   ├── gloss.py        Word-to-English gloss maps (cheap model)
-│   │   ├── narrate.py      ElevenLabs TTS + timestamp capture
+│   │   ├── narrate.py      Voxtral TTS via OpenRouter (timestamps paused; ElevenLabs deferred)
 │   │   ├── illustrate.py   Character sheet first, then pages against it
 │   │   └── assemble.py     story.json assembly + validation
 │   ├── cache.py            Content-addressed artifact cache
@@ -129,7 +129,7 @@ graph TD
     RV --> S2{"safety gate again"}
     S2 -- "pass" --> G
     S2 -- "second fail" --> X["reject story"]
-    G --> N["narrate<br/>ElevenLabs, one voice,<br/>timestamps captured"]
+    G --> N["narrate<br/>Voxtral via OpenRouter,<br/>per-language voice (no timestamps)"]
     N --> I["illustrate<br/>character sheet, then pages"]
     I --> A["assemble<br/>story.json + validation"]
     A --> ST["stage<br/>local review folder"]
@@ -146,7 +146,7 @@ Every generated artifact is keyed by a hash of its inputs:
 
 | Artifact | Cache key inputs |
 |----------|-----------------|
-| Narration audio + timestamps | page text + voice ID + model/settings |
+| Narration audio | page text + voice ID + model/settings |
 | Page image | page text + character sheet hash + style prompt + model |
 | Character sheet | story summary + style prompt + model |
 | Gloss map | story text + model |
@@ -160,14 +160,16 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 | Write / revise | Strong authoring model | Content rules embedded in the prompt; authored natively per language, never translated |
 | Safety gate | **Different family** than the writer, temperature 0 | A shared writer/judge blind spot is the failure mode that matters; cross-family judging is one config line |
 | Glosses | Cheap fast model | Mechanical contextual mapping |
+| Narrate | TTS model (`mistralai/voxtral-mini-tts-2603`) | Per-language voice ID; `mp3`/`pcm` output; no timestamps (see [Narration / Audio](#narration--audio)) |
 | Illustrate | Image-capable model | Character sheet fed as reference to every page — chaining page-to-page compounds drift |
 
-Exact model IDs live in `config.py`, chosen and re-benchmarked freely since OpenRouter makes them a string swap.
+Exact model IDs live in `config.py`, chosen and re-benchmarked freely since OpenRouter makes them a string swap — narration included, now that it runs on the same gateway.
 
-### Timestamps and utterances from day one
+### Spoken prompts as first-class assets
 
-- ElevenLabs returns character-level timestamps with every TTS call. They're stored in `story.json` from slice 1 even though karaoke highlighting ships in slice 6 — discarding them would mean regenerating all narration later at double cost.
-- The ten spoken prompts are first-class pipeline assets (generated, reviewed, published per language), not an afterthought — slice 1 already needs the shelf greeting and story start.
+The ten spoken prompts are first-class pipeline assets (generated, reviewed, published per language), not an afterthought — slice 1 already needs the shelf greeting and story start. They are narrated through the same `narrate` step and provider as story pages.
+
+Page timings, by contrast, are **not** produced day one: the starting narration provider (Voxtral) returns audio without word timestamps, so `story.json` page timings stay empty until reading mode reconstructs them. See [Narration / Audio](#narration--audio) for the trade-off and the path back to timings.
 
 ---
 
@@ -234,6 +236,46 @@ On cover tap, the player fetches every page's audio and image for the story (a f
 
 ---
 
+## Narration / Audio
+
+Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across five languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
+
+### Provider: Voxtral via OpenRouter, to start
+
+Narration is generated through **Voxtral Mini TTS** (`mistralai/voxtral-mini-tts-2603`) on OpenRouter's OpenAI-compatible speech endpoint. This is the settled starting point; the full rationale, options, and trade-offs are in [ADR-002](adr/ADR-002-narration-provider.md).
+
+| Aspect | Detail |
+|--------|--------|
+| Endpoint | OpenRouter `POST /api/v1/audio/speech`, OpenAI-compatible |
+| Request | `{ model, input, voice, response_format }` — `voice` is a per-language ID (e.g. `en_paul_happy`), `response_format` is `mp3` or `pcm` |
+| Response | Raw audio bytes — **no word or character timestamps** |
+| Key | The existing `OPENROUTER_API_KEY` — no separate narration key to run the pipeline |
+
+**Why not ElevenLabs (the original choice).** The narration was originally settled on ElevenLabs multilingual_v2 for its native character-level timestamps, proven warmth, and single multilingual voice. Starting on Voxtral instead keeps the whole pipeline on **one key and one gateway** and costs roughly **10× less** — about $1–2 for the 19-story launch library versus about $15–30 on ElevenLabs. Voxtral also offers zero-shot voice cloning, a path toward one cloned narrator identity. ElevenLabs is **deferred and under evaluation**, not discarded; it is the documented fallback.
+
+### The timestamp trade-off (timestamps paused)
+
+Voxtral's `/audio/speech` returns audio without timings, so the earlier "timestamps from day one" design is **paused**. `story.json` page timings stay empty until **reading mode (slice 6)**, the first feature that needs them, reconstructs them one of two ways:
+
+- **Transcription pass** — Voxtral's transcription model does emit word timestamps; running narrated audio back through it recovers timings without a provider switch.
+- **Provider switch** — narrate (or re-narrate) affected stories on ElevenLabs, which returns timestamps natively, accepting possible re-narration cost.
+
+This is acceptable now because **slice 1 does not use timings at all**, and reading mode already **downgrades missing timings to sentence-level highlighting** rather than failing. It is recorded as a risk in [Risks and Open Questions](#risks-and-open-questions).
+
+### Open questions, validated at AI-366
+
+Three narration properties are **unproven** and are resolved at issue AI-366 (the first Italian story — the designed "validate narration warmth" gate) via an ElevenLabs-vs-Voxtral bake-off:
+
+- **Warmth for bedtime** — not yet validated; warmth is core to the product.
+- **Cross-language voice consistency** — Voxtral voices are per-language (a persona per language), so a single narrator identity across languages is unproven.
+- **Greek support** — Voxtral lists 9 languages but does not publish the list; **Greek support is unverified** and must be confirmed before any Greek content.
+
+### Playback
+
+Playback mechanics live in [The Player → The audio engine](#the-audio-engine): a single `AudioContext`, decoded-buffer narration and prompt channels that never overlap, gain-node crossfades for gentle page turns, and exact-position resume. The narration provider produces `mp3`/`pcm` bytes; the audio engine decodes and schedules them. The two halves meet only at the audio file — swapping the narration provider does not touch the player.
+
+---
+
 ## The Parent Area
 
 Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
@@ -252,7 +294,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
 | Nothing about the child leaves the browser | Story-time traffic is bucket-direct asset fetches only; no cookies; no server-side state; R2 access logs disabled |
 | No accounts | The family token is a random capability in IndexedDB, created client-side, carried in export/import |
 | Zero unapproved assets reachable | Only the publish step writes to `published/`; the audit script (slice 5, then CI) verifies every manifest entry resolves to approved content and nothing else is listed |
-| Keys never reach the browser | ElevenLabs and OpenRouter keys exist only in pipeline/service environments |
+| Keys never reach the browser | The OpenRouter key (and an optional ElevenLabs fallback key) exist only in pipeline/service environments |
 
 ---
 
@@ -276,12 +318,12 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 
 | Slice | Player gains | Pipeline gains |
 |-------|--------------|----------------|
-| 1 — One story plays | Shelf (one cover), playback, auto page turns, end screen | CLI core: write → safety → narrate (+timestamps) → illustrate → publish; one Italian story |
+| 1 — One story plays | Shelf (one cover), playback, auto page turns, end screen | CLI core: write → safety → narrate → illustrate → publish; one Italian story (no timings — slice 1 does not use them) |
 | 2 — Survives real life | Retry & offline states, IndexedDB progress, resume, goodnight sign-off | — |
 | 3 — The story branches | Choice overlay, nudge, auto-continue | Branching topology, choice-card images |
 | 4 — Grown-ups arrive | Gate, settings, first-run rule, language chip | Second language (Spanish); all ten prompts per enabled language |
 | 5 — The full shelf | Empty-shelf state | Batch runs; 19 stories × 5 languages; audit script |
-| 6 — Reading mode | Text panel, karaoke, gloss bubbles | Gloss step; timings already banked since slice 1 |
+| 6 — Reading mode | Text panel, karaoke, gloss bubbles | Gloss step; word timings reconstructed here (transcription pass or ElevenLabs switch — see [Narration / Audio](#narration--audio)), since Voxtral narration ships without them |
 | 7 — Portability | Export/import UI | Export schema pinned (family token included) |
 
 ---
@@ -295,7 +337,9 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | **Kill-switch scope** (family vs. operator-global) | Deferred to Phase 2 design |
 | **Pending-bucket auth & pack-request rate limiting** | Deferred to Phase 2 design |
 | **Export file schema** | Pinned in slice 7, not before |
-| **Voice quality in Italian/Greek** | Slice 1/4 explicitly validate narration warmth per language before the library is built |
+| **Narration warmth & voice consistency** (Voxtral) | Unproven; validated at AI-366 (first Italian story) via an ElevenLabs-vs-Voxtral bake-off before the library is built — see [ADR-002](adr/ADR-002-narration-provider.md) |
+| **Deferred narration timestamps** | Voxtral returns no timings, so `story.json` page timings stay empty until reading mode (slice 6) reconstructs them (transcription pass or ElevenLabs switch, accepting possible re-narration). Slice 1 does not use timings, so nothing is blocked now; reading mode downgrades missing timings to sentence-level highlighting |
+| **Greek narration support** (Voxtral) | Unverified — Voxtral lists 9 languages but does not publish the list; confirm before any Greek content, else narrate Greek via a fallback provider |
 
 ---
 
@@ -304,4 +348,9 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | Doc | Content |
 |-----|---------|
 | [Product Spec](product.md) | Vision, behaviors, content rules, spoken prompts, decision log |
+| [System Overview](system-overview.md) | The code as built: module map, state machines, and seams |
+| [Setup & Deploy](setup.md) | R2 bucket, CORS, and the Render blueprint |
+| [ADR-001](adr/ADR-001-technology-stack.md) | Foundational technology stack (why this shape) |
+| [ADR-002](adr/ADR-002-narration-provider.md) | Narration provider — Voxtral via OpenRouter to start; ElevenLabs deferred |
+| [Architecture Decision Records](adr/) | The full ADR index |
 | Implementation Plans | `docs/plans/` *(created per slice)* |
