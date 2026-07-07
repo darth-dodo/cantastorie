@@ -90,6 +90,20 @@ describe("Whole-story prefetch", () => {
     expect(prefetcher.status()).toEqual({ total: 16, loaded: 15, failed: 1 });
   });
 
+  it("banks the story's spoken prompts with the pages — the end prompt is local long before the end", async () => {
+    // Given the cover tap hands over the start and end prompt URLs...
+    const engine = fakeEngine();
+    const fetchFn = okFetch();
+    const prefetcher = createPrefetcher({ engine, fetchFn });
+
+    await prefetcher.prefetchStory(storyOfPages(8), ["/p/story-start.wav", "/p/end.wav"]);
+
+    // ...then they decode into the engine alongside the page audio.
+    expect(engine.load).toHaveBeenCalledWith("/p/story-start.wav");
+    expect(engine.load).toHaveBeenCalledWith("/p/end.wav");
+    expect(prefetcher.status()).toEqual({ total: 18, loaded: 18, failed: 0 });
+  });
+
   it("pages without assets ask for nothing (a text-only dev story still opens)", async () => {
     const engine = fakeEngine();
     const fetchFn = okFetch();

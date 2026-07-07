@@ -138,12 +138,30 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
     expect(document.querySelector(".page-art.current")).not.toBeNull();
   });
 
-  it("whole-story prefetch banks all 16 assets around the cover tap", async () => {
+  it("whole-story prefetch banks all 18 assets around the cover tap — pages and prompts", async () => {
     const engine = fakeEngine();
     await openFirstCover(engine);
     await vi.waitFor(() =>
-      expect(running.prefetcher.status()).toEqual({ total: 16, loaded: 16, failed: 0 }),
+      expect(running.prefetcher.status()).toEqual({ total: 18, loaded: 18, failed: 0 }),
     );
+  });
+
+  it("a double-tapped cover fetches story.json once: the promise is the cache", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let storyJsonFetches = 0;
+    const countingFetch = async (url) => {
+      if (String(url).endsWith("story.json")) storyJsonFetches += 1;
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn: countingFetch, engine: fakeEngine() });
+
+    // The excited double-tap: two clicks before the first load resolves.
+    const cover = document.querySelector(".cover");
+    cover.click();
+    cover.click();
+
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(storyJsonFetches).toBe(1);
   });
 
   it("the start prompt ends, narration begins, and audio end turns the page", async () => {

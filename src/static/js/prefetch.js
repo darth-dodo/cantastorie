@@ -36,12 +36,17 @@ export function createPrefetcher({ engine, fetchFn = (...args) => globalThis.fet
 
     // Resolves when every not-yet-banked asset settles; safe to fire and
     // forget — playback only ever waits on the engine's own load().
-    async prefetchStory(story) {
+    // extraAudio carries the story's spoken prompts (start, end): the end
+    // prompt must be local long before the end screen asks for it.
+    async prefetchStory(story, extraAudio = []) {
       const pages = story.allPages ?? story.pages;
       const jobs = [];
       for (const page of pages) {
         jobs.push(bank(page.audioUrl, () => engine.load(page.audioUrl)));
         jobs.push(bank(page.imageUrl, () => warmImage(page.imageUrl)));
+      }
+      for (const url of extraAudio) {
+        jobs.push(bank(url, () => engine.load(url)));
       }
       await Promise.all(jobs.filter(Boolean));
       return { total, loaded, failed };
