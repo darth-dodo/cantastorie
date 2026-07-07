@@ -175,6 +175,8 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
     assert f"published/stories/{story_id}/story.json" in keys
     assert f"published/stories/{story_id}/{next(iter(assembled.assets))}" in keys
     assert "published/it/manifest.json" in keys
+    # Prompts are first-class published assets under published/prompts/it/.
+    assert "published/prompts/it/shelf_greeting.0123456789abcdef.mp3" in keys
     assert result.manifest_story_ids == [story_id]
 
     manifest = _manifest(s3)
