@@ -19,6 +19,8 @@ dependencies = [
     "pydantic-ai>=0.4.0",
     "typer>=0.15.0",
     "httpx>=0.28.0",
+    # Publish: R2 is S3-compatible, reached with boto3
+    "boto3>=1.35.0",
 ]
 
 [project.scripts]
@@ -29,6 +31,10 @@ dev = [
     # Testing
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
+
+    # A fake S3 so publish is proven with zero network
+    "moto[s3]>=5.0.0",
+    "boto3-stubs[s3]>=1.35.0",
 
     # Linting & Formatting
     "ruff>=0.8.0",

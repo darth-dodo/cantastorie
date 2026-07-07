@@ -36,6 +36,20 @@ class Settings(BaseSettings):
 
     content_dir: Path = Path("content")
 
+    # Where generate stages an assembled story for the operator to review
+    # (text, audio, images together) before publish reads it back.
+    staging_dir: Path = Path("staging")
+
+    # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
+    # access keys follow the SecretStr pattern above — never logged, never
+    # repr'd. r2_public_base is the URL the published/ prefix is served at,
+    # so a manifest's story/prompt URLs resolve straight to the bucket.
+    r2_endpoint_url: str = ""
+    r2_access_key_id: SecretStr = SecretStr("")
+    r2_secret_access_key: SecretStr = SecretStr("")
+    r2_bucket: str = ""
+    r2_public_base: str = ""
+
     @model_validator(mode="after")
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
         # A shared writer/judge blind spot is the failure mode that matters
