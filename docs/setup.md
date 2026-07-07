@@ -22,37 +22,46 @@ The pipeline's keys (`OPENROUTER_API_KEY`, `ELEVENLABS_API_KEY`) are **never** d
 
 ## 1. The R2 bucket
 
-Create one bucket (the `published/` tree lives inside it as key prefixes):
+The bucket **`cantastorie`** lives in the **EU jurisdiction** (data residency in the EU — the audience is Italian/Spanish families and the app handles children's context). R2 namespaces jurisdictional buckets separately, so **every `wrangler r2` command needs `-J eu`** (`--jurisdiction eu`); without it wrangler looks at the default namespace and reports "bucket does not exist". To create it (already done for the live bucket):
 
 ```
-wrangler r2 bucket create cantastorie-published
+wrangler r2 bucket create cantastorie -J eu
 ```
+
+The `published/` tree lives inside it as key prefixes.
 
 ### Public read
 
 Published content is public by design. Enable the bucket's public URL:
 
 ```
-wrangler r2 bucket dev-url enable cantastorie-published
+wrangler r2 bucket dev-url enable cantastorie -J eu
 ```
 
-This returns a `https://pub-<hash>.r2.dev` URL. For a stable name, connect a custom domain instead (Dashboard → R2 → the bucket → Settings → Custom Domains) and add that origin to the CORS file below.
+This returns a `https://pub-<hash>.r2.dev` URL — the live bucket's is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev`. For a stable name, connect a custom domain instead (Dashboard → R2 → the bucket → Settings → Custom Domains) and add that origin to the CORS file below.
 
 > Phase 2 introduces generated-but-unapproved content under a private `pending/` prefix with separate credentials. Keep that out of this public bucket when it arrives.
 
 ### Access logs OFF
 
-R2 does not log object access by default — the goal is to keep it that way, so there is provably nothing recording what a child plays. Verify in the Dashboard (R2 → the bucket → Settings): **no Logpush job** targets the bucket and **event notifications are disabled**. This is part of "nothing about the child ever leaves the browser."
+R2 does not log object access by default — the goal is to keep it that way, so there is provably nothing recording what a child plays. Verify no event-notification pipeline is attached (a bare "no configurations found" is the healthy answer):
+
+```
+wrangler r2 bucket notification list cantastorie -J eu
+```
+
+Also confirm in the Dashboard (R2 → the bucket → Settings) that **no Logpush job** targets the bucket. This is part of "nothing about the child ever leaves the browser".
 
 ### CORS
 
-The player fetches assets cross-origin (Render shell → R2 bucket), so the bucket must allow the player origin. The policy is version-controlled at [`deploy/r2-cors.json`](../deploy/r2-cors.json): `GET`/`HEAD` only, `Range` allowed (audio seeking), scoped to the Render origin and localhost. Apply it via the Dashboard (R2 → the bucket → Settings → CORS Policy → paste the JSON) or with wrangler:
+The player fetches assets cross-origin (Render shell → R2 bucket), so the bucket must allow the player origin. The policy is version-controlled at [`deploy/r2-cors.json`](../deploy/r2-cors.json) in Cloudflare's R2 CORS schema (a `rules` array; `allowed.methods` `GET`/`HEAD`, `allowed.headers` `Range` for audio seeking, scoped to the Render origin and localhost). Apply and verify it with:
 
 ```
-wrangler r2 bucket cors set cantastorie-published --file deploy/r2-cors.json
+wrangler r2 bucket cors set cantastorie --file deploy/r2-cors.json -J eu
+wrangler r2 bucket cors list cantastorie -J eu
 ```
 
-(Check `wrangler r2 bucket cors --help` for your wrangler version; the canonical policy is the JSON file regardless.) Add your custom-domain and any production origins to `AllowedOrigins` before applying.
+Add your custom-domain and any production origins to `allowed.origins` before applying.
 
 ---
 
@@ -72,7 +81,7 @@ published/prompts/it/…
 
 1. Render → **New** → **Blueprint** → pick this repository. Render reads `render.yaml` and creates the `cantastorie` service on the **Starter** plan (always-on — the cold-start decision, see the risk log).
 2. Set one environment variable on the service:
-   - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash — e.g. `https://pub-<hash>.r2.dev/published` or `https://cdn.your-domain/published`.
+   - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
 3. Leave `autoDeploy` on: pushes to `main` redeploy. The Dockerfile compiles Tailwind and serves the shell; `/health` is the health check.
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
