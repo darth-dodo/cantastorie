@@ -176,6 +176,72 @@ describe("prompts never overlap narration", () => {
   });
 });
 
+describe("interleavings a double-tapping child can produce", () => {
+  it("a prompt silenced by a newer prompt keeps its onEnded to itself and leaves the new slot alone", async () => {
+    // Given prompt A speaking and a second tap starting prompt B...
+    const endedA = vi.fn();
+    await engine.playPrompt("start-a.mp3", { onEnded: endedA });
+    await engine.playPrompt("start-b.mp3"); // silences A
+
+    // ...when A's silenced source fires its late onended...
+    await ctx.sources[0].onended();
+
+    // ...then A's stale callback never fires (nothing releases narration
+    // over the still-speaking B)...
+    expect(endedA).not.toHaveBeenCalled();
+
+    // ...and B still owns the prompt slot: a third prompt silences B.
+    await engine.playPrompt("start-c.mp3");
+    expect(ctx.sources[1].stop).toHaveBeenCalled();
+  });
+
+  it("pausing while the page buffer is still loading keeps the voice silent, then resumes it", async () => {
+    // Given page 1's buffer is still on the wire...
+    let releaseFetch;
+    const gate = new Promise((resolve) => {
+      releaseFetch = resolve;
+    });
+    const slow = createAudioEngine({
+      createContext: () => ctx,
+      fetchFn: async () => {
+        await gate;
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+      },
+    });
+    const pending = slow.playNarration("p1.mp3");
+
+    // ...when the child taps pause before it arrives...
+    slow.pauseNarration();
+    expect(slow.state).toBe("paused");
+
+    // ...then the buffer landing does NOT start a voice under a paused UI...
+    releaseFetch();
+    await pending;
+    expect(ctx.sources).toHaveLength(0);
+    expect(slow.state).toBe("paused");
+
+    // ...and resume plays the held page from its start.
+    await slow.resumeNarration();
+    expect(slow.state).toBe("playing");
+    expect(ctx.sources[0].start).toHaveBeenCalledWith(0, 0);
+  });
+
+  it("a failed page load is forgotten, not cached: the next attempt refetches", async () => {
+    // Given one flaky request on a bad night...
+    let flaky = true;
+    const fetchSpy = vi.fn(async () =>
+      flaky ? { ok: false, status: 503 } : { ok: true, arrayBuffer: async () => new ArrayBuffer(8) },
+    );
+    const recovering = createAudioEngine({ createContext: () => ctx, fetchFn: fetchSpy });
+    await expect(recovering.load("p5.mp3")).rejects.toThrow(/503/);
+
+    // ...when the network recovers, the page speaks again this session.
+    flaky = false;
+    await expect(recovering.load("p5.mp3")).resolves.toBeTruthy();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("stopAll", () => {
   it("silences every voice and returns to idle", async () => {
     await engine.playNarration("p1.mp3");
