@@ -5,7 +5,14 @@ import { init } from "../../src/static/js/main.js";
 // Vitest runs with cwd at the project root; import.meta.url is an http://
 // URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
 // shell serves this template at "/" and mounts the assets under "/static".
-const indexHtml = readFileSync("src/templates/index.html", "utf-8");
+// The server renders {{ asset_base }} from Settings.asset_base (the R2 public
+// URL in prod, the static mount in dev); Vitest has no Jinja, so mirror that
+// substitution with the dev default here.
+const ASSET_BASE = "/static/content";
+const indexHtml = readFileSync("src/templates/index.html", "utf-8").replace(
+  "{{ asset_base }}",
+  ASSET_BASE,
+);
 const manifest = JSON.parse(readFileSync("src/static/content/it/manifest.json", "utf-8"));
 const storyFixture = JSON.parse(
   readFileSync("src/static/content/it/stories/la-barchetta-e-la-luna/story.json", "utf-8"),
@@ -90,7 +97,7 @@ describe("player shell", () => {
     expect(document.querySelector("#app")).not.toBeNull();
     expect(document.querySelector('link[href="/static/css/tokens.css"]')).not.toBeNull();
     expect(document.querySelector('link[href="/static/css/player.css"]')).not.toBeNull();
-    expect(document.querySelector('meta[name="asset-base"]').content).toBe("/static/content");
+    expect(document.querySelector('meta[name="asset-base"]').content).toBe(ASSET_BASE);
   });
 
   it("boots a manifest-driven shelf", async () => {

@@ -2,7 +2,8 @@
 
 from fastapi.testclient import TestClient
 
-from src.api.main import app
+from src.api.main import app, create_app
+from src.config import Settings, get_settings
 
 client = TestClient(app)
 
@@ -19,6 +20,25 @@ def test_player_page_serves_shell() -> None:
     assert 'id="app"' in response.text
     assert "/static/css/tokens.css" in response.text
     assert "/static/css/player.css" in response.text
+
+
+def test_player_page_asset_base_defaults_to_the_static_mount() -> None:
+    # Given no ASSET_BASE override, When the shell is served, Then the player
+    # reads assets from the local static mount — dev works with no bucket.
+    body = client.get("/").text
+    assert 'name="asset-base" content="/static/content"' in body
+
+
+def test_player_page_serves_the_configured_asset_base() -> None:
+    # Given ASSET_BASE points at the R2 public bucket (production, AI-365),
+    # When the shell is served, Then the player fetches published stories
+    # bucket-direct from that origin instead of the app server.
+    deployed = create_app()
+    deployed.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None, asset_base="https://pub-test.r2.dev/published"
+    )
+    body = TestClient(deployed).get("/").text
+    assert 'name="asset-base" content="https://pub-test.r2.dev/published"' in body
 
 
 def test_static_mount_serves_js() -> None:

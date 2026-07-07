@@ -18,7 +18,10 @@ services:
   - type: web
     name: cantastorie
     runtime: docker
-    plan: free
+    # Always-on: no cold-start spin-down. The app is opened fresh at bedtime
+    # daily, so on the free tier's 15-min idle every first open would be a
+    # ~50s cold boot — blowing the 4s budget (docs/architecture.md risk log).
+    plan: starter
     region: frankfurt
     branch: main
 
@@ -29,6 +32,13 @@ services:
     healthCheckPath: /health
 
     envVars:
+      # Where the player fetches published stories. Point this at the R2
+      # public bucket URL, including the /published prefix, e.g.
+      # https://pub-<hash>.r2.dev/published — set in the Render dashboard.
+      # Left unset, the player falls back to the app's /static/content mount.
+      - key: ASSET_BASE
+        sync: false
+
       # The web app serves static shells only; no API keys required.
       # OPENROUTER_API_KEY / ELEVENLABS_API_KEY belong to the local pipeline
       # environment and are added here only when Phase 2 factory routes land.
