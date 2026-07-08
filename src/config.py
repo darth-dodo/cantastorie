@@ -7,6 +7,9 @@ from typing import Self
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Matilda — the fallback narrator when no voice is configured.
+DEFAULT_ELEVENLABS_VOICE_ID = "XrExE9yKIg1WjnnlVkGX"
+
 
 class Settings(BaseSettings):
     """Pipeline settings; the player needs no keys at story time."""
@@ -31,7 +34,10 @@ class Settings(BaseSettings):
     image_model: str = "google/gemini-2.5-flash-image"
 
     elevenlabs_base_url: str = "https://api.elevenlabs.io"
-    elevenlabs_voice_id: str = ""
+    # Matilda — a warm, friendly ElevenLabs pre-made voice suited to bedtime
+    # story narration. A non-empty ELEVENLABS_VOICE_ID in the env overrides it;
+    # an empty one falls back to this default (see the validator below).
+    elevenlabs_voice_id: str = DEFAULT_ELEVENLABS_VOICE_ID
     elevenlabs_tts_model: str = "eleven_multilingual_v2"
 
     content_dir: Path = Path("content")
@@ -55,6 +61,14 @@ class Settings(BaseSettings):
     r2_secret_access_key: SecretStr = SecretStr("")
     r2_bucket: str = ""
     r2_public_base: str = ""
+
+    @model_validator(mode="after")
+    def blank_voice_id_falls_back_to_the_default(self) -> Self:
+        # An empty ELEVENLABS_VOICE_ID in .env would otherwise shadow the field
+        # default and produce a request to /text-to-speech//with-timestamps.
+        if not self.elevenlabs_voice_id:
+            self.elevenlabs_voice_id = DEFAULT_ELEVENLABS_VOICE_ID
+        return self
 
     @model_validator(mode="after")
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
