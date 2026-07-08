@@ -36,6 +36,12 @@ class Settings(BaseSettings):
 
     content_dir: Path = Path("content")
 
+    # Where the player fetches published story assets. Local dev serves them
+    # from the static mount; production points ASSET_BASE at the R2 public URL
+    # (e.g. https://pub-<hash>.r2.dev/published) so playback is bucket-direct.
+    # No trailing slash — the player appends "/{lang}/manifest.json".
+    asset_base: str = "/static/content"
+
     # Where generate stages an assembled story for the operator to review
     # (text, audio, images together) before publish reads it back.
     staging_dir: Path = Path("staging")

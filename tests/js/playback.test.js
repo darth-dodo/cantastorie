@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPlayback } from "../../src/static/js/playback.js";
+import { createPlayback, STORY_START_LOAD_TIMEOUT_MS } from "../../src/static/js/playback.js";
 import { createStore } from "../../src/static/js/store.js";
 
 // Playback-loop specs (AI-364), named for the behaviors in docs/product.md
@@ -12,6 +12,7 @@ import { createStore } from "../../src/static/js/store.js";
 // .test.js); here we watch what playback asks of it.
 function fakeEngine() {
   const calls = [];
+  const stalledLoads = new Map();
   let narration = null;
   let held = null;
   let prompt = null;
@@ -21,8 +22,22 @@ function fakeEngine() {
     get state() {
       return state;
     },
+    // Test driver: make one URL's load hang until the returned release fires.
+    stallLoad(url) {
+      let release;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      stalledLoads.set(url, gate);
+      return () => {
+        stalledLoads.delete(url);
+        release();
+      };
+    },
     async load(url) {
       calls.push(["load", url]);
+      const gate = stalledLoads.get(url);
+      if (gate) await gate;
     },
     async playNarration(url, { onEnded } = {}) {
       calls.push(["narration", url]);
@@ -106,6 +121,12 @@ function narrations() {
   return engine.calls.filter(([kind]) => kind === "narration").map(([, url]) => url);
 }
 
+function promptsSpoken() {
+  return engine.calls.filter(([kind]) => kind === "prompt").map(([, url]) => url);
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe("Story start prompt — \"Tap a cover. 'Si parte!' — and page 1 narration begins\"", () => {
   it("given a fresh story, the start prompt speaks first and page 1 narration follows it", async () => {
     // When the cover opens the story...
@@ -121,9 +142,13 @@ describe("Story start prompt — \"Tap a cover. 'Si parte!' — and page 1 narra
     expect(store.state).toMatchObject({ screen: "player", page: 0, playing: true });
   });
 
-  it("whole-story prefetch starts on the cover tap, before page 1 plays", async () => {
+  it("whole-story prefetch starts on the cover tap, prompts included, before page 1 plays", async () => {
     const story = await openFresh();
-    expect(prefetcher.prefetchStory).toHaveBeenCalledWith(story);
+    // The end prompt banks with the story: by the end screen it is local.
+    expect(prefetcher.prefetchStory).toHaveBeenCalledWith(story, [
+      PROMPTS.story_start,
+      PROMPTS.end,
+    ]);
   });
 
   it("a missing start prompt never blocks the story: narration begins anyway", async () => {
@@ -207,6 +232,7 @@ describe("End screen — final scene, replay and back-to-shelf pictures, end pro
     await openFresh();
     engine.endPrompt();
     for (let i = 0; i < 8; i++) engine.endNarration();
+    await flush(); // the end prompt plays once its (cached) load settles
   });
 
   it("when the final page's audio ends, the end prompt speaks", () => {
@@ -286,6 +312,82 @@ describe("Choice pages stay possible (playback ignores them; AI-370 owns the ove
     // Choosing closes the overlay and narration carries on.
     store.choose();
     expect(narrations().at(-1)).toBe("/s/p4.wav");
+  });
+});
+
+describe("Race interleavings (PR #8 review)", () => {
+  it("a double-tapped cover speaks one start prompt sequence and starts page 1 exactly once", async () => {
+    // Given an excited double-tap: both openStory calls run...
+    await playback.openStory(fixtureStory());
+    await playback.openStory(fixtureStory());
+    expect(promptsSpoken()).toEqual([PROMPTS.story_start, PROMPTS.story_start]);
+
+    // ...when the surviving prompt ends (the engine silenced the first,
+    // and a silenced prompt keeps its onEnded to itself)...
+    engine.endPrompt();
+
+    // ...then page 1 narration begins exactly once — never over the prompt.
+    expect(narrations()).toEqual(["/s/p1.wav"]);
+  });
+
+  it("an end prompt that finishes loading after 'Ancora!' stays quiet — it must not duck the replay", async () => {
+    // Given a cold cache where the end prompt is still on the wire...
+    const releaseEndPrompt = engine.stallLoad(PROMPTS.end);
+    await openFresh();
+    engine.endPrompt();
+    for (let i = 0; i < 8; i++) engine.endNarration();
+    expect(store.state.screen).toBe("end");
+
+    // ...when the child taps replay before it arrives...
+    store.replay();
+    expect(narrations().at(-1)).toBe("/s/p1.wav");
+
+    // ...then the late-arriving prompt checks the screen and stays quiet.
+    releaseEndPrompt();
+    await flush();
+    expect(promptsSpoken()).not.toContain(PROMPTS.end);
+  });
+
+  it("the end prompt still speaks when the child stays on the end screen", async () => {
+    const releaseEndPrompt = engine.stallLoad(PROMPTS.end);
+    await openFresh();
+    engine.endPrompt();
+    for (let i = 0; i < 8; i++) engine.endNarration();
+
+    releaseEndPrompt();
+    await flush();
+    expect(promptsSpoken()).toContain(PROMPTS.end);
+  });
+
+  it("a hung start-prompt load frees the story after the timeout instead of freezing it mute", async () => {
+    vi.useFakeTimers();
+    try {
+      // Given the start prompt's request hangs forever...
+      engine.stallLoad(PROMPTS.story_start);
+      const opening = playback.openStory(fixtureStory());
+
+      // ...when the timeout passes...
+      await vi.advanceTimersByTimeAsync(STORY_START_LOAD_TIMEOUT_MS);
+      await opening;
+
+      // ...then the pages speak without their fanfare — never dead air.
+      expect(narrations()).toEqual(["/s/p1.wav"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("exiting to the shelf while the start prompt loads leaves the shelf silent", async () => {
+    const releaseStart = engine.stallLoad(PROMPTS.story_start);
+    const opening = playback.openStory(fixtureStory());
+
+    // The child bails out to the shelf while the prompt is on the wire.
+    store.exitStory();
+    releaseStart();
+    await opening;
+
+    expect(promptsSpoken()).toEqual([]);
+    expect(narrations()).toEqual([]);
   });
 });
 

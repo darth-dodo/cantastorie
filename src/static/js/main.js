@@ -69,8 +69,14 @@ export async function init(
   async function openCover(entry) {
     if (entry?.story && fetchFn) {
       try {
-        const loaded = storyCache.get(entry.story) ?? (await loadStory(entry.story, fetchFn));
-        storyCache.set(entry.story, loaded);
+        // Cache the promise, not the result: a double-tap shares one fetch.
+        let pending = storyCache.get(entry.story);
+        if (!pending) {
+          pending = loadStory(entry.story, fetchFn);
+          storyCache.set(entry.story, pending);
+          pending.catch(() => storyCache.delete(entry.story)); // retry next tap
+        }
+        const loaded = await pending;
         activeStory = loaded;
         await playback.openStory(loaded);
         return;
@@ -85,12 +91,9 @@ export async function init(
 
   // The first tap anywhere wakes the sound; if it isn't already the cover
   // tap, the shelf greets aloud. Browsers allow no audio before a gesture.
-  let woken = false;
   root.addEventListener(
     "pointerdown",
     (event) => {
-      if (woken) return;
-      woken = true;
       engine
         .unlock()
         .then(() => {
@@ -102,7 +105,7 @@ export async function init(
         })
         .catch((err) => console.warn("greeting skipped", err));
     },
-    { capture: true },
+    { capture: true, once: true },
   );
 
   let shown = { screen: null, choiceOpen: false, resumeOpen: false };

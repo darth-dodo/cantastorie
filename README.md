@@ -1,52 +1,121 @@
 # Cantastorie
 
-[![CI](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml)
-
 > Bedtime stories your child steers, in the languages your family speaks. Told aloud, painted in watercolor, and approved by you before a single word reaches little ears.
 
-The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived carefully: one warm narrator voice, soft watercolor pages, and a child's finger choosing the path — with a parent as the piazza's gatekeeper.
+[![CI](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/darth-dodo/cantastorie/graph/badge.svg)](https://codecov.io/gh/darth-dodo/cantastorie)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Cloudflare R2](https://img.shields.io/badge/Cloudflare-R2-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/r2/)
+[![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-cc785c?logo=anthropic&logoColor=white)](https://claude.ai)
+
+The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived carefully: one warm narrator voice, soft watercolor pages, and a child's finger choosing the path — with a parent as the piazza's gatekeeper, seeing and hearing every word, picture, and sound before any child meets it.
 
 ---
 
-## Why
+## The Problem
 
-Pre-readers can't use story apps built on text, and screen apps built on taps train the wrong appetite at bedtime. Multilingual families juggle one-language apps with robotic voices in the smaller languages. And parents have no way to fully preview generated content before their child meets it.
+Pre-readers cannot use story apps built on text, and screen apps built on taps train the wrong appetite at bedtime. Multilingual families juggle one-language apps with robotic voices in the smaller languages. And parents have no way to fully preview generated content before their child meets it.
 
 Cantastorie is built on one belief: **a bedtime app should wind a child down.** Voice carries the story, pictures carry the choices, and nothing on screen asks a pre-reader to read.
 
-## How a Story Night Works
+---
 
-1. A tap wakes the shelf, which greets the child aloud: *"Ciao! Quale storia ascoltiamo oggi?"*
-2. Tap a cover — *"Si parte!"* — and the story begins. Two taps, four seconds, no reading.
-3. Watercolor pages turn themselves when the narration ends. One big play-pause button is the only control.
-4. At a branch point, two picture cards appear with spoken labels. The child taps one; the story follows. A child who drifts off mid-choice still gets a complete, gentle ending.
-5. Every story lands on comfort or sleepiness — and if no one taps after the end, a soft *"Buonanotte, tesoro."*
+## How It Works
 
-## What Makes It Different
+### Two Taps to a Story
 
-| | |
-|---|---|
-| **Voice-first** | Every prompt is spoken in the child's language; zero required text in child mode |
-| **One narrator** | The same warm voice tells every story in Italian, Spanish, English, Greek, and German |
-| **Child-steered** | Branching stories with picture-tap choices — agency without reading |
-| **Watercolor, always** | Soft palette, rounded characters, nothing frightening — bedtime, not Saturday cartoons |
-| **Parent-approved** | Every word, picture, and sound is seen and heard by an adult before any child meets it |
-| **Reading mode** | Optional karaoke word highlighting with tap-word glosses, for reading-along families |
-| **Truly private** | No accounts, no tracking, no analytics. Progress lives in the browser and exports to a file. Nothing about the child ever leaves the device. |
+A tap wakes the shelf, which greets the child aloud — *"Ciao! Quale storia ascoltiamo oggi?"* Tap a cover, *"Si parte!"*, and page one begins. At most two taps and four seconds stand between opening the app and hearing a story. Watercolor pages turn themselves when the narration ends; one large play-pause button is the only control, and pausing resumes from the exact position.
 
-## Languages
+### Child-Steered Branches
 
-Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, and German ride along. Stories are authored natively per language, never translated: an Italian story reaches for biscotti della nonna, a Spanish one for magdalenas.
+At fixed branch points the page dims behind two picture cards with spoken labels. The child taps one and the story follows — agency without reading. A child who drifts off mid-choice still gets a complete, gentle ending: after a spoken nudge and a short wait, the first option auto-continues. Replayability lives in the branches — the boat story again, then the other ending.
 
-## Safety, Stated Plainly
+### One Warm Narrator
 
-No violence beyond the mildest peril. No monsters, darkness-as-threat, or abandonment. No brands, no romance, no real people. Kind characters who resolve things through help, never punishment. Every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+The target is a single warm narrator identity across every story and language, like the piazza storyteller of old. Launch narration is generated by **Voxtral** (via OpenRouter), with **ElevenLabs** under evaluation for bedtime warmth and a single cross-language voice; the trade-offs are recorded in [ADR-002](docs/adr/ADR-002-narration-provider.md). Every child-facing prompt is recorded per language — zero required text in child mode.
 
-## Status
+### Watercolor Boards
 
-In design and early build. The product is fully specified and the architecture is settled; the first vertical slice — one Italian story, told aloud with watercolor pages — is next.
+Soft watercolor, warm palette, rounded characters, nothing frightening — bedtime, not Saturday cartoons. Images carry no text and nothing scary. Every story's final page lands on comfort or sleepiness.
 
-## Development
+### The Parent Gate
+
+Everything grown-up sits behind a small, low-contrast corner of the shelf. The gate is a three-second hold followed by a two-integer addition on a keypad — no PIN, freshly random each time. Five failures lock it for five minutes, and the lockout survives reloads. Behind it: language settings, reading mode, and export/import (with the dashboard and review queue arriving in Phase 2).
+
+### Reading Mode, Optional
+
+For reading-along parents and emerging readers, an optional text panel shows the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading.
+
+### Five Languages
+
+Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, and German ride along. Stories are authored natively per language, never translated: an Italian story reaches for *biscotti della nonna*, a Spanish one for *magdalenas*.
+
+### Truly Private, Parent-Approved
+
+No accounts, no tracking, no analytics. Progress lives in the browser (IndexedDB) and exports to a file; nothing about the child ever leaves the device. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+
+---
+
+## For Developers
+
+Cantastorie is one FastAPI app (a vanilla-JS child player plus a server-rendered parent area) alongside a plain-Python authoring pipeline in the same repository. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+
+### Tech Stack
+
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| **Backend** | FastAPI | Async, Pydantic validation, HTMX-friendly SSR — hermano-proven |
+| **Player UI** | Vanilla ES modules + Web Audio API | Full-screen, audio-driven, FSM-managed; crossfades that work on iOS |
+| **Parent UI** | Jinja2 + HTMX + Tailwind | Server-driven UI, minimal JS |
+| **Pipeline** | Plain Python + Pydantic AI | Typed step functions, filesystem checkpoints, no graph framework |
+| **LLMs, images & narration** | OpenRouter | One gateway, per-step model choice; narration on Voxtral Mini TTS (ElevenLabs deferred — [ADR-002](docs/adr/ADR-002-narration-provider.md)) |
+| **Asset storage** | Cloudflare R2 | Zero egress fees, access logs off, bucket-direct playback |
+| **Hosting** | Render (Docker, `render.yaml`) | Hermano's deploy precedent |
+| **Child persistence** | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
+| **Testing** | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows in a real browser |
+
+### System Overview
+
+One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and IndexedDB. The authoring pipeline is a separate plain-Python package in the same repo, run as a CLI. The app and the pipeline share only `src/config.py` and the `story.json` contract.
+
+```mermaid
+graph LR
+    B["Browser (child)<br/>ES modules + Web Audio + IndexedDB"]
+    R2["Cloudflare R2<br/>audio · images · manifests"]
+    F["FastAPI on Render<br/>player page · parent area"]
+    P["Pipeline CLI<br/>plain Python + Pydantic AI"]
+    OR["OpenRouter<br/>story · safety · glosses · images · narration"]
+
+    B -- "bucket-direct fetch" --> R2
+    B -- "page load, parent HTMX" --> F
+    P -- "publish" --> R2
+    P --> OR
+```
+
+For the code as built — module map, player and audio state machines, and the seams between them — see [docs/system-overview.md](docs/system-overview.md). For the settled design and its rationale, see [docs/architecture.md](docs/architecture.md).
+
+### Project Structure
+
+```
+src/
+├── config.py            Settings shared by app and pipeline (R2, keys, per-step models)
+├── api/                 FastAPI app factory, player route, parent area
+├── pipeline/            Authoring pipeline: typed steps, cache, providers, models
+│   └── steps/           write · safety · revise · gloss · narrate · illustrate · assemble
+├── templates/           Jinja2 (parent area + player shell)
+└── static/
+    ├── js/              Vanilla ES modules: fsm, audio engine, playback, screens, storage
+    └── css/             Player watercolor CSS; parent Tailwind
+
+content/                 Pipeline working folders (gitignored)
+tests/                   pytest + Vitest + Playwright
+docs/                    product.md, architecture.md, system-overview.md, setup.md, adr/
+```
+
+### Quick Start
 
 Requires [uv](https://docs.astral.sh/uv/), Node.js 20+, and Python 3.12 (uv installs it automatically).
 
@@ -60,16 +129,26 @@ make check          # lint + format check + strict mypy
 make help           # list every target
 ```
 
-Copy `.env.example` to `.env` for pipeline work (OpenRouter + ElevenLabs keys); the player needs no keys at story time. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit.
+Copy `.env.example` to `.env` for pipeline work. **Only `OPENROUTER_API_KEY` is needed to run the pipeline end to end** — story, safety, glosses, images, and narration (Voxtral) all run through OpenRouter. `ELEVENLABS_API_KEY` is optional and only used if narration falls back to ElevenLabs (deferred and under evaluation — see [ADR-002](docs/adr/ADR-002-narration-provider.md)). The player needs no keys at story time.
 
-Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Deployment targets Render via [render.yaml](render.yaml), following habla-hermano's pattern.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit. Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Deployment targets Render via [render.yaml](render.yaml); the Cloudflare R2 bucket and Render setup are documented in [docs/setup.md](docs/setup.md).
+
+### Status
+
+In design and early build. The product is fully specified and the architecture is settled; the first vertical slice — one Italian story, told aloud with watercolor pages — is next.
+
+---
 
 ## Documentation
 
 - [Product Specification](docs/product.md) — vision, behaviors, content rules, decision log
-- [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, and the authoring pipeline
+- [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, the authoring pipeline, and narration
 - [System Overview](docs/system-overview.md) — the code as built: module map, state machines, and seams
+- [Setup & Deploy](docs/setup.md) — R2 bucket, CORS, and the Render blueprint
+- [Architecture Decision Records](docs/adr/) — settled decisions, including the [technology stack](docs/adr/ADR-001-technology-stack.md) and [narration provider](docs/adr/ADR-002-narration-provider.md)
+
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

@@ -35,6 +35,11 @@ export function createAudioEngine({
   // Where the story stands while paused or ducked.
   let held = null; // { url, offset, onEnded }
   let prompt = null; // { source, gain }
+  // A narration commanded but still decoding. Every narration command
+  // (play, pause, stop) bumps the epoch; a start that returns from its
+  // load to a stale epoch was superseded and must stay silent.
+  let pendingStart = null; // { url, offset, onEnded }
+  let playEpoch = 0;
 
   function ensureContext() {
     ctx ??= createContext();
@@ -77,7 +82,11 @@ export function createAudioEngine({
   }
 
   async function startNarration(url, offset, onEnded) {
+    const epoch = ++playEpoch;
+    pendingStart = { url, offset, onEnded };
     const buffer = await engine.load(url);
+    if (epoch !== playEpoch) return; // paused or stopped while loading
+    pendingStart = null;
     const fading = narration !== null;
     if (fading) silence(narration, crossfadeSeconds);
 
@@ -123,7 +132,11 @@ export function createAudioEngine({
               if (!res.ok) throw new Error(`audio fetch failed: ${url} (${res.status})`);
               return res.arrayBuffer();
             })
-            .then((data) => ctx.decodeAudioData(data)),
+            .then((data) => ctx.decodeAudioData(data))
+            .catch((err) => {
+              buffers.delete(url); // one flaky request must not silence the page all session
+              throw err;
+            }),
         );
       }
       return buffers.get(url);
@@ -144,6 +157,18 @@ export function createAudioEngine({
         // Pausing mid-prompt sticks: the prompt's end must not un-pause it.
         fsm.send("PAUSE");
         return held?.offset ?? 0;
+      }
+      playEpoch++; // a voice still loading must not start under a paused UI
+      if (pendingStart) {
+        if (narration) {
+          silence(narration, 0);
+          narration = null;
+        }
+        held = pendingStart;
+        pendingStart = null;
+        if (fsm.matches("idle")) fsm.send("PLAY"); // the loading voice was the story playing
+        if (!fsm.matches("paused")) fsm.send("PAUSE");
+        return held.offset;
       }
       if (!fsm.matches("playing") || !narration) return held?.offset ?? 0;
       holdNarration();
@@ -181,9 +206,9 @@ export function createAudioEngine({
       prompt = voice;
 
       voice.source.onended = async () => {
-        prompt = null;
+        if (prompt === voice) prompt = null; // never clear a newer prompt's slot
+        if (voice.source._manualStop) return; // a silenced prompt keeps its onEnded to itself
         onEnded?.();
-        if (voice.source._manualStop) return;
         if (fsm.matches("ducked")) {
           fsm.send("UNDUCK");
           await engine.resumeNarration();
@@ -192,6 +217,8 @@ export function createAudioEngine({
     },
 
     stopAll() {
+      playEpoch++;
+      pendingStart = null;
       if (narration) silence(narration, 0);
       if (prompt) silence(prompt, 0);
       narration = null;

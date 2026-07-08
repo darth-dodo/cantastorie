@@ -5,7 +5,14 @@ import { init } from "../../src/static/js/main.js";
 // Vitest runs with cwd at the project root; import.meta.url is an http://
 // URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
 // shell serves this template at "/" and mounts the assets under "/static".
-const indexHtml = readFileSync("src/templates/index.html", "utf-8");
+// The server renders {{ asset_base }} from Settings.asset_base (the R2 public
+// URL in prod, the static mount in dev); Vitest has no Jinja, so mirror that
+// substitution with the dev default here.
+const ASSET_BASE = "/static/content";
+const indexHtml = readFileSync("src/templates/index.html", "utf-8").replace(
+  "{{ asset_base }}",
+  ASSET_BASE,
+);
 const manifest = JSON.parse(readFileSync("src/static/content/it/manifest.json", "utf-8"));
 const storyFixture = JSON.parse(
   readFileSync("src/static/content/it/stories/la-barchetta-e-la-luna/story.json", "utf-8"),
@@ -90,7 +97,7 @@ describe("player shell", () => {
     expect(document.querySelector("#app")).not.toBeNull();
     expect(document.querySelector('link[href="/static/css/tokens.css"]')).not.toBeNull();
     expect(document.querySelector('link[href="/static/css/player.css"]')).not.toBeNull();
-    expect(document.querySelector('meta[name="asset-base"]').content).toBe("/static/content");
+    expect(document.querySelector('meta[name="asset-base"]').content).toBe(ASSET_BASE);
   });
 
   it("boots a manifest-driven shelf", async () => {
@@ -138,12 +145,30 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
     expect(document.querySelector(".page-art.current")).not.toBeNull();
   });
 
-  it("whole-story prefetch banks all 16 assets around the cover tap", async () => {
+  it("whole-story prefetch banks all 18 assets around the cover tap — pages and prompts", async () => {
     const engine = fakeEngine();
     await openFirstCover(engine);
     await vi.waitFor(() =>
-      expect(running.prefetcher.status()).toEqual({ total: 16, loaded: 16, failed: 0 }),
+      expect(running.prefetcher.status()).toEqual({ total: 18, loaded: 18, failed: 0 }),
     );
+  });
+
+  it("a double-tapped cover fetches story.json once: the promise is the cache", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let storyJsonFetches = 0;
+    const countingFetch = async (url) => {
+      if (String(url).endsWith("story.json")) storyJsonFetches += 1;
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn: countingFetch, engine: fakeEngine() });
+
+    // The excited double-tap: two clicks before the first load resolves.
+    const cover = document.querySelector(".cover");
+    cover.click();
+    cover.click();
+
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(storyJsonFetches).toBe(1);
   });
 
   it("the start prompt ends, narration begins, and audio end turns the page", async () => {
