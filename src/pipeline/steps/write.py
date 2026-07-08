@@ -84,22 +84,31 @@ def story_from_draft(
     )
 
 
-def _write_inputs(theme: Theme, language: Language, settings: Settings) -> dict[str, object]:
-    return {
+def _write_inputs(
+    theme: Theme, language: Language, settings: Settings, premise: str | None = None
+) -> dict[str, object]:
+    inputs: dict[str, object] = {
         "theme": theme,
         "language": language,
         "model": settings.write_model,
         "prompt_version": PROMPT_VERSION,
     }
+    # Only when present, so a no-premise run keeps its pre-premise cache key.
+    if premise is not None:
+        inputs["premise"] = premise
+    return inputs
 
 
-def derive_story_id(theme: Theme, language: Language, settings: Settings) -> str:
+def derive_story_id(
+    theme: Theme, language: Language, settings: Settings, premise: str | None = None
+) -> str:
     """The story's stable id — a slug plus a hash of the write inputs.
 
-    Deterministic from theme + language + writer model, so the CLI can name the
-    working folder content/{story-id}/ before the story is written.
+    Deterministic from theme + language + writer model (+ premise when given),
+    so the CLI can name the working folder content/{story-id}/ before the story
+    is written.
     """
-    return f"{theme.replace('_', '-')}-{language}-{cache_key(_write_inputs(theme, language, settings))[:8]}"
+    return f"{theme.replace('_', '-')}-{language}-{cache_key(_write_inputs(theme, language, settings, premise))[:8]}"
 
 
 def write_story(
@@ -109,17 +118,24 @@ def write_story(
     cache: ArtifactCache,
     *,
     model: Model | None = None,
+    premise: str | None = None,
 ) -> Story:
-    """Author a native-language story; unchanged inputs cost zero API calls."""
+    """Author a native-language story; unchanged inputs cost zero API calls.
+
+    An optional premise steers the plot; when given it also distinguishes the
+    cache key and story id, so a premised run never reuses a plain-theme story.
+    """
     llm = model if model is not None else build_model(settings.write_model, settings)
-    inputs = _write_inputs(theme, language, settings)
-    story_id = derive_story_id(theme, language, settings)
+    inputs = _write_inputs(theme, language, settings, premise)
+    story_id = derive_story_id(theme, language, settings, premise)
 
     def produce() -> bytes:
         prompt = (
             f"Write a bedtime story in {LANGUAGE_NAMES[language]} "
             f"on the theme: {theme.replace('_', ' ')}."
         )
+        if premise is not None:
+            prompt += f"\nFollow this premise closely:\n{premise}"
         draft = build_write_agent(llm).run_sync(prompt).output
         story = story_from_draft(draft, story_id=story_id, theme=theme, language=language)
         return story.model_dump_json().encode()
