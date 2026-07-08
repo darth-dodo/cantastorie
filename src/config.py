@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     write_model: str = "anthropic/claude-sonnet-4.5"
     safety_model: str = "openai/gpt-4.1-mini"
     gloss_model: str = "google/gemini-2.5-flash-lite"
-    image_model: str = "google/gemini-2.5-flash-image"
+    image_model: str = "google/gemini-3.1-flash-lite-image"
 
     elevenlabs_base_url: str = "https://api.elevenlabs.io"
     # Matilda — a warm, friendly ElevenLabs pre-made voice suited to bedtime

@@ -1,0 +1,2102 @@
+{
+  "schema_version": 1,
+  "id": "cosmo-space-cowboy",
+  "language": "en",
+  "title": "The Moon Says Goodnight",
+  "theme": "the_moon_says_goodnight",
+  "shape": "linear",
+  "pages": [
+    {
+      "id": "p1",
+      "text": "High up in the velvet sky, Cosmo flies his little rocket. Comet hums a soft tune as they glide along. Stars twinkle all around like tiny lanterns. Cosmo wears a soft hat and a scarf of starlight. He tips his hat to every planet they pass. Jupiter nods, Saturn smiles, and Neptune waves back gently.",
+      "audio": {
+        "file": "p1.382217c4.mp3",
+        "timings": [
+          {
+            "word": "High",
+            "start_s": 0.0,
+            "end_s": 0.337
+          },
+          {
+            "word": "up",
+            "start_s": 0.395,
+            "end_s": 0.522
+          },
+          {
+            "word": "in",
+            "start_s": 0.58,
+            "end_s": 0.639
+          },
+          {
+            "word": "the",
+            "start_s": 0.685,
+            "end_s": 0.755
+          },
+          {
+            "word": "velvet",
+            "start_s": 0.801,
+            "end_s": 1.126
+          },
+          {
+            "word": "sky",
+            "start_s": 1.173,
+            "end_s": 1.625
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 2.078,
+            "end_s": 2.531
+          },
+          {
+            "word": "flies",
+            "start_s": 2.601,
+            "end_s": 2.949
+          },
+          {
+            "word": "his",
+            "start_s": 2.995,
+            "end_s": 3.111
+          },
+          {
+            "word": "little",
+            "start_s": 3.17,
+            "end_s": 3.39
+          },
+          {
+            "word": "rocket",
+            "start_s": 3.425,
+            "end_s": 3.866
+          },
+          {
+            "word": "Comet",
+            "start_s": 4.737,
+            "end_s": 5.12
+          },
+          {
+            "word": "hums",
+            "start_s": 5.178,
+            "end_s": 5.492
+          },
+          {
+            "word": "a",
+            "start_s": 5.538,
+            "end_s": 5.573
+          },
+          {
+            "word": "soft",
+            "start_s": 5.654,
+            "end_s": 5.956
+          },
+          {
+            "word": "tune",
+            "start_s": 5.991,
+            "end_s": 6.269
+          },
+          {
+            "word": "as",
+            "start_s": 6.304,
+            "end_s": 6.374
+          },
+          {
+            "word": "they",
+            "start_s": 6.42,
+            "end_s": 6.525
+          },
+          {
+            "word": "glide",
+            "start_s": 6.56,
+            "end_s": 6.815
+          },
+          {
+            "word": "along",
+            "start_s": 6.838,
+            "end_s": 7.198
+          },
+          {
+            "word": "Stars",
+            "start_s": 7.883,
+            "end_s": 8.348
+          },
+          {
+            "word": "twinkle",
+            "start_s": 8.417,
+            "end_s": 8.777
+          },
+          {
+            "word": "all",
+            "start_s": 8.812,
+            "end_s": 8.928
+          },
+          {
+            "word": "around",
+            "start_s": 8.986,
+            "end_s": 9.416
+          },
+          {
+            "word": "like",
+            "start_s": 9.625,
+            "end_s": 9.822
+          },
+          {
+            "word": "tiny",
+            "start_s": 9.857,
+            "end_s": 10.17
+          },
+          {
+            "word": "lanterns",
+            "start_s": 10.24,
+            "end_s": 10.809
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 11.68,
+            "end_s": 12.109
+          },
+          {
+            "word": "wears",
+            "start_s": 12.167,
+            "end_s": 12.411
+          },
+          {
+            "word": "a",
+            "start_s": 12.458,
+            "end_s": 12.492
+          },
+          {
+            "word": "soft",
+            "start_s": 12.55,
+            "end_s": 12.841
+          },
+          {
+            "word": "hat",
+            "start_s": 12.899,
+            "end_s": 13.212
+          },
+          {
+            "word": "and",
+            "start_s": 13.386,
+            "end_s": 13.584
+          },
+          {
+            "word": "a",
+            "start_s": 13.642,
+            "end_s": 13.665
+          },
+          {
+            "word": "scarf",
+            "start_s": 13.711,
+            "end_s": 14.002
+          },
+          {
+            "word": "of",
+            "start_s": 14.048,
+            "end_s": 14.106
+          },
+          {
+            "word": "starlight",
+            "start_s": 14.164,
+            "end_s": 14.71
+          },
+          {
+            "word": "He",
+            "start_s": 15.325,
+            "end_s": 15.441
+          },
+          {
+            "word": "tips",
+            "start_s": 15.511,
+            "end_s": 15.79
+          },
+          {
+            "word": "his",
+            "start_s": 15.824,
+            "end_s": 15.929
+          },
+          {
+            "word": "hat",
+            "start_s": 15.975,
+            "end_s": 16.196
+          },
+          {
+            "word": "to",
+            "start_s": 16.254,
+            "end_s": 16.335
+          },
+          {
+            "word": "every",
+            "start_s": 16.428,
+            "end_s": 16.684
+          },
+          {
+            "word": "planet",
+            "start_s": 16.742,
+            "end_s": 17.043
+          },
+          {
+            "word": "they",
+            "start_s": 17.078,
+            "end_s": 17.194
+          },
+          {
+            "word": "pass",
+            "start_s": 17.252,
+            "end_s": 17.682
+          },
+          {
+            "word": "Jupiter",
+            "start_s": 18.46,
+            "end_s": 18.843
+          },
+          {
+            "word": "nods",
+            "start_s": 18.913,
+            "end_s": 19.331
+          },
+          {
+            "word": "Saturn",
+            "start_s": 19.679,
+            "end_s": 20.085
+          },
+          {
+            "word": "smiles",
+            "start_s": 20.143,
+            "end_s": 20.689
+          },
+          {
+            "word": "and",
+            "start_s": 21.037,
+            "end_s": 21.188
+          },
+          {
+            "word": "Neptune",
+            "start_s": 21.258,
+            "end_s": 21.722
+          },
+          {
+            "word": "waves",
+            "start_s": 21.78,
+            "end_s": 22.094
+          },
+          {
+            "word": "back",
+            "start_s": 22.152,
+            "end_s": 22.361
+          },
+          {
+            "word": "gently",
+            "start_s": 22.43,
+            "end_s": 22.872
+          }
+        ]
+      },
+      "image": "p1.82b568b2.webp",
+      "next_page": "p2",
+      "choice": null
+    },
+    {
+      "id": "p2",
+      "text": "Cosmo and Comet drift through the quiet night sky. They see something small and white floating all alone. It is a tiny moon-calf, blinking with sleepy eyes. The little moon-calf has drifted far from home. It floats silently, looking lost among the stars. Cosmo's heart feels warm and kind.",
+      "audio": {
+        "file": "p2.2d70c337.mp3",
+        "timings": [
+          {
+            "word": "Cosmo",
+            "start_s": 0.0,
+            "end_s": 0.557
+          },
+          {
+            "word": "and",
+            "start_s": 0.627,
+            "end_s": 0.708
+          },
+          {
+            "word": "Comet",
+            "start_s": 0.778,
+            "end_s": 1.196
+          },
+          {
+            "word": "drift",
+            "start_s": 1.312,
+            "end_s": 1.695
+          },
+          {
+            "word": "through",
+            "start_s": 1.741,
+            "end_s": 1.974
+          },
+          {
+            "word": "the",
+            "start_s": 1.997,
+            "end_s": 2.067
+          },
+          {
+            "word": "quiet",
+            "start_s": 2.101,
+            "end_s": 2.415
+          },
+          {
+            "word": "night",
+            "start_s": 2.473,
+            "end_s": 2.67
+          },
+          {
+            "word": "sky",
+            "start_s": 2.728,
+            "end_s": 3.228
+          },
+          {
+            "word": "They",
+            "start_s": 4.098,
+            "end_s": 4.261
+          },
+          {
+            "word": "see",
+            "start_s": 4.319,
+            "end_s": 4.481
+          },
+          {
+            "word": "something",
+            "start_s": 4.54,
+            "end_s": 4.888
+          },
+          {
+            "word": "small",
+            "start_s": 4.969,
+            "end_s": 5.457
+          },
+          {
+            "word": "and",
+            "start_s": 5.515,
+            "end_s": 5.608
+          },
+          {
+            "word": "white",
+            "start_s": 5.677,
+            "end_s": 6.095
+          },
+          {
+            "word": "floating",
+            "start_s": 6.177,
+            "end_s": 6.606
+          },
+          {
+            "word": "all",
+            "start_s": 6.653,
+            "end_s": 6.769
+          },
+          {
+            "word": "alone",
+            "start_s": 6.827,
+            "end_s": 7.314
+          },
+          {
+            "word": "It",
+            "start_s": 8.104,
+            "end_s": 8.243
+          },
+          {
+            "word": "is",
+            "start_s": 8.29,
+            "end_s": 8.382
+          },
+          {
+            "word": "a",
+            "start_s": 8.429,
+            "end_s": 8.464
+          },
+          {
+            "word": "tiny",
+            "start_s": 8.522,
+            "end_s": 8.835
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 8.905,
+            "end_s": 9.543
+          },
+          {
+            "word": "blinking",
+            "start_s": 9.996,
+            "end_s": 10.437
+          },
+          {
+            "word": "with",
+            "start_s": 10.495,
+            "end_s": 10.635
+          },
+          {
+            "word": "sleepy",
+            "start_s": 10.693,
+            "end_s": 11.041
+          },
+          {
+            "word": "eyes",
+            "start_s": 11.122,
+            "end_s": 11.517
+          },
+          {
+            "word": "The",
+            "start_s": 12.388,
+            "end_s": 12.504
+          },
+          {
+            "word": "little",
+            "start_s": 12.562,
+            "end_s": 12.783
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 12.817,
+            "end_s": 13.456
+          },
+          {
+            "word": "has",
+            "start_s": 13.526,
+            "end_s": 13.688
+          },
+          {
+            "word": "drifted",
+            "start_s": 13.746,
+            "end_s": 14.106
+          },
+          {
+            "word": "far",
+            "start_s": 14.176,
+            "end_s": 14.42
+          },
+          {
+            "word": "from",
+            "start_s": 14.501,
+            "end_s": 14.652
+          },
+          {
+            "word": "home",
+            "start_s": 14.721,
+            "end_s": 15.163
+          },
+          {
+            "word": "It",
+            "start_s": 15.743,
+            "end_s": 15.882
+          },
+          {
+            "word": "floats",
+            "start_s": 15.94,
+            "end_s": 16.266
+          },
+          {
+            "word": "silently",
+            "start_s": 16.324,
+            "end_s": 16.974
+          },
+          {
+            "word": "looking",
+            "start_s": 17.461,
+            "end_s": 17.763
+          },
+          {
+            "word": "lost",
+            "start_s": 17.833,
+            "end_s": 18.216
+          },
+          {
+            "word": "among",
+            "start_s": 18.274,
+            "end_s": 18.495
+          },
+          {
+            "word": "the",
+            "start_s": 18.541,
+            "end_s": 18.611
+          },
+          {
+            "word": "stars",
+            "start_s": 18.646,
+            "end_s": 19.168
+          },
+          {
+            "word": "Cosmo's",
+            "start_s": 20.039,
+            "end_s": 20.561
+          },
+          {
+            "word": "heart",
+            "start_s": 20.608,
+            "end_s": 20.852
+          },
+          {
+            "word": "feels",
+            "start_s": 20.91,
+            "end_s": 21.165
+          },
+          {
+            "word": "warm",
+            "start_s": 21.246,
+            "end_s": 21.676
+          },
+          {
+            "word": "and",
+            "start_s": 21.827,
+            "end_s": 22.001
+          },
+          {
+            "word": "kind",
+            "start_s": 22.071,
+            "end_s": 22.523
+          }
+        ]
+      },
+      "image": "p2.be9a1642.webp",
+      "next_page": "p3",
+      "choice": null
+    },
+    {
+      "id": "p3",
+      "text": "Cosmo reaches for his special rainbow lasso. It glows softly with colours gentle as a whisper. He swings the lasso round and round, ever so carefully. Whoosh, whoosh, it loops through the starry dark. The rainbow lasso floats toward the little moon-calf. It wraps around the moon-calf like a soft hug.",
+      "audio": {
+        "file": "p3.d1798180.mp3",
+        "timings": [
+          {
+            "word": "Cosmo",
+            "start_s": 0.0,
+            "end_s": 0.488
+          },
+          {
+            "word": "reaches",
+            "start_s": 0.58,
+            "end_s": 0.894
+          },
+          {
+            "word": "for",
+            "start_s": 0.952,
+            "end_s": 1.08
+          },
+          {
+            "word": "his",
+            "start_s": 1.138,
+            "end_s": 1.254
+          },
+          {
+            "word": "special",
+            "start_s": 1.3,
+            "end_s": 1.66
+          },
+          {
+            "word": "rainbow",
+            "start_s": 1.741,
+            "end_s": 2.043
+          },
+          {
+            "word": "lasso",
+            "start_s": 2.113,
+            "end_s": 2.531
+          },
+          {
+            "word": "It",
+            "start_s": 3.216,
+            "end_s": 3.367
+          },
+          {
+            "word": "glows",
+            "start_s": 3.413,
+            "end_s": 3.715
+          },
+          {
+            "word": "softly",
+            "start_s": 3.762,
+            "end_s": 4.226
+          },
+          {
+            "word": "with",
+            "start_s": 4.284,
+            "end_s": 4.423
+          },
+          {
+            "word": "colours",
+            "start_s": 4.47,
+            "end_s": 4.853
+          },
+          {
+            "word": "gentle",
+            "start_s": 4.923,
+            "end_s": 5.259
+          },
+          {
+            "word": "as",
+            "start_s": 5.294,
+            "end_s": 5.375
+          },
+          {
+            "word": "a",
+            "start_s": 5.422,
+            "end_s": 5.457
+          },
+          {
+            "word": "whisper",
+            "start_s": 5.503,
+            "end_s": 5.921
+          },
+          {
+            "word": "He",
+            "start_s": 6.792,
+            "end_s": 6.92
+          },
+          {
+            "word": "swings",
+            "start_s": 6.989,
+            "end_s": 7.338
+          },
+          {
+            "word": "the",
+            "start_s": 7.372,
+            "end_s": 7.442
+          },
+          {
+            "word": "lasso",
+            "start_s": 7.5,
+            "end_s": 7.825
+          },
+          {
+            "word": "round",
+            "start_s": 7.918,
+            "end_s": 8.255
+          },
+          {
+            "word": "and",
+            "start_s": 8.313,
+            "end_s": 8.394
+          },
+          {
+            "word": "round",
+            "start_s": 8.464,
+            "end_s": 8.847
+          },
+          {
+            "word": "ever",
+            "start_s": 9.137,
+            "end_s": 9.381
+          },
+          {
+            "word": "so",
+            "start_s": 9.439,
+            "end_s": 9.555
+          },
+          {
+            "word": "carefully",
+            "start_s": 9.625,
+            "end_s": 10.136
+          },
+          {
+            "word": "Whoosh",
+            "start_s": 10.728,
+            "end_s": 11.064
+          },
+          {
+            "word": "whoosh",
+            "start_s": 11.122,
+            "end_s": 11.447
+          },
+          {
+            "word": "it",
+            "start_s": 11.796,
+            "end_s": 11.923
+          },
+          {
+            "word": "loops",
+            "start_s": 11.981,
+            "end_s": 12.237
+          },
+          {
+            "word": "through",
+            "start_s": 12.283,
+            "end_s": 12.539
+          },
+          {
+            "word": "the",
+            "start_s": 12.574,
+            "end_s": 12.643
+          },
+          {
+            "word": "starry",
+            "start_s": 12.69,
+            "end_s": 13.015
+          },
+          {
+            "word": "dark",
+            "start_s": 13.073,
+            "end_s": 13.398
+          },
+          {
+            "word": "The",
+            "start_s": 14.245,
+            "end_s": 14.362
+          },
+          {
+            "word": "rainbow",
+            "start_s": 14.431,
+            "end_s": 14.745
+          },
+          {
+            "word": "lasso",
+            "start_s": 14.814,
+            "end_s": 15.139
+          },
+          {
+            "word": "floats",
+            "start_s": 15.209,
+            "end_s": 15.557
+          },
+          {
+            "word": "toward",
+            "start_s": 15.615,
+            "end_s": 15.929
+          },
+          {
+            "word": "the",
+            "start_s": 15.963,
+            "end_s": 16.033
+          },
+          {
+            "word": "little",
+            "start_s": 16.079,
+            "end_s": 16.323
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 16.358,
+            "end_s": 16.939
+          },
+          {
+            "word": "It",
+            "start_s": 17.554,
+            "end_s": 17.682
+          },
+          {
+            "word": "wraps",
+            "start_s": 17.705,
+            "end_s": 17.983
+          },
+          {
+            "word": "around",
+            "start_s": 18.03,
+            "end_s": 18.262
+          },
+          {
+            "word": "the",
+            "start_s": 18.297,
+            "end_s": 18.367
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 18.401,
+            "end_s": 18.889
+          },
+          {
+            "word": "like",
+            "start_s": 18.947,
+            "end_s": 19.098
+          },
+          {
+            "word": "a",
+            "start_s": 19.121,
+            "end_s": 19.144
+          },
+          {
+            "word": "soft",
+            "start_s": 19.191,
+            "end_s": 19.481
+          },
+          {
+            "word": "hug",
+            "start_s": 19.528,
+            "end_s": 19.818
+          }
+        ]
+      },
+      "image": "p3.cc8226a1.webp",
+      "next_page": "p4",
+      "choice": null
+    },
+    {
+      "id": "p4",
+      "text": "Cosmo pulls gently, gently on the rainbow lasso. The little moon-calf drifts closer to Comet's side. Together they float back across the velvet sky. The moon-calf blinks happily now, feeling safe and warm. Cosmo hums a gentle tune as they travel. The stars sparkle brighter, lighting their way home.",
+      "audio": {
+        "file": "p4.e715f130.mp3",
+        "timings": [
+          {
+            "word": "Cosmo",
+            "start_s": 0.0,
+            "end_s": 0.511
+          },
+          {
+            "word": "pulls",
+            "start_s": 0.592,
+            "end_s": 0.906
+          },
+          {
+            "word": "gently",
+            "start_s": 0.975,
+            "end_s": 1.405
+          },
+          {
+            "word": "gently",
+            "start_s": 1.695,
+            "end_s": 2.067
+          },
+          {
+            "word": "on",
+            "start_s": 2.136,
+            "end_s": 2.218
+          },
+          {
+            "word": "the",
+            "start_s": 2.252,
+            "end_s": 2.322
+          },
+          {
+            "word": "rainbow",
+            "start_s": 2.38,
+            "end_s": 2.67
+          },
+          {
+            "word": "lasso",
+            "start_s": 2.74,
+            "end_s": 3.193
+          },
+          {
+            "word": "The",
+            "start_s": 3.808,
+            "end_s": 3.924
+          },
+          {
+            "word": "little",
+            "start_s": 3.982,
+            "end_s": 4.226
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 4.272,
+            "end_s": 4.899
+          },
+          {
+            "word": "drifts",
+            "start_s": 4.992,
+            "end_s": 5.317
+          },
+          {
+            "word": "closer",
+            "start_s": 5.387,
+            "end_s": 5.735
+          },
+          {
+            "word": "to",
+            "start_s": 5.805,
+            "end_s": 5.863
+          },
+          {
+            "word": "Comet's",
+            "start_s": 5.933,
+            "end_s": 6.281
+          },
+          {
+            "word": "side",
+            "start_s": 6.304,
+            "end_s": 6.734
+          },
+          {
+            "word": "Together",
+            "start_s": 7.512,
+            "end_s": 7.976
+          },
+          {
+            "word": "they",
+            "start_s": 8.104,
+            "end_s": 8.266
+          },
+          {
+            "word": "float",
+            "start_s": 8.336,
+            "end_s": 8.58
+          },
+          {
+            "word": "back",
+            "start_s": 8.661,
+            "end_s": 8.905
+          },
+          {
+            "word": "across",
+            "start_s": 8.963,
+            "end_s": 9.346
+          },
+          {
+            "word": "the",
+            "start_s": 9.392,
+            "end_s": 9.462
+          },
+          {
+            "word": "velvet",
+            "start_s": 9.509,
+            "end_s": 9.81
+          },
+          {
+            "word": "sky",
+            "start_s": 9.857,
+            "end_s": 10.298
+          },
+          {
+            "word": "The",
+            "start_s": 11.169,
+            "end_s": 11.285
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 11.331,
+            "end_s": 11.854
+          },
+          {
+            "word": "blinks",
+            "start_s": 11.947,
+            "end_s": 12.295
+          },
+          {
+            "word": "happily",
+            "start_s": 12.353,
+            "end_s": 12.725
+          },
+          {
+            "word": "now",
+            "start_s": 12.783,
+            "end_s": 12.98
+          },
+          {
+            "word": "feeling",
+            "start_s": 13.305,
+            "end_s": 13.595
+          },
+          {
+            "word": "safe",
+            "start_s": 13.665,
+            "end_s": 14.002
+          },
+          {
+            "word": "and",
+            "start_s": 14.048,
+            "end_s": 14.129
+          },
+          {
+            "word": "warm",
+            "start_s": 14.187,
+            "end_s": 14.547
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 15.395,
+            "end_s": 15.859
+          },
+          {
+            "word": "hums",
+            "start_s": 15.94,
+            "end_s": 16.208
+          },
+          {
+            "word": "a",
+            "start_s": 16.254,
+            "end_s": 16.277
+          },
+          {
+            "word": "gentle",
+            "start_s": 16.358,
+            "end_s": 16.672
+          },
+          {
+            "word": "tune",
+            "start_s": 16.707,
+            "end_s": 17.032
+          },
+          {
+            "word": "as",
+            "start_s": 17.067,
+            "end_s": 17.148
+          },
+          {
+            "word": "they",
+            "start_s": 17.194,
+            "end_s": 17.299
+          },
+          {
+            "word": "travel",
+            "start_s": 17.345,
+            "end_s": 17.752
+          },
+          {
+            "word": "The",
+            "start_s": 18.367,
+            "end_s": 18.472
+          },
+          {
+            "word": "stars",
+            "start_s": 18.53,
+            "end_s": 18.924
+          },
+          {
+            "word": "sparkle",
+            "start_s": 18.971,
+            "end_s": 19.354
+          },
+          {
+            "word": "brighter",
+            "start_s": 19.389,
+            "end_s": 19.76
+          },
+          {
+            "word": "lighting",
+            "start_s": 20.027,
+            "end_s": 20.341
+          },
+          {
+            "word": "their",
+            "start_s": 20.376,
+            "end_s": 20.515
+          },
+          {
+            "word": "way",
+            "start_s": 20.561,
+            "end_s": 20.677
+          },
+          {
+            "word": "home",
+            "start_s": 20.735,
+            "end_s": 21.107
+          }
+        ]
+      },
+      "image": "p4.927d1333.webp",
+      "next_page": "p5",
+      "choice": null
+    },
+    {
+      "id": "p5",
+      "text": "They arrive at the glowing craters of the moon. The moon-calf's mother waits with wide, loving eyes. She nuzzles her baby softly with her glowing nose. The little moon-calf snuggles close to its mother. All the star-friends begin to sing a quiet song. Their voices twinkle and shimmer, soft as a lullaby.",
+      "audio": {
+        "file": "p5.d9cfdf17.mp3",
+        "timings": [
+          {
+            "word": "They",
+            "start_s": 0.0,
+            "end_s": 0.197
+          },
+          {
+            "word": "arrive",
+            "start_s": 0.244,
+            "end_s": 0.615
+          },
+          {
+            "word": "at",
+            "start_s": 0.65,
+            "end_s": 0.72
+          },
+          {
+            "word": "the",
+            "start_s": 0.755,
+            "end_s": 0.824
+          },
+          {
+            "word": "glowing",
+            "start_s": 0.871,
+            "end_s": 1.207
+          },
+          {
+            "word": "craters",
+            "start_s": 1.265,
+            "end_s": 1.649
+          },
+          {
+            "word": "of",
+            "start_s": 1.683,
+            "end_s": 1.753
+          },
+          {
+            "word": "the",
+            "start_s": 1.8,
+            "end_s": 1.869
+          },
+          {
+            "word": "moon",
+            "start_s": 1.916,
+            "end_s": 2.218
+          },
+          {
+            "word": "The",
+            "start_s": 3.204,
+            "end_s": 3.32
+          },
+          {
+            "word": "moon-calf's",
+            "start_s": 3.379,
+            "end_s": 3.994
+          },
+          {
+            "word": "mother",
+            "start_s": 4.052,
+            "end_s": 4.342
+          },
+          {
+            "word": "waits",
+            "start_s": 4.493,
+            "end_s": 4.818
+          },
+          {
+            "word": "with",
+            "start_s": 4.865,
+            "end_s": 5.004
+          },
+          {
+            "word": "wide",
+            "start_s": 5.074,
+            "end_s": 5.457
+          },
+          {
+            "word": "loving",
+            "start_s": 5.526,
+            "end_s": 5.805
+          },
+          {
+            "word": "eyes",
+            "start_s": 5.875,
+            "end_s": 6.223
+          },
+          {
+            "word": "She",
+            "start_s": 7.001,
+            "end_s": 7.14
+          },
+          {
+            "word": "nuzzles",
+            "start_s": 7.233,
+            "end_s": 7.616
+          },
+          {
+            "word": "her",
+            "start_s": 7.674,
+            "end_s": 7.767
+          },
+          {
+            "word": "baby",
+            "start_s": 7.825,
+            "end_s": 8.092
+          },
+          {
+            "word": "softly",
+            "start_s": 8.173,
+            "end_s": 8.626
+          },
+          {
+            "word": "with",
+            "start_s": 8.684,
+            "end_s": 8.824
+          },
+          {
+            "word": "her",
+            "start_s": 8.858,
+            "end_s": 8.928
+          },
+          {
+            "word": "glowing",
+            "start_s": 8.975,
+            "end_s": 9.288
+          },
+          {
+            "word": "nose",
+            "start_s": 9.346,
+            "end_s": 9.787
+          },
+          {
+            "word": "The",
+            "start_s": 10.507,
+            "end_s": 10.635
+          },
+          {
+            "word": "little",
+            "start_s": 10.693,
+            "end_s": 10.937
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 10.983,
+            "end_s": 11.564
+          },
+          {
+            "word": "snuggles",
+            "start_s": 11.656,
+            "end_s": 12.086
+          },
+          {
+            "word": "close",
+            "start_s": 12.144,
+            "end_s": 12.469
+          },
+          {
+            "word": "to",
+            "start_s": 12.504,
+            "end_s": 12.562
+          },
+          {
+            "word": "its",
+            "start_s": 12.632,
+            "end_s": 12.748
+          },
+          {
+            "word": "mother",
+            "start_s": 12.794,
+            "end_s": 13.119
+          },
+          {
+            "word": "All",
+            "start_s": 13.897,
+            "end_s": 14.153
+          },
+          {
+            "word": "the",
+            "start_s": 14.222,
+            "end_s": 14.292
+          },
+          {
+            "word": "star-friends",
+            "start_s": 14.338,
+            "end_s": 15.011
+          },
+          {
+            "word": "begin",
+            "start_s": 15.081,
+            "end_s": 15.383
+          },
+          {
+            "word": "to",
+            "start_s": 15.441,
+            "end_s": 15.511
+          },
+          {
+            "word": "sing",
+            "start_s": 15.58,
+            "end_s": 15.836
+          },
+          {
+            "word": "a",
+            "start_s": 15.894,
+            "end_s": 15.917
+          },
+          {
+            "word": "quiet",
+            "start_s": 15.987,
+            "end_s": 16.335
+          },
+          {
+            "word": "song",
+            "start_s": 16.393,
+            "end_s": 16.753
+          },
+          {
+            "word": "Their",
+            "start_s": 17.566,
+            "end_s": 17.763
+          },
+          {
+            "word": "voices",
+            "start_s": 17.809,
+            "end_s": 18.169
+          },
+          {
+            "word": "twinkle",
+            "start_s": 18.227,
+            "end_s": 18.645
+          },
+          {
+            "word": "and",
+            "start_s": 18.68,
+            "end_s": 18.761
+          },
+          {
+            "word": "shimmer",
+            "start_s": 18.808,
+            "end_s": 19.156
+          },
+          {
+            "word": "soft",
+            "start_s": 19.505,
+            "end_s": 19.876
+          },
+          {
+            "word": "as",
+            "start_s": 19.922,
+            "end_s": 19.992
+          },
+          {
+            "word": "a",
+            "start_s": 20.05,
+            "end_s": 20.073
+          },
+          {
+            "word": "lullaby",
+            "start_s": 20.12,
+            "end_s": 20.654
+          }
+        ]
+      },
+      "image": "p5.52f52aff.webp",
+      "next_page": "p6",
+      "choice": null
+    },
+    {
+      "id": "p6",
+      "text": "The big round moon smiles down at gentle Cosmo. She yawns a great, slow yawn that spreads across the sky. The moon says goodnight in a voice like warm honey. Goodnight, Cosmo. Goodnight, little Comet. Goodnight, moon-calf. Goodnight, stars. Everything feels peaceful and calm now.",
+      "audio": {
+        "file": "p6.05d3f184.mp3",
+        "timings": [
+          {
+            "word": "The",
+            "start_s": 0.0,
+            "end_s": 0.151
+          },
+          {
+            "word": "big",
+            "start_s": 0.209,
+            "end_s": 0.406
+          },
+          {
+            "word": "round",
+            "start_s": 0.488,
+            "end_s": 0.743
+          },
+          {
+            "word": "moon",
+            "start_s": 0.824,
+            "end_s": 1.138
+          },
+          {
+            "word": "smiles",
+            "start_s": 1.231,
+            "end_s": 1.637
+          },
+          {
+            "word": "down",
+            "start_s": 1.695,
+            "end_s": 1.962
+          },
+          {
+            "word": "at",
+            "start_s": 2.009,
+            "end_s": 2.09
+          },
+          {
+            "word": "gentle",
+            "start_s": 2.148,
+            "end_s": 2.45
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 2.473,
+            "end_s": 2.984
+          },
+          {
+            "word": "She",
+            "start_s": 4.04,
+            "end_s": 4.191
+          },
+          {
+            "word": "yawns",
+            "start_s": 4.272,
+            "end_s": 4.598
+          },
+          {
+            "word": "a",
+            "start_s": 4.632,
+            "end_s": 4.667
+          },
+          {
+            "word": "great",
+            "start_s": 4.748,
+            "end_s": 5.039
+          },
+          {
+            "word": "slow",
+            "start_s": 5.108,
+            "end_s": 5.387
+          },
+          {
+            "word": "yawn",
+            "start_s": 5.457,
+            "end_s": 5.863
+          },
+          {
+            "word": "that",
+            "start_s": 6.037,
+            "end_s": 6.211
+          },
+          {
+            "word": "spreads",
+            "start_s": 6.269,
+            "end_s": 6.629
+          },
+          {
+            "word": "across",
+            "start_s": 6.664,
+            "end_s": 6.989
+          },
+          {
+            "word": "the",
+            "start_s": 7.036,
+            "end_s": 7.105
+          },
+          {
+            "word": "sky",
+            "start_s": 7.152,
+            "end_s": 7.593
+          },
+          {
+            "word": "The",
+            "start_s": 8.951,
+            "end_s": 9.079
+          },
+          {
+            "word": "moon",
+            "start_s": 9.125,
+            "end_s": 9.334
+          },
+          {
+            "word": "says",
+            "start_s": 9.404,
+            "end_s": 9.601
+          },
+          {
+            "word": "goodnight",
+            "start_s": 9.66,
+            "end_s": 10.089
+          },
+          {
+            "word": "in",
+            "start_s": 10.182,
+            "end_s": 10.31
+          },
+          {
+            "word": "a",
+            "start_s": 10.344,
+            "end_s": 10.368
+          },
+          {
+            "word": "voice",
+            "start_s": 10.437,
+            "end_s": 10.693
+          },
+          {
+            "word": "like",
+            "start_s": 10.728,
+            "end_s": 10.879
+          },
+          {
+            "word": "warm",
+            "start_s": 10.913,
+            "end_s": 11.134
+          },
+          {
+            "word": "honey",
+            "start_s": 11.192,
+            "end_s": 11.505
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 12.156,
+            "end_s": 12.562
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 12.608,
+            "end_s": 13.142
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 13.932,
+            "end_s": 14.338
+          },
+          {
+            "word": "little",
+            "start_s": 14.385,
+            "end_s": 14.594
+          },
+          {
+            "word": "Comet",
+            "start_s": 14.617,
+            "end_s": 15.047
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 15.662,
+            "end_s": 16.103
+          },
+          {
+            "word": "moon-calf",
+            "start_s": 16.149,
+            "end_s": 16.765
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 17.415,
+            "end_s": 17.833
+          },
+          {
+            "word": "stars",
+            "start_s": 17.879,
+            "end_s": 18.39
+          },
+          {
+            "word": "Everything",
+            "start_s": 19.04,
+            "end_s": 19.505
+          },
+          {
+            "word": "feels",
+            "start_s": 19.563,
+            "end_s": 19.818
+          },
+          {
+            "word": "peaceful",
+            "start_s": 19.888,
+            "end_s": 20.329
+          },
+          {
+            "word": "and",
+            "start_s": 20.41,
+            "end_s": 20.515
+          },
+          {
+            "word": "calm",
+            "start_s": 20.584,
+            "end_s": 20.863
+          },
+          {
+            "word": "now",
+            "start_s": 20.933,
+            "end_s": 21.165
+          }
+        ]
+      },
+      "image": "p6.4831fac2.webp",
+      "next_page": "p7",
+      "choice": null
+    },
+    {
+      "id": "p7",
+      "text": "Cosmo guides Comet down to a soft, fluffy cloud. The cloud feels like a warm pillow beneath them. Cosmo tips his hat over his eyes gently. His scarf of starlight wraps around him like a blanket. Comet settles down with a happy little sigh. The stars shine quietly all around them.",
+      "audio": {
+        "file": "p7.33ec57de.mp3",
+        "timings": [
+          {
+            "word": "Cosmo",
+            "start_s": 0.0,
+            "end_s": 0.499
+          },
+          {
+            "word": "guides",
+            "start_s": 0.569,
+            "end_s": 0.836
+          },
+          {
+            "word": "Comet",
+            "start_s": 0.882,
+            "end_s": 1.207
+          },
+          {
+            "word": "down",
+            "start_s": 1.254,
+            "end_s": 1.451
+          },
+          {
+            "word": "to",
+            "start_s": 1.509,
+            "end_s": 1.567
+          },
+          {
+            "word": "a",
+            "start_s": 1.66,
+            "end_s": 1.683
+          },
+          {
+            "word": "soft",
+            "start_s": 1.753,
+            "end_s": 2.101
+          },
+          {
+            "word": "fluffy",
+            "start_s": 2.159,
+            "end_s": 2.461
+          },
+          {
+            "word": "cloud",
+            "start_s": 2.519,
+            "end_s": 2.902
+          },
+          {
+            "word": "The",
+            "start_s": 3.518,
+            "end_s": 3.622
+          },
+          {
+            "word": "cloud",
+            "start_s": 3.68,
+            "end_s": 4.005
+          },
+          {
+            "word": "feels",
+            "start_s": 4.075,
+            "end_s": 4.389
+          },
+          {
+            "word": "like",
+            "start_s": 4.447,
+            "end_s": 4.586
+          },
+          {
+            "word": "a",
+            "start_s": 4.621,
+            "end_s": 4.644
+          },
+          {
+            "word": "warm",
+            "start_s": 4.714,
+            "end_s": 5.004
+          },
+          {
+            "word": "pillow",
+            "start_s": 5.074,
+            "end_s": 5.352
+          },
+          {
+            "word": "beneath",
+            "start_s": 5.41,
+            "end_s": 5.677
+          },
+          {
+            "word": "them",
+            "start_s": 5.724,
+            "end_s": 5.921
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 6.792,
+            "end_s": 7.221
+          },
+          {
+            "word": "tips",
+            "start_s": 7.291,
+            "end_s": 7.535
+          },
+          {
+            "word": "his",
+            "start_s": 7.581,
+            "end_s": 7.674
+          },
+          {
+            "word": "hat",
+            "start_s": 7.721,
+            "end_s": 7.964
+          },
+          {
+            "word": "over",
+            "start_s": 8.022,
+            "end_s": 8.22
+          },
+          {
+            "word": "his",
+            "start_s": 8.29,
+            "end_s": 8.394
+          },
+          {
+            "word": "eyes",
+            "start_s": 8.464,
+            "end_s": 8.684
+          },
+          {
+            "word": "gently",
+            "start_s": 8.754,
+            "end_s": 9.172
+          },
+          {
+            "word": "His",
+            "start_s": 9.787,
+            "end_s": 9.95
+          },
+          {
+            "word": "scarf",
+            "start_s": 9.996,
+            "end_s": 10.391
+          },
+          {
+            "word": "of",
+            "start_s": 10.449,
+            "end_s": 10.507
+          },
+          {
+            "word": "starlight",
+            "start_s": 10.577,
+            "end_s": 11.076
+          },
+          {
+            "word": "wraps",
+            "start_s": 11.111,
+            "end_s": 11.424
+          },
+          {
+            "word": "around",
+            "start_s": 11.471,
+            "end_s": 11.749
+          },
+          {
+            "word": "him",
+            "start_s": 11.807,
+            "end_s": 11.923
+          },
+          {
+            "word": "like",
+            "start_s": 11.981,
+            "end_s": 12.121
+          },
+          {
+            "word": "a",
+            "start_s": 12.156,
+            "end_s": 12.179
+          },
+          {
+            "word": "blanket",
+            "start_s": 12.214,
+            "end_s": 12.666
+          },
+          {
+            "word": "Comet",
+            "start_s": 13.421,
+            "end_s": 13.816
+          },
+          {
+            "word": "settles",
+            "start_s": 13.886,
+            "end_s": 14.187
+          },
+          {
+            "word": "down",
+            "start_s": 14.245,
+            "end_s": 14.524
+          },
+          {
+            "word": "with",
+            "start_s": 14.582,
+            "end_s": 14.71
+          },
+          {
+            "word": "a",
+            "start_s": 14.756,
+            "end_s": 14.779
+          },
+          {
+            "word": "happy",
+            "start_s": 14.861,
+            "end_s": 15.128
+          },
+          {
+            "word": "little",
+            "start_s": 15.186,
+            "end_s": 15.406
+          },
+          {
+            "word": "sigh",
+            "start_s": 15.43,
+            "end_s": 15.79
+          },
+          {
+            "word": "The",
+            "start_s": 16.405,
+            "end_s": 16.509
+          },
+          {
+            "word": "stars",
+            "start_s": 16.567,
+            "end_s": 16.985
+          },
+          {
+            "word": "shine",
+            "start_s": 17.032,
+            "end_s": 17.287
+          },
+          {
+            "word": "quietly",
+            "start_s": 17.322,
+            "end_s": 17.752
+          },
+          {
+            "word": "all",
+            "start_s": 17.81,
+            "end_s": 17.937
+          },
+          {
+            "word": "around",
+            "start_s": 17.995,
+            "end_s": 18.239
+          },
+          {
+            "word": "them",
+            "start_s": 18.286,
+            "end_s": 18.471
+          }
+        ]
+      },
+      "image": "p7.edeba1a2.webp",
+      "next_page": "p8",
+      "choice": null
+    },
+    {
+      "id": "p8",
+      "text": "Cosmo drifts slowly into a happy sleep. The night sky holds him safe and warm. Stars whisper goodnight songs soft as breathing. The moon glows gently, watching over everyone. Cosmo dreams of kind adventures and rainbow colours. All is calm. All is peaceful. Goodnight, dear Cosmo. Goodnight.",
+      "audio": {
+        "file": "p8.5eff550c.mp3",
+        "timings": [
+          {
+            "word": "Cosmo",
+            "start_s": 0.0,
+            "end_s": 0.546
+          },
+          {
+            "word": "drifts",
+            "start_s": 0.615,
+            "end_s": 0.929
+          },
+          {
+            "word": "slowly",
+            "start_s": 0.964,
+            "end_s": 1.416
+          },
+          {
+            "word": "into",
+            "start_s": 1.486,
+            "end_s": 1.649
+          },
+          {
+            "word": "a",
+            "start_s": 1.73,
+            "end_s": 1.753
+          },
+          {
+            "word": "happy",
+            "start_s": 1.823,
+            "end_s": 2.078
+          },
+          {
+            "word": "sleep",
+            "start_s": 2.148,
+            "end_s": 2.473
+          },
+          {
+            "word": "The",
+            "start_s": 3.251,
+            "end_s": 3.367
+          },
+          {
+            "word": "night",
+            "start_s": 3.425,
+            "end_s": 3.634
+          },
+          {
+            "word": "sky",
+            "start_s": 3.68,
+            "end_s": 4.029
+          },
+          {
+            "word": "holds",
+            "start_s": 4.11,
+            "end_s": 4.342
+          },
+          {
+            "word": "him",
+            "start_s": 4.389,
+            "end_s": 4.481
+          },
+          {
+            "word": "safe",
+            "start_s": 4.563,
+            "end_s": 4.841
+          },
+          {
+            "word": "and",
+            "start_s": 4.876,
+            "end_s": 4.957
+          },
+          {
+            "word": "warm",
+            "start_s": 5.016,
+            "end_s": 5.341
+          },
+          {
+            "word": "Stars",
+            "start_s": 6.118,
+            "end_s": 6.56
+          },
+          {
+            "word": "whisper",
+            "start_s": 6.606,
+            "end_s": 6.943
+          },
+          {
+            "word": "goodnight",
+            "start_s": 7.012,
+            "end_s": 7.419
+          },
+          {
+            "word": "songs",
+            "start_s": 7.465,
+            "end_s": 7.918
+          },
+          {
+            "word": "soft",
+            "start_s": 8.069,
+            "end_s": 8.406
+          },
+          {
+            "word": "as",
+            "start_s": 8.452,
+            "end_s": 8.522
+          },
+          {
+            "word": "breathing",
+            "start_s": 8.58,
+            "end_s": 8.998
+          },
+          {
+            "word": "The",
+            "start_s": 9.683,
+            "end_s": 9.799
+          },
+          {
+            "word": "moon",
+            "start_s": 9.857,
+            "end_s": 10.089
+          },
+          {
+            "word": "glows",
+            "start_s": 10.147,
+            "end_s": 10.461
+          },
+          {
+            "word": "gently",
+            "start_s": 10.519,
+            "end_s": 10.948
+          },
+          {
+            "word": "watching",
+            "start_s": 11.25,
+            "end_s": 11.633
+          },
+          {
+            "word": "over",
+            "start_s": 11.691,
+            "end_s": 11.854
+          },
+          {
+            "word": "everyone",
+            "start_s": 11.923,
+            "end_s": 12.481
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 13.305,
+            "end_s": 13.769
+          },
+          {
+            "word": "dreams",
+            "start_s": 13.827,
+            "end_s": 14.153
+          },
+          {
+            "word": "of",
+            "start_s": 14.199,
+            "end_s": 14.257
+          },
+          {
+            "word": "kind",
+            "start_s": 14.338,
+            "end_s": 14.629
+          },
+          {
+            "word": "adventures",
+            "start_s": 14.675,
+            "end_s": 15.29
+          },
+          {
+            "word": "and",
+            "start_s": 15.441,
+            "end_s": 15.604
+          },
+          {
+            "word": "rainbow",
+            "start_s": 15.685,
+            "end_s": 15.999
+          },
+          {
+            "word": "colours",
+            "start_s": 16.068,
+            "end_s": 16.533
+          },
+          {
+            "word": "All",
+            "start_s": 17.287,
+            "end_s": 17.554
+          },
+          {
+            "word": "is",
+            "start_s": 17.624,
+            "end_s": 17.717
+          },
+          {
+            "word": "calm",
+            "start_s": 17.786,
+            "end_s": 18.17
+          },
+          {
+            "word": "All",
+            "start_s": 18.808,
+            "end_s": 19.098
+          },
+          {
+            "word": "is",
+            "start_s": 19.191,
+            "end_s": 19.307
+          },
+          {
+            "word": "peaceful",
+            "start_s": 19.389,
+            "end_s": 19.865
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 20.712,
+            "end_s": 21.165
+          },
+          {
+            "word": "dear",
+            "start_s": 21.223,
+            "end_s": 21.409
+          },
+          {
+            "word": "Cosmo",
+            "start_s": 21.49,
+            "end_s": 22.013
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 22.767,
+            "end_s": 23.324
+          }
+        ]
+      },
+      "image": "p8.d62be60e.webp",
+      "next_page": null,
+      "choice": null
+    }
+  ],
+  "gloss": null
+}

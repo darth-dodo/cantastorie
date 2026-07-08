@@ -1,0 +1,18 @@
+{
+  "language": "en",
+  "prompts": {},
+  "stories": [
+    {
+      "id": "cosmo-space-cowboy",
+      "title": "The Moon Says Goodnight",
+      "wash": "wash-bosco",
+      "story": "/static/content/en/stories/cosmo-space-cowboy/story.json"
+    },
+    {
+      "id": "pip-the-pirate",
+      "title": "Pip and the Little Boat Biscuit",
+      "wash": "wash-barchetta",
+      "story": "/static/content/en/stories/pip-the-pirate/story.json"
+    }
+  ]
+}
