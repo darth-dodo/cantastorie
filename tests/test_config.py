@@ -46,6 +46,37 @@ def test_api_keys_never_appear_in_repr_or_str() -> None:
         assert "el-secret" not in rendered
 
 
+def test_r2_credentials_never_appear_in_repr_or_str() -> None:
+    """Given settings holding real R2 access-key material,
+    When settings are rendered via repr or str (as a log line would),
+    Then neither R2 secret appears — the publish keys live only in env, never
+    in logs, exactly like the OpenRouter and ElevenLabs keys.
+    """
+    settings = Settings(
+        _env_file=None,
+        r2_access_key_id=SecretStr("r2-access-secret"),
+        r2_secret_access_key=SecretStr("r2-signing-secret"),
+    )
+    for rendered in (repr(settings), str(settings)):
+        assert "r2-access-secret" not in rendered
+        assert "r2-signing-secret" not in rendered
+
+
+def test_r2_settings_default_to_empty_so_the_pipeline_loads_without_a_bucket() -> None:
+    """Given no .env and no environment,
+    When Settings load,
+    Then the R2 publish target defaults to empty strings/secrets and staging
+    defaults to the local staging/ folder — generation never needs a bucket.
+    """
+    settings = Settings(_env_file=None)
+    assert settings.r2_endpoint_url == ""
+    assert settings.r2_bucket == ""
+    assert settings.r2_public_base == ""
+    assert settings.r2_access_key_id.get_secret_value() == ""
+    assert settings.r2_secret_access_key.get_secret_value() == ""
+    assert settings.staging_dir.name == "staging"
+
+
 def test_safety_judge_defaults_to_a_different_model_family_than_the_writer() -> None:
     """Given the default per-step model choices,
     When the writer and safety-gate families are compared,
