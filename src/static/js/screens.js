@@ -59,12 +59,10 @@ function iconShelf() {
 export function buildShelf(store, greeting, stories = shelf, onOpen = () => store.openStory()) {
   const screen = el("div", "screen shelf");
 
-  if (document.documentElement.dataset.theme === "dusk") {
-    const stars = el("div", "stars");
-    stars.style.top = "88px";
-    stars.style.right = "56px";
-    screen.appendChild(stars);
-  }
+  // No stars on the shelf: its top-left is the greeting, so the cluster was
+  // right-anchored and its box-shadow companions fell off-screen, leaving one
+  // orphaned dot that reads as a dead pixel. Stars stay on the player/end
+  // night scenes, where they're left-anchored and render as a full cluster.
 
   const header = el("div", "greeting");
   const mascot = el("div", "mascot");
