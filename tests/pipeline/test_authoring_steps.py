@@ -395,3 +395,21 @@ def test_a_story_violating_a_content_limit_routes_to_revise_even_when_the_judge_
     assert check_story(story) == []
     assert reviser.calls == 1
     assert "sentence" in reviser.seen_prompts[0]  # the violation reached the reviser
+
+
+def test_author_story_forwards_the_premise_to_the_writer(tmp_path: Path) -> None:
+    """Given a premise passed to author_story,
+    When the authoring loop runs and the first draft passes every gate,
+    Then the premise reached the writer model's prompt."""
+    writer = DraftModel(good_draft())
+    judge = JudgeModel(report_args())
+    author_story(
+        "the_sleepy_sea",
+        "it",
+        _settings(),
+        _cache(tmp_path),
+        write_model=writer,
+        safety_model=judge,
+        premise="Bruno bear has a birthday.",
+    )
+    assert any("Bruno bear has a birthday." in seen for seen in writer.seen_prompts)

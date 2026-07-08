@@ -198,3 +198,27 @@ def test_rerunning_generate_reproduces_an_identical_staged_story(tmp_path: Path)
         image_transport=_fake_images(),
     )
     assert (staged_again / "story.json").read_bytes() == first
+
+
+def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path) -> None:
+    """Given the same theme and language,
+    When one run has a premise and one does not,
+    Then they stage to different working folders — no collision."""
+    settings = _settings(tmp_path)
+
+    def run(premise: str | None) -> Path:
+        return generate_story(
+            "the_sleepy_sea",
+            "it",
+            settings,
+            write_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            safety_model=TestModel(custom_output_args=_PASSING_REPORT),
+            revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            narration_client=_fake_elevenlabs(),
+            image_transport=_fake_images(),
+            premise=premise,
+        )
+
+    plain = run(None)
+    premised = run("A birthday at sea.")
+    assert plain.name != premised.name
