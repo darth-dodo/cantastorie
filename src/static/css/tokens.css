@@ -20,6 +20,11 @@
   --font-story: "Literata", serif;
   --karaoke: rgba(229, 183, 94, 0.45);
 
+  /* Layout: the app is a mobile-first, hold-in-hand experience. On larger
+     viewports the whole player is framed as a centered phone-width column
+     rather than magnified full-screen. Phones fill the frame edge to edge. */
+  --app-max: 540px;
+
   /* Motion: slow crossfades only — nothing snaps, flashes, or bounces */
   --fade: 900ms ease;
   --fade-quick: 600ms ease;

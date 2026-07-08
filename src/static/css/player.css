@@ -18,7 +18,25 @@ body {
   user-select: none;
 }
 
-#app,
+/* The app frame: mobile-first, so on a phone #app IS the viewport and every
+   screen is full-bleed. On a larger viewport the frame caps at a phone width
+   and centers, lifted subtly off the backdrop — a held-in-hand shelf, never
+   a magnified one. Screens are absolute inset:0 within this frame, so the
+   full-bleed page art fills the frame edge to edge at every size. */
+#app {
+  position: absolute;
+  inset: 0;
+  max-width: var(--app-max);
+  margin-inline: auto;
+  overflow: hidden;
+}
+
+@media (min-width: 600px) {
+  #app {
+    box-shadow: 0 0 80px rgba(0, 0, 0, 0.28);
+  }
+}
+
 .screen {
   position: absolute;
   inset: 0;
@@ -53,6 +71,16 @@ button.presses:active {
   background:
     radial-gradient(90% 40% at 50% -10%, rgba(245, 223, 174, 0.18), rgba(245, 223, 174, 0) 70%),
     linear-gradient(180deg, #261e15, #2a2119 55%, #332818);
+}
+
+/* With room to spare (a tall frame), center the shelf column vertically so
+   it isn't a top-aligned strip; short viewports keep it top-aligned so
+   nothing clips. */
+@media (min-height: 760px) {
+  .shelf {
+    justify-content: center;
+    padding-bottom: 40px;
+  }
 }
 
 .greeting {
