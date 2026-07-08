@@ -29,6 +29,9 @@ def generate(
     theme: str = typer.Option(..., help="One of the locked launch themes"),
     language: str = typer.Option(..., help="Story language: it, es, en, el, de"),
     shape: str = typer.Option("linear", help="linear or branching"),
+    premise: str = typer.Option(
+        "", help="Optional plot brief; steers the story beyond the theme seed"
+    ),
 ) -> None:
     """Generate a story end to end (write → safety → narrate → illustrate → assemble → stage)."""
     if language not in _LANGUAGES:
@@ -41,7 +44,12 @@ def generate(
         typer.echo(f"Unknown shape {shape!r}; linear or branching")
         raise typer.Exit(1)
 
-    staged = generate_story(cast("Theme", theme), cast("Language", language), get_settings())
+    staged = generate_story(
+        cast("Theme", theme),
+        cast("Language", language),
+        get_settings(),
+        premise=premise or None,
+    )
     typer.echo(f"Staged {staged.name} for review at {staged}")
 
 
