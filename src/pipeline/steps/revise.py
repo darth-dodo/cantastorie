@@ -111,6 +111,7 @@ def author_story(
     write_model: Model | None = None,
     safety_model: Model | None = None,
     revise_model: Model | None = None,
+    premise: str | None = None,
 ) -> tuple[Story, SafetyReport]:
     """write → gate → bounded revise: the one loop the pipeline owns.
 
@@ -118,7 +119,7 @@ def author_story(
     content limits (as code) and all nine safety verdicts. Two failed
     revisions reject the story.
     """
-    story = write_story(theme, language, settings, cache, model=write_model)
+    story = write_story(theme, language, settings, cache, model=write_model, premise=premise)
     report = safety_gate(story, settings, cache, model=safety_model)
     failures = _gate_failures(story, report)
 

@@ -1,0 +1,2647 @@
+{
+  "schema_version": 1,
+  "id": "pip-the-pirate",
+  "language": "en",
+  "title": "Pip and the Little Boat Biscuit",
+  "theme": "the_little_boat",
+  "shape": "linear",
+  "pages": [
+    {
+      "id": "p1",
+      "text": "Pip is a friendly little pirate with a soft red bandana. Tonight Pip climbs into a tiny wooden boat named Biscuit. The moon shines bright and silver on the calm sea. Pip holds an old, crinkly map in small hands. The map shows a treasure on an island far away. Biscuit's little sail goes flap-flap in the gentle breeze. Away they go, rocking softly on the moonlit waves.",
+      "audio": {
+        "file": "p1.5f867319.mp3",
+        "timings": [
+          {
+            "word": "Pip",
+            "start_s": 0.0,
+            "end_s": 0.302
+          },
+          {
+            "word": "is",
+            "start_s": 0.36,
+            "end_s": 0.441
+          },
+          {
+            "word": "a",
+            "start_s": 0.488,
+            "end_s": 0.522
+          },
+          {
+            "word": "friendly",
+            "start_s": 0.58,
+            "end_s": 0.917
+          },
+          {
+            "word": "little",
+            "start_s": 0.975,
+            "end_s": 1.184
+          },
+          {
+            "word": "pirate",
+            "start_s": 1.207,
+            "end_s": 1.66
+          },
+          {
+            "word": "with",
+            "start_s": 1.776,
+            "end_s": 1.95
+          },
+          {
+            "word": "a",
+            "start_s": 1.997,
+            "end_s": 2.02
+          },
+          {
+            "word": "soft",
+            "start_s": 2.09,
+            "end_s": 2.426
+          },
+          {
+            "word": "red",
+            "start_s": 2.496,
+            "end_s": 2.67
+          },
+          {
+            "word": "bandana",
+            "start_s": 2.728,
+            "end_s": 3.332
+          },
+          {
+            "word": "Tonight",
+            "start_s": 4.063,
+            "end_s": 4.458
+          },
+          {
+            "word": "Pip",
+            "start_s": 4.528,
+            "end_s": 4.737
+          },
+          {
+            "word": "climbs",
+            "start_s": 4.807,
+            "end_s": 5.155
+          },
+          {
+            "word": "into",
+            "start_s": 5.201,
+            "end_s": 5.364
+          },
+          {
+            "word": "a",
+            "start_s": 5.445,
+            "end_s": 5.48
+          },
+          {
+            "word": "tiny",
+            "start_s": 5.526,
+            "end_s": 5.84
+          },
+          {
+            "word": "wooden",
+            "start_s": 5.898,
+            "end_s": 6.153
+          },
+          {
+            "word": "boat",
+            "start_s": 6.2,
+            "end_s": 6.409
+          },
+          {
+            "word": "named",
+            "start_s": 6.478,
+            "end_s": 6.699
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 6.757,
+            "end_s": 7.198
+          },
+          {
+            "word": "The",
+            "start_s": 7.86,
+            "end_s": 7.976
+          },
+          {
+            "word": "moon",
+            "start_s": 8.022,
+            "end_s": 8.22
+          },
+          {
+            "word": "shines",
+            "start_s": 8.278,
+            "end_s": 8.591
+          },
+          {
+            "word": "bright",
+            "start_s": 8.661,
+            "end_s": 8.951
+          },
+          {
+            "word": "and",
+            "start_s": 9.009,
+            "end_s": 9.091
+          },
+          {
+            "word": "silver",
+            "start_s": 9.16,
+            "end_s": 9.52
+          },
+          {
+            "word": "on",
+            "start_s": 9.601,
+            "end_s": 9.706
+          },
+          {
+            "word": "the",
+            "start_s": 9.741,
+            "end_s": 9.81
+          },
+          {
+            "word": "calm",
+            "start_s": 9.845,
+            "end_s": 10.136
+          },
+          {
+            "word": "sea",
+            "start_s": 10.217,
+            "end_s": 10.53
+          },
+          {
+            "word": "Pip",
+            "start_s": 11.378,
+            "end_s": 11.633
+          },
+          {
+            "word": "holds",
+            "start_s": 11.691,
+            "end_s": 11.958
+          },
+          {
+            "word": "an",
+            "start_s": 11.993,
+            "end_s": 12.063
+          },
+          {
+            "word": "old",
+            "start_s": 12.144,
+            "end_s": 12.388
+          },
+          {
+            "word": "crinkly",
+            "start_s": 12.457,
+            "end_s": 12.852
+          },
+          {
+            "word": "map",
+            "start_s": 12.922,
+            "end_s": 13.166
+          },
+          {
+            "word": "in",
+            "start_s": 13.235,
+            "end_s": 13.317
+          },
+          {
+            "word": "small",
+            "start_s": 13.398,
+            "end_s": 13.711
+          },
+          {
+            "word": "hands",
+            "start_s": 13.769,
+            "end_s": 14.199
+          },
+          {
+            "word": "The",
+            "start_s": 14.861,
+            "end_s": 14.977
+          },
+          {
+            "word": "map",
+            "start_s": 15.035,
+            "end_s": 15.244
+          },
+          {
+            "word": "shows",
+            "start_s": 15.314,
+            "end_s": 15.534
+          },
+          {
+            "word": "a",
+            "start_s": 15.581,
+            "end_s": 15.604
+          },
+          {
+            "word": "treasure",
+            "start_s": 15.662,
+            "end_s": 16.15
+          },
+          {
+            "word": "on",
+            "start_s": 16.196,
+            "end_s": 16.359
+          },
+          {
+            "word": "an",
+            "start_s": 16.405,
+            "end_s": 16.475
+          },
+          {
+            "word": "island",
+            "start_s": 16.544,
+            "end_s": 16.869
+          },
+          {
+            "word": "far",
+            "start_s": 16.951,
+            "end_s": 17.16
+          },
+          {
+            "word": "away",
+            "start_s": 17.218,
+            "end_s": 17.613
+          },
+          {
+            "word": "Biscuit's",
+            "start_s": 18.298,
+            "end_s": 18.762
+          },
+          {
+            "word": "little",
+            "start_s": 18.797,
+            "end_s": 19.017
+          },
+          {
+            "word": "sail",
+            "start_s": 19.052,
+            "end_s": 19.366
+          },
+          {
+            "word": "goes",
+            "start_s": 19.459,
+            "end_s": 19.656
+          },
+          {
+            "word": "flap-flap",
+            "start_s": 19.726,
+            "end_s": 20.352
+          },
+          {
+            "word": "in",
+            "start_s": 20.411,
+            "end_s": 20.469
+          },
+          {
+            "word": "the",
+            "start_s": 20.515,
+            "end_s": 20.585
+          },
+          {
+            "word": "gentle",
+            "start_s": 20.631,
+            "end_s": 20.921
+          },
+          {
+            "word": "breeze",
+            "start_s": 20.945,
+            "end_s": 21.397
+          },
+          {
+            "word": "Away",
+            "start_s": 22.187,
+            "end_s": 22.512
+          },
+          {
+            "word": "they",
+            "start_s": 22.582,
+            "end_s": 22.698
+          },
+          {
+            "word": "go",
+            "start_s": 22.756,
+            "end_s": 22.976
+          },
+          {
+            "word": "rocking",
+            "start_s": 23.359,
+            "end_s": 23.719
+          },
+          {
+            "word": "softly",
+            "start_s": 23.789,
+            "end_s": 24.23
+          },
+          {
+            "word": "on",
+            "start_s": 24.288,
+            "end_s": 24.358
+          },
+          {
+            "word": "the",
+            "start_s": 24.393,
+            "end_s": 24.462
+          },
+          {
+            "word": "moonlit",
+            "start_s": 24.497,
+            "end_s": 24.822
+          },
+          {
+            "word": "waves",
+            "start_s": 24.869,
+            "end_s": 25.298
+          }
+        ]
+      },
+      "image": "p1.8933337a.webp",
+      "next_page": "p2",
+      "choice": null
+    },
+    {
+      "id": "p2",
+      "text": "The sea is quiet and peaceful tonight. The water goes swish, swish, swish under Biscuit's hull. Stars twinkle like tiny candles in the velvet sky. Pip hums a little sailing song, tra-la, tra-la. The waves are gentle, lifting Biscuit up and down. Up and down, up and down, so softly. Everything is calm and safe on this warm night.",
+      "audio": {
+        "file": "p2.465f277e.mp3",
+        "timings": [
+          {
+            "word": "The",
+            "start_s": 0.0,
+            "end_s": 0.163
+          },
+          {
+            "word": "sea",
+            "start_s": 0.221,
+            "end_s": 0.406
+          },
+          {
+            "word": "is",
+            "start_s": 0.441,
+            "end_s": 0.522
+          },
+          {
+            "word": "quiet",
+            "start_s": 0.592,
+            "end_s": 0.964
+          },
+          {
+            "word": "and",
+            "start_s": 1.01,
+            "end_s": 1.08
+          },
+          {
+            "word": "peaceful",
+            "start_s": 1.149,
+            "end_s": 1.498
+          },
+          {
+            "word": "tonight",
+            "start_s": 1.556,
+            "end_s": 1.927
+          },
+          {
+            "word": "The",
+            "start_s": 2.519,
+            "end_s": 2.635
+          },
+          {
+            "word": "water",
+            "start_s": 2.694,
+            "end_s": 2.937
+          },
+          {
+            "word": "goes",
+            "start_s": 2.984,
+            "end_s": 3.17
+          },
+          {
+            "word": "swish",
+            "start_s": 3.216,
+            "end_s": 3.599
+          },
+          {
+            "word": "swish",
+            "start_s": 3.669,
+            "end_s": 4.075
+          },
+          {
+            "word": "swish",
+            "start_s": 4.133,
+            "end_s": 4.516
+          },
+          {
+            "word": "under",
+            "start_s": 4.586,
+            "end_s": 4.76
+          },
+          {
+            "word": "Biscuit's",
+            "start_s": 4.807,
+            "end_s": 5.178
+          },
+          {
+            "word": "hull",
+            "start_s": 5.213,
+            "end_s": 5.48
+          },
+          {
+            "word": "Stars",
+            "start_s": 6.293,
+            "end_s": 6.687
+          },
+          {
+            "word": "twinkle",
+            "start_s": 6.745,
+            "end_s": 7.117
+          },
+          {
+            "word": "like",
+            "start_s": 7.163,
+            "end_s": 7.338
+          },
+          {
+            "word": "tiny",
+            "start_s": 7.372,
+            "end_s": 7.674
+          },
+          {
+            "word": "candles",
+            "start_s": 7.732,
+            "end_s": 8.115
+          },
+          {
+            "word": "in",
+            "start_s": 8.15,
+            "end_s": 8.208
+          },
+          {
+            "word": "the",
+            "start_s": 8.243,
+            "end_s": 8.313
+          },
+          {
+            "word": "velvet",
+            "start_s": 8.359,
+            "end_s": 8.649
+          },
+          {
+            "word": "sky",
+            "start_s": 8.696,
+            "end_s": 9.137
+          },
+          {
+            "word": "Pip",
+            "start_s": 10.112,
+            "end_s": 10.344
+          },
+          {
+            "word": "hums",
+            "start_s": 10.414,
+            "end_s": 10.704
+          },
+          {
+            "word": "a",
+            "start_s": 10.739,
+            "end_s": 10.762
+          },
+          {
+            "word": "little",
+            "start_s": 10.809,
+            "end_s": 11.029
+          },
+          {
+            "word": "sailing",
+            "start_s": 11.053,
+            "end_s": 11.366
+          },
+          {
+            "word": "song",
+            "start_s": 11.424,
+            "end_s": 11.714
+          },
+          {
+            "word": "tra-la",
+            "start_s": 12.063,
+            "end_s": 12.713
+          },
+          {
+            "word": "tra-la",
+            "start_s": 12.783,
+            "end_s": 13.502
+          },
+          {
+            "word": "The",
+            "start_s": 14.315,
+            "end_s": 14.443
+          },
+          {
+            "word": "waves",
+            "start_s": 14.501,
+            "end_s": 14.791
+          },
+          {
+            "word": "are",
+            "start_s": 14.826,
+            "end_s": 14.93
+          },
+          {
+            "word": "gentle",
+            "start_s": 14.977,
+            "end_s": 15.511
+          },
+          {
+            "word": "lifting",
+            "start_s": 15.72,
+            "end_s": 16.056
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 16.114,
+            "end_s": 16.44
+          },
+          {
+            "word": "up",
+            "start_s": 16.498,
+            "end_s": 16.637
+          },
+          {
+            "word": "and",
+            "start_s": 16.683,
+            "end_s": 16.753
+          },
+          {
+            "word": "down",
+            "start_s": 16.811,
+            "end_s": 17.148
+          },
+          {
+            "word": "Up",
+            "start_s": 17.868,
+            "end_s": 18.065
+          },
+          {
+            "word": "and",
+            "start_s": 18.135,
+            "end_s": 18.228
+          },
+          {
+            "word": "down",
+            "start_s": 18.297,
+            "end_s": 18.657
+          },
+          {
+            "word": "up",
+            "start_s": 19.04,
+            "end_s": 19.203
+          },
+          {
+            "word": "and",
+            "start_s": 19.261,
+            "end_s": 19.342
+          },
+          {
+            "word": "down",
+            "start_s": 19.4,
+            "end_s": 19.737
+          },
+          {
+            "word": "so",
+            "start_s": 19.969,
+            "end_s": 20.166
+          },
+          {
+            "word": "softly",
+            "start_s": 20.248,
+            "end_s": 20.782
+          },
+          {
+            "word": "Everything",
+            "start_s": 21.629,
+            "end_s": 22.036
+          },
+          {
+            "word": "is",
+            "start_s": 22.082,
+            "end_s": 22.175
+          },
+          {
+            "word": "calm",
+            "start_s": 22.233,
+            "end_s": 22.546
+          },
+          {
+            "word": "and",
+            "start_s": 22.593,
+            "end_s": 22.674
+          },
+          {
+            "word": "safe",
+            "start_s": 22.744,
+            "end_s": 23.034
+          },
+          {
+            "word": "on",
+            "start_s": 23.08,
+            "end_s": 23.15
+          },
+          {
+            "word": "this",
+            "start_s": 23.185,
+            "end_s": 23.301
+          },
+          {
+            "word": "warm",
+            "start_s": 23.359,
+            "end_s": 23.58
+          },
+          {
+            "word": "night",
+            "start_s": 23.638,
+            "end_s": 23.916
+          }
+        ]
+      },
+      "image": "p2.b9cb217c.webp",
+      "next_page": "p3",
+      "choice": null
+    },
+    {
+      "id": "p3",
+      "text": "Suddenly Pip spots something small bobbing on the waves. It is a little baby seagull, all fluffy and white. The baby seagull bobs up and down, peep-peep. It is too sleepy to fly home tonight. Its tiny eyes blink slowly in the moonlight. Poor little bird, so lost and tired! Pip steers Biscuit closer, very gently, very slowly.",
+      "audio": {
+        "file": "p3.c5ccd8e0.mp3",
+        "timings": [
+          {
+            "word": "Suddenly",
+            "start_s": 0.0,
+            "end_s": 0.534
+          },
+          {
+            "word": "Pip",
+            "start_s": 0.859,
+            "end_s": 1.103
+          },
+          {
+            "word": "spots",
+            "start_s": 1.161,
+            "end_s": 1.521
+          },
+          {
+            "word": "something",
+            "start_s": 1.556,
+            "end_s": 1.869
+          },
+          {
+            "word": "small",
+            "start_s": 1.927,
+            "end_s": 2.264
+          },
+          {
+            "word": "bobbing",
+            "start_s": 2.357,
+            "end_s": 2.682
+          },
+          {
+            "word": "on",
+            "start_s": 2.728,
+            "end_s": 2.775
+          },
+          {
+            "word": "the",
+            "start_s": 2.81,
+            "end_s": 2.879
+          },
+          {
+            "word": "waves",
+            "start_s": 2.914,
+            "end_s": 3.332
+          },
+          {
+            "word": "It",
+            "start_s": 4.11,
+            "end_s": 4.249
+          },
+          {
+            "word": "is",
+            "start_s": 4.296,
+            "end_s": 4.377
+          },
+          {
+            "word": "a",
+            "start_s": 4.423,
+            "end_s": 4.447
+          },
+          {
+            "word": "little",
+            "start_s": 4.516,
+            "end_s": 4.76
+          },
+          {
+            "word": "baby",
+            "start_s": 4.818,
+            "end_s": 5.108
+          },
+          {
+            "word": "seagull",
+            "start_s": 5.178,
+            "end_s": 5.596
+          },
+          {
+            "word": "all",
+            "start_s": 5.886,
+            "end_s": 6.107
+          },
+          {
+            "word": "fluffy",
+            "start_s": 6.177,
+            "end_s": 6.502
+          },
+          {
+            "word": "and",
+            "start_s": 6.548,
+            "end_s": 6.618
+          },
+          {
+            "word": "white",
+            "start_s": 6.676,
+            "end_s": 7.094
+          },
+          {
+            "word": "The",
+            "start_s": 7.755,
+            "end_s": 7.883
+          },
+          {
+            "word": "baby",
+            "start_s": 7.93,
+            "end_s": 8.185
+          },
+          {
+            "word": "seagull",
+            "start_s": 8.243,
+            "end_s": 8.58
+          },
+          {
+            "word": "bobs",
+            "start_s": 8.649,
+            "end_s": 8.951
+          },
+          {
+            "word": "up",
+            "start_s": 9.033,
+            "end_s": 9.149
+          },
+          {
+            "word": "and",
+            "start_s": 9.195,
+            "end_s": 9.276
+          },
+          {
+            "word": "down",
+            "start_s": 9.334,
+            "end_s": 9.659
+          },
+          {
+            "word": "peep-peep",
+            "start_s": 9.834,
+            "end_s": 10.472
+          },
+          {
+            "word": "It",
+            "start_s": 11.088,
+            "end_s": 11.215
+          },
+          {
+            "word": "is",
+            "start_s": 11.262,
+            "end_s": 11.355
+          },
+          {
+            "word": "too",
+            "start_s": 11.413,
+            "end_s": 11.575
+          },
+          {
+            "word": "sleepy",
+            "start_s": 11.633,
+            "end_s": 11.958
+          },
+          {
+            "word": "to",
+            "start_s": 12.005,
+            "end_s": 12.051
+          },
+          {
+            "word": "fly",
+            "start_s": 12.098,
+            "end_s": 12.272
+          },
+          {
+            "word": "home",
+            "start_s": 12.341,
+            "end_s": 12.539
+          },
+          {
+            "word": "tonight",
+            "start_s": 12.574,
+            "end_s": 12.945
+          },
+          {
+            "word": "Its",
+            "start_s": 13.723,
+            "end_s": 13.909
+          },
+          {
+            "word": "tiny",
+            "start_s": 13.967,
+            "end_s": 14.303
+          },
+          {
+            "word": "eyes",
+            "start_s": 14.385,
+            "end_s": 14.652
+          },
+          {
+            "word": "blink",
+            "start_s": 14.733,
+            "end_s": 14.988
+          },
+          {
+            "word": "slowly",
+            "start_s": 15.047,
+            "end_s": 15.43
+          },
+          {
+            "word": "in",
+            "start_s": 15.488,
+            "end_s": 15.546
+          },
+          {
+            "word": "the",
+            "start_s": 15.581,
+            "end_s": 15.65
+          },
+          {
+            "word": "moonlight",
+            "start_s": 15.685,
+            "end_s": 16.149
+          },
+          {
+            "word": "Poor",
+            "start_s": 16.799,
+            "end_s": 17.032
+          },
+          {
+            "word": "little",
+            "start_s": 17.09,
+            "end_s": 17.299
+          },
+          {
+            "word": "bird",
+            "start_s": 17.322,
+            "end_s": 17.647
+          },
+          {
+            "word": "so",
+            "start_s": 17.937,
+            "end_s": 18.146
+          },
+          {
+            "word": "lost",
+            "start_s": 18.262,
+            "end_s": 18.622
+          },
+          {
+            "word": "and",
+            "start_s": 18.669,
+            "end_s": 18.75
+          },
+          {
+            "word": "tired",
+            "start_s": 18.796,
+            "end_s": 19.261
+          },
+          {
+            "word": "Pip",
+            "start_s": 19.922,
+            "end_s": 20.166
+          },
+          {
+            "word": "steers",
+            "start_s": 20.248,
+            "end_s": 20.607
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 20.666,
+            "end_s": 20.991
+          },
+          {
+            "word": "closer",
+            "start_s": 21.025,
+            "end_s": 21.455
+          },
+          {
+            "word": "very",
+            "start_s": 21.722,
+            "end_s": 21.954
+          },
+          {
+            "word": "gently",
+            "start_s": 22.012,
+            "end_s": 22.395
+          },
+          {
+            "word": "very",
+            "start_s": 22.755,
+            "end_s": 23.022
+          },
+          {
+            "word": "slowly",
+            "start_s": 23.08,
+            "end_s": 23.522
+          }
+        ]
+      },
+      "image": "p3.b2a8ff04.webp",
+      "next_page": "p4",
+      "choice": null
+    },
+    {
+      "id": "p4",
+      "text": "Pip reaches down ever so softly with caring hands. Scoop! Up comes the sleepy baby seagull, safe and sound. Pip wraps it in a warm, cozy blanket. The baby seagull snuggles close and sighs a tiny sigh. Peep, it whispers softly, feeling warm and safe now. Pip pats its fluffy head with a gentle touch. Together they sail on, following the crinkly treasure map.",
+      "audio": {
+        "file": "p4.5b8425f6.mp3",
+        "timings": [
+          {
+            "word": "Pip",
+            "start_s": 0.0,
+            "end_s": 0.302
+          },
+          {
+            "word": "reaches",
+            "start_s": 0.395,
+            "end_s": 0.708
+          },
+          {
+            "word": "down",
+            "start_s": 0.755,
+            "end_s": 0.987
+          },
+          {
+            "word": "ever",
+            "start_s": 1.057,
+            "end_s": 1.265
+          },
+          {
+            "word": "so",
+            "start_s": 1.335,
+            "end_s": 1.463
+          },
+          {
+            "word": "softly",
+            "start_s": 1.544,
+            "end_s": 1.95
+          },
+          {
+            "word": "with",
+            "start_s": 1.997,
+            "end_s": 2.136
+          },
+          {
+            "word": "caring",
+            "start_s": 2.183,
+            "end_s": 2.485
+          },
+          {
+            "word": "hands",
+            "start_s": 2.543,
+            "end_s": 2.937
+          },
+          {
+            "word": "Scoop",
+            "start_s": 3.692,
+            "end_s": 4.226
+          },
+          {
+            "word": "Up",
+            "start_s": 4.841,
+            "end_s": 5.016
+          },
+          {
+            "word": "comes",
+            "start_s": 5.097,
+            "end_s": 5.399
+          },
+          {
+            "word": "the",
+            "start_s": 5.468,
+            "end_s": 5.55
+          },
+          {
+            "word": "sleepy",
+            "start_s": 5.608,
+            "end_s": 5.956
+          },
+          {
+            "word": "baby",
+            "start_s": 6.026,
+            "end_s": 6.293
+          },
+          {
+            "word": "seagull",
+            "start_s": 6.362,
+            "end_s": 6.757
+          },
+          {
+            "word": "safe",
+            "start_s": 7.082,
+            "end_s": 7.384
+          },
+          {
+            "word": "and",
+            "start_s": 7.419,
+            "end_s": 7.5
+          },
+          {
+            "word": "sound",
+            "start_s": 7.558,
+            "end_s": 7.953
+          },
+          {
+            "word": "Pip",
+            "start_s": 8.731,
+            "end_s": 8.998
+          },
+          {
+            "word": "wraps",
+            "start_s": 9.067,
+            "end_s": 9.369
+          },
+          {
+            "word": "it",
+            "start_s": 9.416,
+            "end_s": 9.485
+          },
+          {
+            "word": "in",
+            "start_s": 9.543,
+            "end_s": 9.613
+          },
+          {
+            "word": "a",
+            "start_s": 9.659,
+            "end_s": 9.694
+          },
+          {
+            "word": "warm",
+            "start_s": 9.752,
+            "end_s": 10.031
+          },
+          {
+            "word": "cozy",
+            "start_s": 10.101,
+            "end_s": 10.403
+          },
+          {
+            "word": "blanket",
+            "start_s": 10.461,
+            "end_s": 10.925
+          },
+          {
+            "word": "The",
+            "start_s": 11.773,
+            "end_s": 11.889
+          },
+          {
+            "word": "baby",
+            "start_s": 11.947,
+            "end_s": 12.19
+          },
+          {
+            "word": "seagull",
+            "start_s": 12.249,
+            "end_s": 12.574
+          },
+          {
+            "word": "snuggles",
+            "start_s": 12.643,
+            "end_s": 13.038
+          },
+          {
+            "word": "close",
+            "start_s": 13.096,
+            "end_s": 13.595
+          },
+          {
+            "word": "and",
+            "start_s": 13.653,
+            "end_s": 13.827
+          },
+          {
+            "word": "sighs",
+            "start_s": 13.909,
+            "end_s": 14.257
+          },
+          {
+            "word": "a",
+            "start_s": 14.303,
+            "end_s": 14.327
+          },
+          {
+            "word": "tiny",
+            "start_s": 14.385,
+            "end_s": 14.675
+          },
+          {
+            "word": "sigh",
+            "start_s": 14.745,
+            "end_s": 15.105
+          },
+          {
+            "word": "Peep",
+            "start_s": 15.79,
+            "end_s": 16.219
+          },
+          {
+            "word": "it",
+            "start_s": 16.811,
+            "end_s": 16.939
+          },
+          {
+            "word": "whispers",
+            "start_s": 16.985,
+            "end_s": 17.369
+          },
+          {
+            "word": "softly",
+            "start_s": 17.403,
+            "end_s": 17.926
+          },
+          {
+            "word": "feeling",
+            "start_s": 18.425,
+            "end_s": 18.727
+          },
+          {
+            "word": "warm",
+            "start_s": 18.797,
+            "end_s": 19.087
+          },
+          {
+            "word": "and",
+            "start_s": 19.145,
+            "end_s": 19.215
+          },
+          {
+            "word": "safe",
+            "start_s": 19.296,
+            "end_s": 19.563
+          },
+          {
+            "word": "now",
+            "start_s": 19.609,
+            "end_s": 19.842
+          },
+          {
+            "word": "Pip",
+            "start_s": 20.712,
+            "end_s": 20.979
+          },
+          {
+            "word": "pats",
+            "start_s": 21.096,
+            "end_s": 21.421
+          },
+          {
+            "word": "its",
+            "start_s": 21.467,
+            "end_s": 21.583
+          },
+          {
+            "word": "fluffy",
+            "start_s": 21.641,
+            "end_s": 21.966
+          },
+          {
+            "word": "head",
+            "start_s": 22.024,
+            "end_s": 22.303
+          },
+          {
+            "word": "with",
+            "start_s": 22.419,
+            "end_s": 22.593
+          },
+          {
+            "word": "a",
+            "start_s": 22.64,
+            "end_s": 22.663
+          },
+          {
+            "word": "gentle",
+            "start_s": 22.721,
+            "end_s": 23.011
+          },
+          {
+            "word": "touch",
+            "start_s": 23.046,
+            "end_s": 23.394
+          },
+          {
+            "word": "Together",
+            "start_s": 24.172,
+            "end_s": 24.671
+          },
+          {
+            "word": "they",
+            "start_s": 24.822,
+            "end_s": 24.996
+          },
+          {
+            "word": "sail",
+            "start_s": 25.055,
+            "end_s": 25.287
+          },
+          {
+            "word": "on",
+            "start_s": 25.368,
+            "end_s": 25.565
+          },
+          {
+            "word": "following",
+            "start_s": 25.983,
+            "end_s": 26.425
+          },
+          {
+            "word": "the",
+            "start_s": 26.471,
+            "end_s": 26.541
+          },
+          {
+            "word": "crinkly",
+            "start_s": 26.587,
+            "end_s": 26.935
+          },
+          {
+            "word": "treasure",
+            "start_s": 26.993,
+            "end_s": 27.307
+          },
+          {
+            "word": "map",
+            "start_s": 27.33,
+            "end_s": 27.585
+          }
+        ]
+      },
+      "image": "p4.1247d77e.webp",
+      "next_page": "p5",
+      "choice": null
+    },
+    {
+      "id": "p5",
+      "text": "The map leads them to a quiet, hidden cove. The water is smooth as glass, shining in the moonlight. Pip spots a small treasure chest on the sandy shore. Biscuit glides softly to the beach, shush-shush-shush. Pip lifts the chest's creaky lid, cre-e-eak. Inside there is no gold or silver coins tonight. Instead, smooth seashells glow with a magical, gentle light.",
+      "audio": {
+        "file": "p5.b3d77425.mp3",
+        "timings": [
+          {
+            "word": "The",
+            "start_s": 0.0,
+            "end_s": 0.163
+          },
+          {
+            "word": "map",
+            "start_s": 0.209,
+            "end_s": 0.43
+          },
+          {
+            "word": "leads",
+            "start_s": 0.499,
+            "end_s": 0.731
+          },
+          {
+            "word": "them",
+            "start_s": 0.766,
+            "end_s": 0.906
+          },
+          {
+            "word": "to",
+            "start_s": 0.964,
+            "end_s": 1.033
+          },
+          {
+            "word": "a",
+            "start_s": 1.115,
+            "end_s": 1.138
+          },
+          {
+            "word": "quiet",
+            "start_s": 1.207,
+            "end_s": 1.579
+          },
+          {
+            "word": "hidden",
+            "start_s": 1.649,
+            "end_s": 1.881
+          },
+          {
+            "word": "cove",
+            "start_s": 1.939,
+            "end_s": 2.38
+          },
+          {
+            "word": "The",
+            "start_s": 3.042,
+            "end_s": 3.146
+          },
+          {
+            "word": "water",
+            "start_s": 3.204,
+            "end_s": 3.483
+          },
+          {
+            "word": "is",
+            "start_s": 3.541,
+            "end_s": 3.611
+          },
+          {
+            "word": "smooth",
+            "start_s": 3.657,
+            "end_s": 3.994
+          },
+          {
+            "word": "as",
+            "start_s": 4.04,
+            "end_s": 4.11
+          },
+          {
+            "word": "glass",
+            "start_s": 4.168,
+            "end_s": 4.679
+          },
+          {
+            "word": "shining",
+            "start_s": 4.969,
+            "end_s": 5.375
+          },
+          {
+            "word": "in",
+            "start_s": 5.41,
+            "end_s": 5.457
+          },
+          {
+            "word": "the",
+            "start_s": 5.492,
+            "end_s": 5.561
+          },
+          {
+            "word": "moonlight",
+            "start_s": 5.596,
+            "end_s": 6.049
+          },
+          {
+            "word": "Pip",
+            "start_s": 6.896,
+            "end_s": 7.14
+          },
+          {
+            "word": "spots",
+            "start_s": 7.21,
+            "end_s": 7.523
+          },
+          {
+            "word": "a",
+            "start_s": 7.558,
+            "end_s": 7.581
+          },
+          {
+            "word": "small",
+            "start_s": 7.639,
+            "end_s": 7.918
+          },
+          {
+            "word": "treasure",
+            "start_s": 7.964,
+            "end_s": 8.278
+          },
+          {
+            "word": "chest",
+            "start_s": 8.301,
+            "end_s": 8.58
+          },
+          {
+            "word": "on",
+            "start_s": 8.638,
+            "end_s": 8.707
+          },
+          {
+            "word": "the",
+            "start_s": 8.742,
+            "end_s": 8.812
+          },
+          {
+            "word": "sandy",
+            "start_s": 8.858,
+            "end_s": 9.149
+          },
+          {
+            "word": "shore",
+            "start_s": 9.207,
+            "end_s": 9.625
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 10.321,
+            "end_s": 10.716
+          },
+          {
+            "word": "glides",
+            "start_s": 10.762,
+            "end_s": 11.099
+          },
+          {
+            "word": "softly",
+            "start_s": 11.146,
+            "end_s": 11.564
+          },
+          {
+            "word": "to",
+            "start_s": 11.622,
+            "end_s": 11.68
+          },
+          {
+            "word": "the",
+            "start_s": 11.738,
+            "end_s": 11.807
+          },
+          {
+            "word": "beach",
+            "start_s": 11.842,
+            "end_s": 12.167
+          },
+          {
+            "word": "shush-shush-shush",
+            "start_s": 12.585,
+            "end_s": 14.048
+          },
+          {
+            "word": "Pip",
+            "start_s": 14.919,
+            "end_s": 15.174
+          },
+          {
+            "word": "lifts",
+            "start_s": 15.244,
+            "end_s": 15.488
+          },
+          {
+            "word": "the",
+            "start_s": 15.546,
+            "end_s": 15.615
+          },
+          {
+            "word": "chest's",
+            "start_s": 15.662,
+            "end_s": 16.056
+          },
+          {
+            "word": "creaky",
+            "start_s": 16.114,
+            "end_s": 16.44
+          },
+          {
+            "word": "lid",
+            "start_s": 16.498,
+            "end_s": 16.788
+          },
+          {
+            "word": "cre-e-eak",
+            "start_s": 17.078,
+            "end_s": 17.902
+          },
+          {
+            "word": "Inside",
+            "start_s": 18.68,
+            "end_s": 19.319
+          },
+          {
+            "word": "there",
+            "start_s": 19.354,
+            "end_s": 19.528
+          },
+          {
+            "word": "is",
+            "start_s": 19.563,
+            "end_s": 19.621
+          },
+          {
+            "word": "no",
+            "start_s": 19.69,
+            "end_s": 19.83
+          },
+          {
+            "word": "gold",
+            "start_s": 19.911,
+            "end_s": 20.166
+          },
+          {
+            "word": "or",
+            "start_s": 20.213,
+            "end_s": 20.282
+          },
+          {
+            "word": "silver",
+            "start_s": 20.352,
+            "end_s": 20.631
+          },
+          {
+            "word": "coins",
+            "start_s": 20.7,
+            "end_s": 21.014
+          },
+          {
+            "word": "tonight",
+            "start_s": 21.06,
+            "end_s": 21.443
+          },
+          {
+            "word": "Instead",
+            "start_s": 22.163,
+            "end_s": 22.755
+          },
+          {
+            "word": "smooth",
+            "start_s": 23.08,
+            "end_s": 23.44
+          },
+          {
+            "word": "seashells",
+            "start_s": 23.498,
+            "end_s": 23.998
+          },
+          {
+            "word": "glow",
+            "start_s": 24.044,
+            "end_s": 24.323
+          },
+          {
+            "word": "with",
+            "start_s": 24.392,
+            "end_s": 24.52
+          },
+          {
+            "word": "a",
+            "start_s": 24.555,
+            "end_s": 24.59
+          },
+          {
+            "word": "magical",
+            "start_s": 24.648,
+            "end_s": 25.031
+          },
+          {
+            "word": "gentle",
+            "start_s": 25.101,
+            "end_s": 25.402
+          },
+          {
+            "word": "light",
+            "start_s": 25.437,
+            "end_s": 25.716
+          }
+        ]
+      },
+      "image": "p5.51f20f88.webp",
+      "next_page": "p6",
+      "choice": null
+    },
+    {
+      "id": "p6",
+      "text": "The glowing seashells hum a soft, sweet lullaby tune. Hmmmm, hmmmm, they sing so quietly and peacefully. The baby seagull listens and closes its tiny eyes. Pip gathers the humming shells carefully in gentle arms. They are more precious than any gold or jewels! Pip carries them back to Biscuit with the sleeping bird. Time to sail the baby seagull safely home now.",
+      "audio": {
+        "file": "p6.a0b1d439.mp3",
+        "timings": [
+          {
+            "word": "The",
+            "start_s": 0.0,
+            "end_s": 0.151
+          },
+          {
+            "word": "glowing",
+            "start_s": 0.209,
+            "end_s": 0.557
+          },
+          {
+            "word": "seashells",
+            "start_s": 0.627,
+            "end_s": 1.161
+          },
+          {
+            "word": "hum",
+            "start_s": 1.219,
+            "end_s": 1.509
+          },
+          {
+            "word": "a",
+            "start_s": 1.602,
+            "end_s": 1.637
+          },
+          {
+            "word": "soft",
+            "start_s": 1.753,
+            "end_s": 2.148
+          },
+          {
+            "word": "sweet",
+            "start_s": 2.229,
+            "end_s": 2.531
+          },
+          {
+            "word": "lullaby",
+            "start_s": 2.612,
+            "end_s": 3.007
+          },
+          {
+            "word": "tune",
+            "start_s": 3.065,
+            "end_s": 3.471
+          },
+          {
+            "word": "Hmmmm",
+            "start_s": 4.063,
+            "end_s": 4.923
+          },
+          {
+            "word": "hmmmm",
+            "start_s": 5.271,
+            "end_s": 6.281
+          },
+          {
+            "word": "they",
+            "start_s": 6.78,
+            "end_s": 6.92
+          },
+          {
+            "word": "sing",
+            "start_s": 6.978,
+            "end_s": 7.198
+          },
+          {
+            "word": "so",
+            "start_s": 7.279,
+            "end_s": 7.442
+          },
+          {
+            "word": "quietly",
+            "start_s": 7.523,
+            "end_s": 7.976
+          },
+          {
+            "word": "and",
+            "start_s": 8.022,
+            "end_s": 8.092
+          },
+          {
+            "word": "peacefully",
+            "start_s": 8.162,
+            "end_s": 8.742
+          },
+          {
+            "word": "The",
+            "start_s": 9.358,
+            "end_s": 9.474
+          },
+          {
+            "word": "baby",
+            "start_s": 9.52,
+            "end_s": 9.776
+          },
+          {
+            "word": "seagull",
+            "start_s": 9.845,
+            "end_s": 10.182
+          },
+          {
+            "word": "listens",
+            "start_s": 10.24,
+            "end_s": 10.681
+          },
+          {
+            "word": "and",
+            "start_s": 10.728,
+            "end_s": 10.879
+          },
+          {
+            "word": "closes",
+            "start_s": 10.937,
+            "end_s": 11.331
+          },
+          {
+            "word": "its",
+            "start_s": 11.389,
+            "end_s": 11.517
+          },
+          {
+            "word": "tiny",
+            "start_s": 11.564,
+            "end_s": 11.877
+          },
+          {
+            "word": "eyes",
+            "start_s": 11.958,
+            "end_s": 12.307
+          },
+          {
+            "word": "Pip",
+            "start_s": 13.119,
+            "end_s": 13.363
+          },
+          {
+            "word": "gathers",
+            "start_s": 13.433,
+            "end_s": 13.816
+          },
+          {
+            "word": "the",
+            "start_s": 13.862,
+            "end_s": 13.932
+          },
+          {
+            "word": "humming",
+            "start_s": 13.99,
+            "end_s": 14.245
+          },
+          {
+            "word": "shells",
+            "start_s": 14.303,
+            "end_s": 14.629
+          },
+          {
+            "word": "carefully",
+            "start_s": 14.698,
+            "end_s": 15.128
+          },
+          {
+            "word": "in",
+            "start_s": 15.174,
+            "end_s": 15.244
+          },
+          {
+            "word": "gentle",
+            "start_s": 15.314,
+            "end_s": 15.639
+          },
+          {
+            "word": "arms",
+            "start_s": 15.673,
+            "end_s": 16.068
+          },
+          {
+            "word": "They",
+            "start_s": 16.788,
+            "end_s": 16.939
+          },
+          {
+            "word": "are",
+            "start_s": 16.974,
+            "end_s": 17.078
+          },
+          {
+            "word": "more",
+            "start_s": 17.113,
+            "end_s": 17.264
+          },
+          {
+            "word": "precious",
+            "start_s": 17.299,
+            "end_s": 17.705
+          },
+          {
+            "word": "than",
+            "start_s": 17.751,
+            "end_s": 17.914
+          },
+          {
+            "word": "any",
+            "start_s": 17.995,
+            "end_s": 18.216
+          },
+          {
+            "word": "gold",
+            "start_s": 18.286,
+            "end_s": 18.553
+          },
+          {
+            "word": "or",
+            "start_s": 18.622,
+            "end_s": 18.762
+          },
+          {
+            "word": "jewels",
+            "start_s": 18.843,
+            "end_s": 19.307
+          },
+          {
+            "word": "Pip",
+            "start_s": 19.923,
+            "end_s": 20.178
+          },
+          {
+            "word": "carries",
+            "start_s": 20.248,
+            "end_s": 20.561
+          },
+          {
+            "word": "them",
+            "start_s": 20.596,
+            "end_s": 20.712
+          },
+          {
+            "word": "back",
+            "start_s": 20.758,
+            "end_s": 20.956
+          },
+          {
+            "word": "to",
+            "start_s": 21.014,
+            "end_s": 21.072
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 21.142,
+            "end_s": 21.501
+          },
+          {
+            "word": "with",
+            "start_s": 21.56,
+            "end_s": 21.71
+          },
+          {
+            "word": "the",
+            "start_s": 21.734,
+            "end_s": 21.803
+          },
+          {
+            "word": "sleeping",
+            "start_s": 21.838,
+            "end_s": 22.163
+          },
+          {
+            "word": "bird",
+            "start_s": 22.21,
+            "end_s": 22.512
+          },
+          {
+            "word": "Time",
+            "start_s": 23.011,
+            "end_s": 23.313
+          },
+          {
+            "word": "to",
+            "start_s": 23.347,
+            "end_s": 23.394
+          },
+          {
+            "word": "sail",
+            "start_s": 23.452,
+            "end_s": 23.684
+          },
+          {
+            "word": "the",
+            "start_s": 23.731,
+            "end_s": 23.8
+          },
+          {
+            "word": "baby",
+            "start_s": 23.847,
+            "end_s": 24.079
+          },
+          {
+            "word": "seagull",
+            "start_s": 24.149,
+            "end_s": 24.508
+          },
+          {
+            "word": "safely",
+            "start_s": 24.578,
+            "end_s": 24.903
+          },
+          {
+            "word": "home",
+            "start_s": 24.95,
+            "end_s": 25.147
+          },
+          {
+            "word": "now",
+            "start_s": 25.193,
+            "end_s": 25.402
+          }
+        ]
+      },
+      "image": "p6.3212867c.webp",
+      "next_page": "p7",
+      "choice": null
+    },
+    {
+      "id": "p7",
+      "text": "Pip steers Biscuit to the tall lighthouse on the rocks. There sits Mama Seagull, waiting and watching the waves. She calls out softly when she sees her baby. Pip lifts the sleepy little seagull up to its mama. They nuzzle beaks together, so happy and relieved tonight. Mama Seagull says thank you with a gentle coo. Pip waves goodbye and smiles a warm, happy smile.",
+      "audio": {
+        "file": "p7.748a10cb.mp3",
+        "timings": [
+          {
+            "word": "Pip",
+            "start_s": 0.0,
+            "end_s": 0.279
+          },
+          {
+            "word": "steers",
+            "start_s": 0.337,
+            "end_s": 0.662
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 0.72,
+            "end_s": 1.091
+          },
+          {
+            "word": "to",
+            "start_s": 1.149,
+            "end_s": 1.219
+          },
+          {
+            "word": "the",
+            "start_s": 1.289,
+            "end_s": 1.358
+          },
+          {
+            "word": "tall",
+            "start_s": 1.405,
+            "end_s": 1.649
+          },
+          {
+            "word": "lighthouse",
+            "start_s": 1.707,
+            "end_s": 2.159
+          },
+          {
+            "word": "on",
+            "start_s": 2.194,
+            "end_s": 2.264
+          },
+          {
+            "word": "the",
+            "start_s": 2.299,
+            "end_s": 2.368
+          },
+          {
+            "word": "rocks",
+            "start_s": 2.415,
+            "end_s": 2.81
+          },
+          {
+            "word": "There",
+            "start_s": 3.495,
+            "end_s": 3.75
+          },
+          {
+            "word": "sits",
+            "start_s": 3.796,
+            "end_s": 4.052
+          },
+          {
+            "word": "Mama",
+            "start_s": 4.145,
+            "end_s": 4.4
+          },
+          {
+            "word": "Seagull",
+            "start_s": 4.458,
+            "end_s": 4.841
+          },
+          {
+            "word": "waiting",
+            "start_s": 5.039,
+            "end_s": 5.433
+          },
+          {
+            "word": "and",
+            "start_s": 5.48,
+            "end_s": 5.55
+          },
+          {
+            "word": "watching",
+            "start_s": 5.619,
+            "end_s": 5.944
+          },
+          {
+            "word": "the",
+            "start_s": 5.991,
+            "end_s": 6.06
+          },
+          {
+            "word": "waves",
+            "start_s": 6.095,
+            "end_s": 6.502
+          },
+          {
+            "word": "She",
+            "start_s": 7.221,
+            "end_s": 7.349
+          },
+          {
+            "word": "calls",
+            "start_s": 7.407,
+            "end_s": 7.663
+          },
+          {
+            "word": "out",
+            "start_s": 7.709,
+            "end_s": 7.837
+          },
+          {
+            "word": "softly",
+            "start_s": 7.883,
+            "end_s": 8.301
+          },
+          {
+            "word": "when",
+            "start_s": 8.348,
+            "end_s": 8.487
+          },
+          {
+            "word": "she",
+            "start_s": 8.522,
+            "end_s": 8.615
+          },
+          {
+            "word": "sees",
+            "start_s": 8.673,
+            "end_s": 8.882
+          },
+          {
+            "word": "her",
+            "start_s": 8.928,
+            "end_s": 9.009
+          },
+          {
+            "word": "baby",
+            "start_s": 9.056,
+            "end_s": 9.427
+          },
+          {
+            "word": "Pip",
+            "start_s": 10.043,
+            "end_s": 10.286
+          },
+          {
+            "word": "lifts",
+            "start_s": 10.368,
+            "end_s": 10.612
+          },
+          {
+            "word": "the",
+            "start_s": 10.67,
+            "end_s": 10.739
+          },
+          {
+            "word": "sleepy",
+            "start_s": 10.786,
+            "end_s": 11.122
+          },
+          {
+            "word": "little",
+            "start_s": 11.18,
+            "end_s": 11.389
+          },
+          {
+            "word": "seagull",
+            "start_s": 11.424,
+            "end_s": 11.761
+          },
+          {
+            "word": "up",
+            "start_s": 11.854,
+            "end_s": 11.981
+          },
+          {
+            "word": "to",
+            "start_s": 12.04,
+            "end_s": 12.098
+          },
+          {
+            "word": "its",
+            "start_s": 12.179,
+            "end_s": 12.295
+          },
+          {
+            "word": "mama",
+            "start_s": 12.353,
+            "end_s": 12.713
+          },
+          {
+            "word": "They",
+            "start_s": 13.491,
+            "end_s": 13.642
+          },
+          {
+            "word": "nuzzle",
+            "start_s": 13.711,
+            "end_s": 14.025
+          },
+          {
+            "word": "beaks",
+            "start_s": 14.06,
+            "end_s": 14.303
+          },
+          {
+            "word": "together",
+            "start_s": 14.349,
+            "end_s": 14.756
+          },
+          {
+            "word": "so",
+            "start_s": 15.104,
+            "end_s": 15.301
+          },
+          {
+            "word": "happy",
+            "start_s": 15.394,
+            "end_s": 15.696
+          },
+          {
+            "word": "and",
+            "start_s": 15.743,
+            "end_s": 15.812
+          },
+          {
+            "word": "relieved",
+            "start_s": 15.859,
+            "end_s": 16.219
+          },
+          {
+            "word": "tonight",
+            "start_s": 16.253,
+            "end_s": 16.613
+          },
+          {
+            "word": "Mama",
+            "start_s": 17.229,
+            "end_s": 17.473
+          },
+          {
+            "word": "Seagull",
+            "start_s": 17.531,
+            "end_s": 17.832
+          },
+          {
+            "word": "says",
+            "start_s": 17.879,
+            "end_s": 18.099
+          },
+          {
+            "word": "thank",
+            "start_s": 18.181,
+            "end_s": 18.413
+          },
+          {
+            "word": "you",
+            "start_s": 18.459,
+            "end_s": 18.541
+          },
+          {
+            "word": "with",
+            "start_s": 18.599,
+            "end_s": 18.726
+          },
+          {
+            "word": "a",
+            "start_s": 18.761,
+            "end_s": 18.784
+          },
+          {
+            "word": "gentle",
+            "start_s": 18.843,
+            "end_s": 19.121
+          },
+          {
+            "word": "coo",
+            "start_s": 19.156,
+            "end_s": 19.458
+          },
+          {
+            "word": "Pip",
+            "start_s": 20.236,
+            "end_s": 20.456
+          },
+          {
+            "word": "waves",
+            "start_s": 20.526,
+            "end_s": 20.805
+          },
+          {
+            "word": "goodbye",
+            "start_s": 20.839,
+            "end_s": 21.327
+          },
+          {
+            "word": "and",
+            "start_s": 21.373,
+            "end_s": 21.536
+          },
+          {
+            "word": "smiles",
+            "start_s": 21.594,
+            "end_s": 22.0
+          },
+          {
+            "word": "a",
+            "start_s": 22.035,
+            "end_s": 22.07
+          },
+          {
+            "word": "warm",
+            "start_s": 22.128,
+            "end_s": 22.453
+          },
+          {
+            "word": "happy",
+            "start_s": 22.523,
+            "end_s": 22.802
+          },
+          {
+            "word": "smile",
+            "start_s": 22.848,
+            "end_s": 23.336
+          }
+        ]
+      },
+      "image": "p7.f6058f81.webp",
+      "next_page": "p8",
+      "choice": null
+    },
+    {
+      "id": "p8",
+      "text": "Now Pip curls up in Biscuit with the humming shells. The shells sing their soft lullaby, hmmmm, hmmmm, hmmmm. The calm waves rock Biscuit gently, back and forth. Back and forth, like a cradle on the water. The quiet, twinkling stars watch over the little boat. Pip's eyes grow heavy and close at last. Pip drifts happily off to sleep, safe and snug. Goodnight, little pirate. Goodnight, Biscuit. Sweet dreams.",
+      "audio": {
+        "file": "p8.272b56a8.mp3",
+        "timings": [
+          {
+            "word": "Now",
+            "start_s": 0.0,
+            "end_s": 0.313
+          },
+          {
+            "word": "Pip",
+            "start_s": 0.43,
+            "end_s": 0.65
+          },
+          {
+            "word": "curls",
+            "start_s": 0.72,
+            "end_s": 0.998
+          },
+          {
+            "word": "up",
+            "start_s": 1.045,
+            "end_s": 1.138
+          },
+          {
+            "word": "in",
+            "start_s": 1.184,
+            "end_s": 1.242
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 1.3,
+            "end_s": 1.649
+          },
+          {
+            "word": "with",
+            "start_s": 1.683,
+            "end_s": 1.8
+          },
+          {
+            "word": "the",
+            "start_s": 1.834,
+            "end_s": 1.904
+          },
+          {
+            "word": "humming",
+            "start_s": 1.939,
+            "end_s": 2.194
+          },
+          {
+            "word": "shells",
+            "start_s": 2.252,
+            "end_s": 2.659
+          },
+          {
+            "word": "The",
+            "start_s": 3.193,
+            "end_s": 3.309
+          },
+          {
+            "word": "shells",
+            "start_s": 3.367,
+            "end_s": 3.68
+          },
+          {
+            "word": "sing",
+            "start_s": 3.727,
+            "end_s": 3.982
+          },
+          {
+            "word": "their",
+            "start_s": 4.04,
+            "end_s": 4.191
+          },
+          {
+            "word": "soft",
+            "start_s": 4.249,
+            "end_s": 4.551
+          },
+          {
+            "word": "lullaby",
+            "start_s": 4.609,
+            "end_s": 5.108
+          },
+          {
+            "word": "hmmmm",
+            "start_s": 5.863,
+            "end_s": 6.92
+          },
+          {
+            "word": "hmmmm",
+            "start_s": 7.639,
+            "end_s": 8.464
+          },
+          {
+            "word": "hmmmm",
+            "start_s": 9.392,
+            "end_s": 10.252
+          },
+          {
+            "word": "The",
+            "start_s": 11.088,
+            "end_s": 11.204
+          },
+          {
+            "word": "calm",
+            "start_s": 11.262,
+            "end_s": 11.54
+          },
+          {
+            "word": "waves",
+            "start_s": 11.61,
+            "end_s": 11.958
+          },
+          {
+            "word": "rock",
+            "start_s": 12.051,
+            "end_s": 12.283
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 12.353,
+            "end_s": 12.666
+          },
+          {
+            "word": "gently",
+            "start_s": 12.713,
+            "end_s": 13.108
+          },
+          {
+            "word": "back",
+            "start_s": 13.375,
+            "end_s": 13.63
+          },
+          {
+            "word": "and",
+            "start_s": 13.677,
+            "end_s": 13.746
+          },
+          {
+            "word": "forth",
+            "start_s": 13.816,
+            "end_s": 14.176
+          },
+          {
+            "word": "Back",
+            "start_s": 14.838,
+            "end_s": 15.105
+          },
+          {
+            "word": "and",
+            "start_s": 15.151,
+            "end_s": 15.232
+          },
+          {
+            "word": "forth",
+            "start_s": 15.302,
+            "end_s": 15.65
+          },
+          {
+            "word": "like",
+            "start_s": 15.882,
+            "end_s": 16.057
+          },
+          {
+            "word": "a",
+            "start_s": 16.08,
+            "end_s": 16.115
+          },
+          {
+            "word": "cradle",
+            "start_s": 16.173,
+            "end_s": 16.521
+          },
+          {
+            "word": "on",
+            "start_s": 16.556,
+            "end_s": 16.614
+          },
+          {
+            "word": "the",
+            "start_s": 16.649,
+            "end_s": 16.718
+          },
+          {
+            "word": "water",
+            "start_s": 16.753,
+            "end_s": 17.09
+          },
+          {
+            "word": "The",
+            "start_s": 17.81,
+            "end_s": 17.926
+          },
+          {
+            "word": "quiet",
+            "start_s": 17.984,
+            "end_s": 18.367
+          },
+          {
+            "word": "twinkling",
+            "start_s": 18.413,
+            "end_s": 18.843
+          },
+          {
+            "word": "stars",
+            "start_s": 18.901,
+            "end_s": 19.366
+          },
+          {
+            "word": "watch",
+            "start_s": 19.517,
+            "end_s": 19.807
+          },
+          {
+            "word": "over",
+            "start_s": 19.865,
+            "end_s": 20.028
+          },
+          {
+            "word": "the",
+            "start_s": 20.097,
+            "end_s": 20.155
+          },
+          {
+            "word": "little",
+            "start_s": 20.202,
+            "end_s": 20.422
+          },
+          {
+            "word": "boat",
+            "start_s": 20.446,
+            "end_s": 20.736
+          },
+          {
+            "word": "Pip's",
+            "start_s": 21.398,
+            "end_s": 21.699
+          },
+          {
+            "word": "eyes",
+            "start_s": 21.769,
+            "end_s": 21.99
+          },
+          {
+            "word": "grow",
+            "start_s": 22.048,
+            "end_s": 22.234
+          },
+          {
+            "word": "heavy",
+            "start_s": 22.315,
+            "end_s": 22.547
+          },
+          {
+            "word": "and",
+            "start_s": 22.605,
+            "end_s": 22.675
+          },
+          {
+            "word": "close",
+            "start_s": 22.733,
+            "end_s": 23.0
+          },
+          {
+            "word": "at",
+            "start_s": 23.035,
+            "end_s": 23.093
+          },
+          {
+            "word": "last",
+            "start_s": 23.139,
+            "end_s": 23.545
+          },
+          {
+            "word": "Pip",
+            "start_s": 24.323,
+            "end_s": 24.579
+          },
+          {
+            "word": "drifts",
+            "start_s": 24.637,
+            "end_s": 24.904
+          },
+          {
+            "word": "happily",
+            "start_s": 24.962,
+            "end_s": 25.31
+          },
+          {
+            "word": "off",
+            "start_s": 25.38,
+            "end_s": 25.519
+          },
+          {
+            "word": "to",
+            "start_s": 25.566,
+            "end_s": 25.624
+          },
+          {
+            "word": "sleep",
+            "start_s": 25.682,
+            "end_s": 26.007
+          },
+          {
+            "word": "safe",
+            "start_s": 26.332,
+            "end_s": 26.692
+          },
+          {
+            "word": "and",
+            "start_s": 26.738,
+            "end_s": 26.831
+          },
+          {
+            "word": "snug",
+            "start_s": 26.889,
+            "end_s": 27.307
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 27.899,
+            "end_s": 28.306
+          },
+          {
+            "word": "little",
+            "start_s": 28.352,
+            "end_s": 28.561
+          },
+          {
+            "word": "pirate",
+            "start_s": 28.584,
+            "end_s": 29.06
+          },
+          {
+            "word": "Goodnight",
+            "start_s": 29.641,
+            "end_s": 30.047
+          },
+          {
+            "word": "Biscuit",
+            "start_s": 30.094,
+            "end_s": 30.546
+          },
+          {
+            "word": "Sweet",
+            "start_s": 30.906,
+            "end_s": 31.208
+          },
+          {
+            "word": "dreams",
+            "start_s": 31.266,
+            "end_s": 31.684
+          }
+        ]
+      },
+      "image": "p8.18895111.webp",
+      "next_page": null,
+      "choice": null
+    }
+  ],
+  "gloss": null
+}

@@ -30,7 +30,9 @@ def test_generate_validates_then_runs_the_pass_and_reports_the_staging_folder(
     """
     seen: dict[str, object] = {}
 
-    def fake_generate(theme: str, language: str, settings: object) -> Path:
+    def fake_generate(
+        theme: str, language: str, settings: object, premise: str | None = None
+    ) -> Path:
         seen.update(theme=theme, language=language)
         return tmp_path / "staging" / "the-sleepy-sea-it-abc12345"
 
@@ -61,6 +63,40 @@ def test_generate_rejects_a_theme_outside_the_locked_set() -> None:
     result = runner.invoke(app, ["generate", "--theme", "dragons", "--language", "it"])
     assert result.exit_code != 0
     assert "dragons" in result.output
+
+
+def test_generate_forwards_an_optional_premise(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Given a --premise,
+    When generate is invoked,
+    Then the premise is forwarded to the authoring run."""
+    seen: dict[str, object] = {}
+
+    def fake_generate(
+        theme: str, language: str, settings: object, premise: str | None = None
+    ) -> Path:
+        seen.update(theme=theme, language=language, premise=premise)
+        return tmp_path / "staging" / "gentle-forest-friends-en-abc12345"
+
+    monkeypatch.setattr(cli, "generate_story", fake_generate)
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--theme",
+            "gentle_forest_friends",
+            "--language",
+            "en",
+            "--premise",
+            "Bruno bear has a surprise party.",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen["premise"] == "Bruno bear has a surprise party."
 
 
 def test_publish_uploads_a_staged_story_and_reports_the_result(

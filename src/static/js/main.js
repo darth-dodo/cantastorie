@@ -26,9 +26,16 @@ function pickTheme(params, hour) {
   return hour >= 19 || hour < 7 ? "dusk" : "light";
 }
 
-async function fetchManifest(assetBase, fetchFn) {
+// First-run language is Italian (product.md); ?lang=xx opens another
+// published shelf without a parent gate, which is all the demo needs.
+function pickLang(params) {
+  const lang = params.get("lang") ?? "";
+  return /^[a-z]{2}$/.test(lang) ? lang : "it";
+}
+
+async function fetchManifest(assetBase, fetchFn, lang) {
   try {
-    const res = await fetchFn(`${assetBase}/it/manifest.json`);
+    const res = await fetchFn(`${assetBase}/${lang}/manifest.json`);
     if (!res.ok) throw new Error(`manifest fetch failed (${res.status})`);
     return await res.json();
   } catch (err) {
@@ -52,7 +59,8 @@ export async function init(
 
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
-  const manifest = fetchFn ? await fetchManifest(assetBase, fetchFn) : null;
+  const lang = pickLang(params);
+  const manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
   const stories = manifest?.stories ?? fallbackShelf;
 
   const store = createStore(load());

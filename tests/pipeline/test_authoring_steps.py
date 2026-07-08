@@ -26,7 +26,12 @@ from src.pipeline.content_rules import check_story
 from src.pipeline.models import SAFETY_RULES, Story
 from src.pipeline.steps.revise import MAX_REVISIONS, StoryRejectedError, author_story
 from src.pipeline.steps.safety import SAFETY_MODEL_SETTINGS, safety_gate
-from src.pipeline.steps.write import StoryDraft, story_from_draft, write_story
+from src.pipeline.steps.write import (
+    StoryDraft,
+    derive_story_id,
+    story_from_draft,
+    write_story,
+)
 
 # Five words per sentence; eight sentences per page; eight pages = 320 words.
 SENTENCE = "The water sings {word} {word}."
@@ -155,6 +160,61 @@ def test_rerunning_write_with_unchanged_inputs_makes_zero_model_calls(
     first = write_story("the_sleepy_sea", "it", _settings(), cache, model=model)
     second = write_story("the_sleepy_sea", "it", _settings(), cache, model=model)
 
+    assert first == second
+    assert model.calls == 1
+
+
+def test_write_threads_the_premise_into_the_writer_prompt(tmp_path: Path) -> None:
+    """Given a premise,
+    When the write step runs,
+    Then the premise text reaches the writer model's prompt."""
+    model = DraftModel(good_draft())
+    write_story(
+        "the_sleepy_sea",
+        "it",
+        _settings(),
+        _cache(tmp_path),
+        model=model,
+        premise="A little boat counts the stars.",
+    )
+    assert any("A little boat counts the stars." in seen for seen in model.seen_prompts)
+
+
+def test_premise_changes_the_story_id_so_runs_do_not_collide() -> None:
+    """Given the same theme and language,
+    When the premise differs (or is absent),
+    Then derive_story_id yields a distinct id for each — no cache collision."""
+    settings = _settings()
+    plain = derive_story_id("the_sleepy_sea", "it", settings)
+    one = derive_story_id("the_sleepy_sea", "it", settings, premise="boat counts stars")
+    two = derive_story_id("the_sleepy_sea", "it", settings, premise="bear bakes bread")
+    assert len({plain, one, two}) == 3
+
+
+def test_no_premise_leaves_the_story_id_unchanged() -> None:
+    """Given premise is None,
+    When derive_story_id runs,
+    Then the id equals the pre-premise id — existing caches are preserved."""
+    settings = _settings()
+    assert derive_story_id("the_sleepy_sea", "it", settings, premise=None) == derive_story_id(
+        "the_sleepy_sea", "it", settings
+    )
+
+
+def test_rerunning_write_with_the_same_premise_makes_zero_model_calls(
+    tmp_path: Path,
+) -> None:
+    """Given a premised story already persisted,
+    When write runs again with the same premise,
+    Then the model is never re-invoked — the artifact is served from disk."""
+    model = DraftModel(good_draft())
+    cache = _cache(tmp_path)
+    first = write_story(
+        "the_sleepy_sea", "it", _settings(), cache, model=model, premise="Same premise."
+    )
+    second = write_story(
+        "the_sleepy_sea", "it", _settings(), cache, model=model, premise="Same premise."
+    )
     assert first == second
     assert model.calls == 1
 
@@ -335,3 +395,21 @@ def test_a_story_violating_a_content_limit_routes_to_revise_even_when_the_judge_
     assert check_story(story) == []
     assert reviser.calls == 1
     assert "sentence" in reviser.seen_prompts[0]  # the violation reached the reviser
+
+
+def test_author_story_forwards_the_premise_to_the_writer(tmp_path: Path) -> None:
+    """Given a premise passed to author_story,
+    When the authoring loop runs and the first draft passes every gate,
+    Then the premise reached the writer model's prompt."""
+    writer = DraftModel(good_draft())
+    judge = JudgeModel(report_args())
+    author_story(
+        "the_sleepy_sea",
+        "it",
+        _settings(),
+        _cache(tmp_path),
+        write_model=writer,
+        safety_model=judge,
+        premise="Bruno bear has a birthday.",
+    )
+    assert any("Bruno bear has a birthday." in seen for seen in writer.seen_prompts)

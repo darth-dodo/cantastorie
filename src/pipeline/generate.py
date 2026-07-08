@@ -48,13 +48,14 @@ def generate_story(
     revise_model: Model | None = None,
     narration_client: NarrationClient | None = None,
     image_transport: httpx.BaseTransport | None = None,
+    premise: str | None = None,
 ) -> Path:
     """Author, narrate, illustrate, assemble, and stage one story.
 
     Returns the staging folder the operator opens — story.json beside its
     hashed audio and images. Publishing is a separate, operator-gated step.
     """
-    story_id = derive_story_id(theme, language, settings)
+    story_id = derive_story_id(theme, language, settings, premise)
     cache = ArtifactCache(settings.content_dir / story_id)
 
     story, _report = author_story(
@@ -65,6 +66,7 @@ def generate_story(
         write_model=write_model,
         safety_model=safety_model,
         revise_model=revise_model,
+        premise=premise,
     )
     narrated = narrate_pages(story.pages, settings, cache, narration_client)
     story = story.model_copy(update={"pages": narrated})
