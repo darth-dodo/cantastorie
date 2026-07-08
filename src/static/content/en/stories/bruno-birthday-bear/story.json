@@ -1,0 +1,2332 @@
+{
+  "schema_version": 1,
+  "id": "bruno-birthday-bear",
+  "language": "en",
+  "title": "Bruno's Surprise Birthday",
+  "theme": "gentle_forest_friends",
+  "shape": "linear",
+  "pages": [
+    {
+      "id": "p1",
+      "text": "Today is Bruno the brown bear's birthday! He wakes up feeling excited and happy. The sun shines through the trees in the forest. Bruno bounces on his paws, ready to share the good news. He wants to tell all his friends about his special day. \"Maybe they will celebrate with me!\" thinks Bruno.",
+      "audio": {
+        "file": "p1.44c7369a.mp3",
+        "timings": [
+          {
+            "word": "Today",
+            "start_s": 0.0,
+            "end_s": 0.511
+          },
+          {
+            "word": "is",
+            "start_s": 0.592,
+            "end_s": 0.743
+          },
+          {
+            "word": "Bruno",
+            "start_s": 0.824,
+            "end_s": 1.196
+          },
+          {
+            "word": "the",
+            "start_s": 1.312,
+            "end_s": 1.382
+          },
+          {
+            "word": "brown",
+            "start_s": 1.428,
+            "end_s": 1.695
+          },
+          {
+            "word": "bear's",
+            "start_s": 1.753,
+            "end_s": 2.032
+          },
+          {
+            "word": "birthday",
+            "start_s": 2.078,
+            "end_s": 2.67
+          },
+          {
+            "word": "He",
+            "start_s": 3.204,
+            "end_s": 3.32
+          },
+          {
+            "word": "wakes",
+            "start_s": 3.379,
+            "end_s": 3.669
+          },
+          {
+            "word": "up",
+            "start_s": 3.727,
+            "end_s": 3.855
+          },
+          {
+            "word": "feeling",
+            "start_s": 3.936,
+            "end_s": 4.226
+          },
+          {
+            "word": "excited",
+            "start_s": 4.284,
+            "end_s": 4.772
+          },
+          {
+            "word": "and",
+            "start_s": 4.818,
+            "end_s": 4.899
+          },
+          {
+            "word": "happy",
+            "start_s": 4.969,
+            "end_s": 5.375
+          },
+          {
+            "word": "The",
+            "start_s": 5.968,
+            "end_s": 6.084
+          },
+          {
+            "word": "sun",
+            "start_s": 6.142,
+            "end_s": 6.409
+          },
+          {
+            "word": "shines",
+            "start_s": 6.49,
+            "end_s": 6.896
+          },
+          {
+            "word": "through",
+            "start_s": 6.943,
+            "end_s": 7.163
+          },
+          {
+            "word": "the",
+            "start_s": 7.187,
+            "end_s": 7.256
+          },
+          {
+            "word": "trees",
+            "start_s": 7.279,
+            "end_s": 7.581
+          },
+          {
+            "word": "in",
+            "start_s": 7.628,
+            "end_s": 7.686
+          },
+          {
+            "word": "the",
+            "start_s": 7.721,
+            "end_s": 7.79
+          },
+          {
+            "word": "forest",
+            "start_s": 7.837,
+            "end_s": 8.313
+          },
+          {
+            "word": "Bruno",
+            "start_s": 8.998,
+            "end_s": 9.311
+          },
+          {
+            "word": "bounces",
+            "start_s": 9.427,
+            "end_s": 9.81
+          },
+          {
+            "word": "on",
+            "start_s": 9.868,
+            "end_s": 9.95
+          },
+          {
+            "word": "his",
+            "start_s": 9.996,
+            "end_s": 10.101
+          },
+          {
+            "word": "paws",
+            "start_s": 10.159,
+            "end_s": 10.612
+          },
+          {
+            "word": "ready",
+            "start_s": 10.913,
+            "end_s": 11.157
+          },
+          {
+            "word": "to",
+            "start_s": 11.215,
+            "end_s": 11.273
+          },
+          {
+            "word": "share",
+            "start_s": 11.343,
+            "end_s": 11.598
+          },
+          {
+            "word": "the",
+            "start_s": 11.633,
+            "end_s": 11.703
+          },
+          {
+            "word": "good",
+            "start_s": 11.738,
+            "end_s": 11.889
+          },
+          {
+            "word": "news",
+            "start_s": 11.947,
+            "end_s": 12.307
+          },
+          {
+            "word": "He",
+            "start_s": 12.922,
+            "end_s": 13.026
+          },
+          {
+            "word": "wants",
+            "start_s": 13.084,
+            "end_s": 13.305
+          },
+          {
+            "word": "to",
+            "start_s": 13.363,
+            "end_s": 13.433
+          },
+          {
+            "word": "tell",
+            "start_s": 13.502,
+            "end_s": 13.723
+          },
+          {
+            "word": "all",
+            "start_s": 13.793,
+            "end_s": 14.013
+          },
+          {
+            "word": "his",
+            "start_s": 14.083,
+            "end_s": 14.199
+          },
+          {
+            "word": "friends",
+            "start_s": 14.269,
+            "end_s": 14.617
+          },
+          {
+            "word": "about",
+            "start_s": 14.652,
+            "end_s": 14.872
+          },
+          {
+            "word": "his",
+            "start_s": 14.919,
+            "end_s": 15.035
+          },
+          {
+            "word": "special",
+            "start_s": 15.081,
+            "end_s": 15.441
+          },
+          {
+            "word": "day",
+            "start_s": 15.499,
+            "end_s": 15.813
+          },
+          {
+            "word": "Maybe",
+            "start_s": 16.765,
+            "end_s": 17.067
+          },
+          {
+            "word": "they",
+            "start_s": 17.101,
+            "end_s": 17.206
+          },
+          {
+            "word": "will",
+            "start_s": 17.241,
+            "end_s": 17.38
+          },
+          {
+            "word": "celebrate",
+            "start_s": 17.438,
+            "end_s": 17.891
+          },
+          {
+            "word": "with",
+            "start_s": 17.914,
+            "end_s": 18.042
+          },
+          {
+            "word": "me",
+            "start_s": 18.1,
+            "end_s": 18.425
+          },
+          {
+            "word": "thinks",
+            "start_s": 18.646,
+            "end_s": 18.901
+          },
+          {
+            "word": "Bruno",
+            "start_s": 18.959,
+            "end_s": 19.319
+          }
+        ]
+      },
+      "image": "p1.dcb0b466.webp",
+      "next_page": "p2",
+      "choice": null
+    },
+    {
+      "id": "p2",
+      "text": "Bruno visits his friend, the small panda, first. Panda is carrying bamboo stalks and looks very busy. \"Hello, Panda! It's my birthday today!\" says Bruno with a big smile. \"Oh, hello Bruno! I must go now, sorry!\" Panda hurries away quickly. Bruno's smile fades a little bit. He feels confused but keeps walking through the forest.",
+      "audio": {
+        "file": "p2.93e4d08e.mp3",
+        "timings": [
+          {
+            "word": "Bruno",
+            "start_s": 0.0,
+            "end_s": 0.36
+          },
+          {
+            "word": "visits",
+            "start_s": 0.441,
+            "end_s": 0.743
+          },
+          {
+            "word": "his",
+            "start_s": 0.778,
+            "end_s": 0.882
+          },
+          {
+            "word": "friend",
+            "start_s": 0.94,
+            "end_s": 1.335
+          },
+          {
+            "word": "the",
+            "start_s": 1.544,
+            "end_s": 1.649
+          },
+          {
+            "word": "small",
+            "start_s": 1.695,
+            "end_s": 1.962
+          },
+          {
+            "word": "panda",
+            "start_s": 2.02,
+            "end_s": 2.45
+          },
+          {
+            "word": "first",
+            "start_s": 2.635,
+            "end_s": 3.1
+          },
+          {
+            "word": "Panda",
+            "start_s": 3.715,
+            "end_s": 4.063
+          },
+          {
+            "word": "is",
+            "start_s": 4.122,
+            "end_s": 4.214
+          },
+          {
+            "word": "carrying",
+            "start_s": 4.272,
+            "end_s": 4.598
+          },
+          {
+            "word": "bamboo",
+            "start_s": 4.656,
+            "end_s": 5.016
+          },
+          {
+            "word": "stalks",
+            "start_s": 5.074,
+            "end_s": 5.515
+          },
+          {
+            "word": "and",
+            "start_s": 5.759,
+            "end_s": 5.956
+          },
+          {
+            "word": "looks",
+            "start_s": 6.002,
+            "end_s": 6.211
+          },
+          {
+            "word": "very",
+            "start_s": 6.293,
+            "end_s": 6.56
+          },
+          {
+            "word": "busy",
+            "start_s": 6.618,
+            "end_s": 6.989
+          },
+          {
+            "word": "Hello",
+            "start_s": 7.663,
+            "end_s": 7.964
+          },
+          {
+            "word": "Panda",
+            "start_s": 8.034,
+            "end_s": 8.499
+          },
+          {
+            "word": "It's",
+            "start_s": 8.603,
+            "end_s": 8.777
+          },
+          {
+            "word": "my",
+            "start_s": 8.824,
+            "end_s": 8.916
+          },
+          {
+            "word": "birthday",
+            "start_s": 8.986,
+            "end_s": 9.381
+          },
+          {
+            "word": "today",
+            "start_s": 9.439,
+            "end_s": 9.845
+          },
+          {
+            "word": "says",
+            "start_s": 10.182,
+            "end_s": 10.391
+          },
+          {
+            "word": "Bruno",
+            "start_s": 10.461,
+            "end_s": 10.762
+          },
+          {
+            "word": "with",
+            "start_s": 10.844,
+            "end_s": 10.983
+          },
+          {
+            "word": "a",
+            "start_s": 11.018,
+            "end_s": 11.041
+          },
+          {
+            "word": "big",
+            "start_s": 11.099,
+            "end_s": 11.273
+          },
+          {
+            "word": "smile",
+            "start_s": 11.331,
+            "end_s": 11.842
+          },
+          {
+            "word": "Oh",
+            "start_s": 12.399,
+            "end_s": 12.69
+          },
+          {
+            "word": "hello",
+            "start_s": 12.875,
+            "end_s": 13.142
+          },
+          {
+            "word": "Bruno",
+            "start_s": 13.212,
+            "end_s": 13.618
+          },
+          {
+            "word": "I",
+            "start_s": 14.071,
+            "end_s": 14.118
+          },
+          {
+            "word": "must",
+            "start_s": 14.211,
+            "end_s": 14.373
+          },
+          {
+            "word": "go",
+            "start_s": 14.431,
+            "end_s": 14.547
+          },
+          {
+            "word": "now",
+            "start_s": 14.617,
+            "end_s": 14.826
+          },
+          {
+            "word": "sorry",
+            "start_s": 15.058,
+            "end_s": 15.569
+          },
+          {
+            "word": "Panda",
+            "start_s": 16.219,
+            "end_s": 16.533
+          },
+          {
+            "word": "hurries",
+            "start_s": 16.591,
+            "end_s": 16.904
+          },
+          {
+            "word": "away",
+            "start_s": 16.95,
+            "end_s": 17.206
+          },
+          {
+            "word": "quickly",
+            "start_s": 17.276,
+            "end_s": 17.752
+          },
+          {
+            "word": "Bruno's",
+            "start_s": 18.402,
+            "end_s": 18.796
+          },
+          {
+            "word": "smile",
+            "start_s": 18.82,
+            "end_s": 19.191
+          },
+          {
+            "word": "fades",
+            "start_s": 19.249,
+            "end_s": 19.574
+          },
+          {
+            "word": "a",
+            "start_s": 19.598,
+            "end_s": 19.621
+          },
+          {
+            "word": "little",
+            "start_s": 19.667,
+            "end_s": 19.865
+          },
+          {
+            "word": "bit",
+            "start_s": 19.888,
+            "end_s": 20.132
+          },
+          {
+            "word": "He",
+            "start_s": 20.689,
+            "end_s": 20.805
+          },
+          {
+            "word": "feels",
+            "start_s": 20.863,
+            "end_s": 21.118
+          },
+          {
+            "word": "confused",
+            "start_s": 21.176,
+            "end_s": 21.803
+          },
+          {
+            "word": "but",
+            "start_s": 21.978,
+            "end_s": 22.14
+          },
+          {
+            "word": "keeps",
+            "start_s": 22.175,
+            "end_s": 22.419
+          },
+          {
+            "word": "walking",
+            "start_s": 22.477,
+            "end_s": 22.825
+          },
+          {
+            "word": "through",
+            "start_s": 22.86,
+            "end_s": 23.046
+          },
+          {
+            "word": "the",
+            "start_s": 23.069,
+            "end_s": 23.139
+          },
+          {
+            "word": "forest",
+            "start_s": 23.173,
+            "end_s": 23.626
+          }
+        ]
+      },
+      "image": "p2.fed0defa.webp",
+      "next_page": "p3",
+      "choice": null
+    },
+    {
+      "id": "p3",
+      "text": "Next, Bruno finds the sleepy polar bear by the cool stream. Polar Bear yawns and stretches his white paws. \"Polar Bear, it's my birthday!\" Bruno calls out cheerfully. \"That's nice, Bruno. I have to go now!\" Polar Bear shuffles away, yawning again. Bruno's ears droop just a little. Why is everyone so busy today?",
+      "audio": {
+        "file": "p3.11c72fb8.mp3",
+        "timings": [
+          {
+            "word": "Next",
+            "start_s": 0.0,
+            "end_s": 0.453
+          },
+          {
+            "word": "Bruno",
+            "start_s": 0.662,
+            "end_s": 0.975
+          },
+          {
+            "word": "finds",
+            "start_s": 1.057,
+            "end_s": 1.37
+          },
+          {
+            "word": "the",
+            "start_s": 1.416,
+            "end_s": 1.486
+          },
+          {
+            "word": "sleepy",
+            "start_s": 1.533,
+            "end_s": 1.858
+          },
+          {
+            "word": "polar",
+            "start_s": 1.916,
+            "end_s": 2.183
+          },
+          {
+            "word": "bear",
+            "start_s": 2.218,
+            "end_s": 2.392
+          },
+          {
+            "word": "by",
+            "start_s": 2.45,
+            "end_s": 2.543
+          },
+          {
+            "word": "the",
+            "start_s": 2.589,
+            "end_s": 2.659
+          },
+          {
+            "word": "cool",
+            "start_s": 2.694,
+            "end_s": 2.914
+          },
+          {
+            "word": "stream",
+            "start_s": 2.961,
+            "end_s": 3.332
+          },
+          {
+            "word": "Polar",
+            "start_s": 4.017,
+            "end_s": 4.319
+          },
+          {
+            "word": "Bear",
+            "start_s": 4.365,
+            "end_s": 4.528
+          },
+          {
+            "word": "yawns",
+            "start_s": 4.586,
+            "end_s": 4.981
+          },
+          {
+            "word": "and",
+            "start_s": 5.039,
+            "end_s": 5.132
+          },
+          {
+            "word": "stretches",
+            "start_s": 5.201,
+            "end_s": 5.619
+          },
+          {
+            "word": "his",
+            "start_s": 5.666,
+            "end_s": 5.759
+          },
+          {
+            "word": "white",
+            "start_s": 5.817,
+            "end_s": 6.049
+          },
+          {
+            "word": "paws",
+            "start_s": 6.095,
+            "end_s": 6.513
+          },
+          {
+            "word": "Polar",
+            "start_s": 7.187,
+            "end_s": 7.512
+          },
+          {
+            "word": "Bear",
+            "start_s": 7.558,
+            "end_s": 7.802
+          },
+          {
+            "word": "it's",
+            "start_s": 7.976,
+            "end_s": 8.15
+          },
+          {
+            "word": "my",
+            "start_s": 8.197,
+            "end_s": 8.29
+          },
+          {
+            "word": "birthday",
+            "start_s": 8.359,
+            "end_s": 8.893
+          },
+          {
+            "word": "Bruno",
+            "start_s": 9.334,
+            "end_s": 9.636
+          },
+          {
+            "word": "calls",
+            "start_s": 9.706,
+            "end_s": 9.961
+          },
+          {
+            "word": "out",
+            "start_s": 9.996,
+            "end_s": 10.124
+          },
+          {
+            "word": "cheerfully",
+            "start_s": 10.17,
+            "end_s": 10.693
+          },
+          {
+            "word": "That's",
+            "start_s": 11.308,
+            "end_s": 11.587
+          },
+          {
+            "word": "nice",
+            "start_s": 11.668,
+            "end_s": 11.958
+          },
+          {
+            "word": "Bruno",
+            "start_s": 12.016,
+            "end_s": 12.388
+          },
+          {
+            "word": "I",
+            "start_s": 12.655,
+            "end_s": 12.725
+          },
+          {
+            "word": "have",
+            "start_s": 12.841,
+            "end_s": 13.015
+          },
+          {
+            "word": "to",
+            "start_s": 13.05,
+            "end_s": 13.096
+          },
+          {
+            "word": "go",
+            "start_s": 13.154,
+            "end_s": 13.27
+          },
+          {
+            "word": "now",
+            "start_s": 13.34,
+            "end_s": 13.584
+          },
+          {
+            "word": "Polar",
+            "start_s": 14.269,
+            "end_s": 14.605
+          },
+          {
+            "word": "Bear",
+            "start_s": 14.652,
+            "end_s": 14.814
+          },
+          {
+            "word": "shuffles",
+            "start_s": 14.884,
+            "end_s": 15.232
+          },
+          {
+            "word": "away",
+            "start_s": 15.278,
+            "end_s": 15.627
+          },
+          {
+            "word": "yawning",
+            "start_s": 15.894,
+            "end_s": 16.219
+          },
+          {
+            "word": "again",
+            "start_s": 16.277,
+            "end_s": 16.648
+          },
+          {
+            "word": "Bruno's",
+            "start_s": 17.519,
+            "end_s": 17.972
+          },
+          {
+            "word": "ears",
+            "start_s": 18.03,
+            "end_s": 18.32
+          },
+          {
+            "word": "droop",
+            "start_s": 18.378,
+            "end_s": 18.657
+          },
+          {
+            "word": "just",
+            "start_s": 18.727,
+            "end_s": 18.924
+          },
+          {
+            "word": "a",
+            "start_s": 18.97,
+            "end_s": 18.994
+          },
+          {
+            "word": "little",
+            "start_s": 19.04,
+            "end_s": 19.365
+          },
+          {
+            "word": "Why",
+            "start_s": 19.899,
+            "end_s": 20.085
+          },
+          {
+            "word": "is",
+            "start_s": 20.143,
+            "end_s": 20.236
+          },
+          {
+            "word": "everyone",
+            "start_s": 20.294,
+            "end_s": 20.677
+          },
+          {
+            "word": "so",
+            "start_s": 20.712,
+            "end_s": 20.851
+          },
+          {
+            "word": "busy",
+            "start_s": 20.921,
+            "end_s": 21.188
+          },
+          {
+            "word": "today",
+            "start_s": 21.246,
+            "end_s": 21.652
+          }
+        ]
+      },
+      "image": "p3.0d62d170.webp",
+      "next_page": "p4",
+      "choice": null
+    },
+    {
+      "id": "p4",
+      "text": "Bruno pads along to see the honey-loving sun bear. Sun Bear is licking her paws near the old oak tree. \"Sun Bear, guess what? It's my birthday!\" Bruno says hopefully. \"Oh my! I really must dash, Bruno!\" Sun Bear scampers off quickly. Bruno's tail begins to droop lower now. His heart feels heavy and sad inside his chest.",
+      "audio": {
+        "file": "p4.7a3aa429.mp3",
+        "timings": [
+          {
+            "word": "Bruno",
+            "start_s": 0.0,
+            "end_s": 0.395
+          },
+          {
+            "word": "pads",
+            "start_s": 0.476,
+            "end_s": 0.778
+          },
+          {
+            "word": "along",
+            "start_s": 0.813,
+            "end_s": 1.138
+          },
+          {
+            "word": "to",
+            "start_s": 1.207,
+            "end_s": 1.277
+          },
+          {
+            "word": "see",
+            "start_s": 1.335,
+            "end_s": 1.474
+          },
+          {
+            "word": "the",
+            "start_s": 1.509,
+            "end_s": 1.579
+          },
+          {
+            "word": "honey-loving",
+            "start_s": 1.637,
+            "end_s": 2.159
+          },
+          {
+            "word": "sun",
+            "start_s": 2.229,
+            "end_s": 2.403
+          },
+          {
+            "word": "bear",
+            "start_s": 2.461,
+            "end_s": 2.717
+          },
+          {
+            "word": "Sun",
+            "start_s": 3.529,
+            "end_s": 3.773
+          },
+          {
+            "word": "Bear",
+            "start_s": 3.82,
+            "end_s": 3.982
+          },
+          {
+            "word": "is",
+            "start_s": 4.04,
+            "end_s": 4.122
+          },
+          {
+            "word": "licking",
+            "start_s": 4.203,
+            "end_s": 4.458
+          },
+          {
+            "word": "her",
+            "start_s": 4.516,
+            "end_s": 4.586
+          },
+          {
+            "word": "paws",
+            "start_s": 4.656,
+            "end_s": 4.992
+          },
+          {
+            "word": "near",
+            "start_s": 5.05,
+            "end_s": 5.178
+          },
+          {
+            "word": "the",
+            "start_s": 5.213,
+            "end_s": 5.283
+          },
+          {
+            "word": "old",
+            "start_s": 5.341,
+            "end_s": 5.515
+          },
+          {
+            "word": "oak",
+            "start_s": 5.573,
+            "end_s": 5.724
+          },
+          {
+            "word": "tree",
+            "start_s": 5.793,
+            "end_s": 6.177
+          },
+          {
+            "word": "Sun",
+            "start_s": 7.163,
+            "end_s": 7.419
+          },
+          {
+            "word": "Bear",
+            "start_s": 7.477,
+            "end_s": 7.663
+          },
+          {
+            "word": "guess",
+            "start_s": 7.732,
+            "end_s": 7.964
+          },
+          {
+            "word": "what",
+            "start_s": 8.011,
+            "end_s": 8.324
+          },
+          {
+            "word": "It's",
+            "start_s": 8.591,
+            "end_s": 8.777
+          },
+          {
+            "word": "my",
+            "start_s": 8.835,
+            "end_s": 8.94
+          },
+          {
+            "word": "birthday",
+            "start_s": 9.021,
+            "end_s": 9.683
+          },
+          {
+            "word": "Bruno",
+            "start_s": 10.24,
+            "end_s": 10.565
+          },
+          {
+            "word": "says",
+            "start_s": 10.646,
+            "end_s": 10.855
+          },
+          {
+            "word": "hopefully",
+            "start_s": 10.913,
+            "end_s": 11.424
+          },
+          {
+            "word": "Oh",
+            "start_s": 12.132,
+            "end_s": 12.399
+          },
+          {
+            "word": "my",
+            "start_s": 12.481,
+            "end_s": 13.038
+          },
+          {
+            "word": "I",
+            "start_s": 13.398,
+            "end_s": 13.456
+          },
+          {
+            "word": "really",
+            "start_s": 13.607,
+            "end_s": 13.874
+          },
+          {
+            "word": "must",
+            "start_s": 13.944,
+            "end_s": 14.176
+          },
+          {
+            "word": "dash",
+            "start_s": 14.257,
+            "end_s": 14.64
+          },
+          {
+            "word": "Bruno",
+            "start_s": 14.698,
+            "end_s": 15.116
+          },
+          {
+            "word": "Sun",
+            "start_s": 15.743,
+            "end_s": 15.975
+          },
+          {
+            "word": "Bear",
+            "start_s": 16.022,
+            "end_s": 16.208
+          },
+          {
+            "word": "scampers",
+            "start_s": 16.277,
+            "end_s": 16.73
+          },
+          {
+            "word": "off",
+            "start_s": 16.788,
+            "end_s": 16.939
+          },
+          {
+            "word": "quickly",
+            "start_s": 17.009,
+            "end_s": 17.473
+          },
+          {
+            "word": "Bruno's",
+            "start_s": 18.124,
+            "end_s": 18.542
+          },
+          {
+            "word": "tail",
+            "start_s": 18.588,
+            "end_s": 18.843
+          },
+          {
+            "word": "begins",
+            "start_s": 18.913,
+            "end_s": 19.203
+          },
+          {
+            "word": "to",
+            "start_s": 19.25,
+            "end_s": 19.319
+          },
+          {
+            "word": "droop",
+            "start_s": 19.389,
+            "end_s": 19.633
+          },
+          {
+            "word": "lower",
+            "start_s": 19.703,
+            "end_s": 19.935
+          },
+          {
+            "word": "now",
+            "start_s": 19.993,
+            "end_s": 20.202
+          },
+          {
+            "word": "His",
+            "start_s": 20.759,
+            "end_s": 20.933
+          },
+          {
+            "word": "heart",
+            "start_s": 20.991,
+            "end_s": 21.177
+          },
+          {
+            "word": "feels",
+            "start_s": 21.224,
+            "end_s": 21.467
+          },
+          {
+            "word": "heavy",
+            "start_s": 21.537,
+            "end_s": 21.804
+          },
+          {
+            "word": "and",
+            "start_s": 21.85,
+            "end_s": 21.92
+          },
+          {
+            "word": "sad",
+            "start_s": 21.99,
+            "end_s": 22.28
+          },
+          {
+            "word": "inside",
+            "start_s": 22.326,
+            "end_s": 22.617
+          },
+          {
+            "word": "his",
+            "start_s": 22.64,
+            "end_s": 22.733
+          },
+          {
+            "word": "chest",
+            "start_s": 22.779,
+            "end_s": 23.197
+          }
+        ]
+      },
+      "image": "p4.e0d2c0dc.webp",
+      "next_page": "p5",
+      "choice": null
+    },
+    {
+      "id": "p5",
+      "text": "Finally, Bruno finds the shy spectacled bear near the berry bushes. Spectacled Bear peeks out from behind the leaves nervously. \"Hello, friend. Today is my birthday,\" Bruno says quietly now. \"I... I have to go! Sorry, Bruno!\" Spectacled Bear disappears into the forest. Bruno feels forgotten and very alone. His tail droops all the way down.",
+      "audio": {
+        "file": "p5.ae291cd6.mp3",
+        "timings": [
+          {
+            "word": "Finally",
+            "start_s": 0.0,
+            "end_s": 0.546
+          },
+          {
+            "word": "Bruno",
+            "start_s": 0.685,
+            "end_s": 1.01
+          },
+          {
+            "word": "finds",
+            "start_s": 1.091,
+            "end_s": 1.405
+          },
+          {
+            "word": "the",
+            "start_s": 1.451,
+            "end_s": 1.533
+          },
+          {
+            "word": "shy",
+            "start_s": 1.579,
+            "end_s": 1.834
+          },
+          {
+            "word": "spectacled",
+            "start_s": 1.892,
+            "end_s": 2.426
+          },
+          {
+            "word": "bear",
+            "start_s": 2.461,
+            "end_s": 2.752
+          },
+          {
+            "word": "near",
+            "start_s": 2.902,
+            "end_s": 3.077
+          },
+          {
+            "word": "the",
+            "start_s": 3.111,
+            "end_s": 3.181
+          },
+          {
+            "word": "berry",
+            "start_s": 3.216,
+            "end_s": 3.425
+          },
+          {
+            "word": "bushes",
+            "start_s": 3.471,
+            "end_s": 3.936
+          },
+          {
+            "word": "Spectacled",
+            "start_s": 4.528,
+            "end_s": 5.12
+          },
+          {
+            "word": "Bear",
+            "start_s": 5.155,
+            "end_s": 5.364
+          },
+          {
+            "word": "peeks",
+            "start_s": 5.445,
+            "end_s": 5.724
+          },
+          {
+            "word": "out",
+            "start_s": 5.782,
+            "end_s": 5.944
+          },
+          {
+            "word": "from",
+            "start_s": 6.002,
+            "end_s": 6.13
+          },
+          {
+            "word": "behind",
+            "start_s": 6.177,
+            "end_s": 6.478
+          },
+          {
+            "word": "the",
+            "start_s": 6.525,
+            "end_s": 6.594
+          },
+          {
+            "word": "leaves",
+            "start_s": 6.641,
+            "end_s": 6.931
+          },
+          {
+            "word": "nervously",
+            "start_s": 7.001,
+            "end_s": 7.558
+          },
+          {
+            "word": "Hello",
+            "start_s": 8.29,
+            "end_s": 8.591
+          },
+          {
+            "word": "friend",
+            "start_s": 8.684,
+            "end_s": 9.056
+          },
+          {
+            "word": "Today",
+            "start_s": 9.474,
+            "end_s": 9.799
+          },
+          {
+            "word": "is",
+            "start_s": 9.845,
+            "end_s": 9.938
+          },
+          {
+            "word": "my",
+            "start_s": 9.996,
+            "end_s": 10.089
+          },
+          {
+            "word": "birthday",
+            "start_s": 10.159,
+            "end_s": 10.728
+          },
+          {
+            "word": "Bruno",
+            "start_s": 11.297,
+            "end_s": 11.598
+          },
+          {
+            "word": "says",
+            "start_s": 11.668,
+            "end_s": 11.865
+          },
+          {
+            "word": "quietly",
+            "start_s": 11.935,
+            "end_s": 12.33
+          },
+          {
+            "word": "now",
+            "start_s": 12.388,
+            "end_s": 12.62
+          },
+          {
+            "word": "I",
+            "start_s": 13.293,
+            "end_s": 13.537
+          },
+          {
+            "word": "I",
+            "start_s": 14.141,
+            "end_s": 14.211
+          },
+          {
+            "word": "have",
+            "start_s": 14.362,
+            "end_s": 14.571
+          },
+          {
+            "word": "to",
+            "start_s": 14.605,
+            "end_s": 14.652
+          },
+          {
+            "word": "go",
+            "start_s": 14.71,
+            "end_s": 14.907
+          },
+          {
+            "word": "Sorry",
+            "start_s": 15.197,
+            "end_s": 15.639
+          },
+          {
+            "word": "Bruno",
+            "start_s": 15.72,
+            "end_s": 16.126
+          },
+          {
+            "word": "Spectacled",
+            "start_s": 16.799,
+            "end_s": 17.391
+          },
+          {
+            "word": "Bear",
+            "start_s": 17.426,
+            "end_s": 17.635
+          },
+          {
+            "word": "disappears",
+            "start_s": 17.705,
+            "end_s": 18.25
+          },
+          {
+            "word": "into",
+            "start_s": 18.297,
+            "end_s": 18.448
+          },
+          {
+            "word": "the",
+            "start_s": 18.506,
+            "end_s": 18.576
+          },
+          {
+            "word": "forest",
+            "start_s": 18.622,
+            "end_s": 19.086
+          },
+          {
+            "word": "Bruno",
+            "start_s": 19.609,
+            "end_s": 19.911
+          },
+          {
+            "word": "feels",
+            "start_s": 19.98,
+            "end_s": 20.213
+          },
+          {
+            "word": "forgotten",
+            "start_s": 20.271,
+            "end_s": 20.747
+          },
+          {
+            "word": "and",
+            "start_s": 20.898,
+            "end_s": 21.06
+          },
+          {
+            "word": "very",
+            "start_s": 21.13,
+            "end_s": 21.362
+          },
+          {
+            "word": "alone",
+            "start_s": 21.408,
+            "end_s": 21.873
+          },
+          {
+            "word": "His",
+            "start_s": 22.349,
+            "end_s": 22.523
+          },
+          {
+            "word": "tail",
+            "start_s": 22.569,
+            "end_s": 22.848
+          },
+          {
+            "word": "droops",
+            "start_s": 22.906,
+            "end_s": 23.231
+          },
+          {
+            "word": "all",
+            "start_s": 23.278,
+            "end_s": 23.463
+          },
+          {
+            "word": "the",
+            "start_s": 23.51,
+            "end_s": 23.579
+          },
+          {
+            "word": "way",
+            "start_s": 23.614,
+            "end_s": 23.742
+          },
+          {
+            "word": "down",
+            "start_s": 23.8,
+            "end_s": 24.125
+          }
+        ]
+      },
+      "image": "p5.bf81bf23.webp",
+      "next_page": "p6",
+      "choice": null
+    },
+    {
+      "id": "p6",
+      "text": "Bruno walks slowly home through the darkening forest. His paws feel heavy with each step he takes. The trees whisper softly in the gentle evening breeze. \"Nobody remembered my birthday,\" Bruno thinks sadly to himself. He reaches his little door and pushes it open. What could be waiting inside for a forgotten bear?",
+      "audio": {
+        "file": "p6.58e18410.mp3",
+        "timings": [
+          {
+            "word": "Bruno",
+            "start_s": 0.0,
+            "end_s": 0.395
+          },
+          {
+            "word": "walks",
+            "start_s": 0.464,
+            "end_s": 0.755
+          },
+          {
+            "word": "slowly",
+            "start_s": 0.789,
+            "end_s": 1.161
+          },
+          {
+            "word": "home",
+            "start_s": 1.219,
+            "end_s": 1.498
+          },
+          {
+            "word": "through",
+            "start_s": 1.533,
+            "end_s": 1.718
+          },
+          {
+            "word": "the",
+            "start_s": 1.741,
+            "end_s": 1.811
+          },
+          {
+            "word": "darkening",
+            "start_s": 1.834,
+            "end_s": 2.241
+          },
+          {
+            "word": "forest",
+            "start_s": 2.31,
+            "end_s": 2.798
+          },
+          {
+            "word": "His",
+            "start_s": 3.576,
+            "end_s": 3.738
+          },
+          {
+            "word": "paws",
+            "start_s": 3.808,
+            "end_s": 4.168
+          },
+          {
+            "word": "feel",
+            "start_s": 4.238,
+            "end_s": 4.447
+          },
+          {
+            "word": "heavy",
+            "start_s": 4.516,
+            "end_s": 4.772
+          },
+          {
+            "word": "with",
+            "start_s": 4.83,
+            "end_s": 4.981
+          },
+          {
+            "word": "each",
+            "start_s": 5.05,
+            "end_s": 5.248
+          },
+          {
+            "word": "step",
+            "start_s": 5.306,
+            "end_s": 5.561
+          },
+          {
+            "word": "he",
+            "start_s": 5.619,
+            "end_s": 5.677
+          },
+          {
+            "word": "takes",
+            "start_s": 5.735,
+            "end_s": 6.142
+          },
+          {
+            "word": "The",
+            "start_s": 6.92,
+            "end_s": 7.036
+          },
+          {
+            "word": "trees",
+            "start_s": 7.094,
+            "end_s": 7.419
+          },
+          {
+            "word": "whisper",
+            "start_s": 7.477,
+            "end_s": 7.802
+          },
+          {
+            "word": "softly",
+            "start_s": 7.872,
+            "end_s": 8.394
+          },
+          {
+            "word": "in",
+            "start_s": 8.522,
+            "end_s": 8.649
+          },
+          {
+            "word": "the",
+            "start_s": 8.696,
+            "end_s": 8.766
+          },
+          {
+            "word": "gentle",
+            "start_s": 8.812,
+            "end_s": 9.125
+          },
+          {
+            "word": "evening",
+            "start_s": 9.183,
+            "end_s": 9.474
+          },
+          {
+            "word": "breeze",
+            "start_s": 9.52,
+            "end_s": 9.996
+          },
+          {
+            "word": "Nobody",
+            "start_s": 11.401,
+            "end_s": 11.831
+          },
+          {
+            "word": "remembered",
+            "start_s": 11.9,
+            "end_s": 12.33
+          },
+          {
+            "word": "my",
+            "start_s": 12.376,
+            "end_s": 12.469
+          },
+          {
+            "word": "birthday",
+            "start_s": 12.527,
+            "end_s": 13.084
+          },
+          {
+            "word": "Bruno",
+            "start_s": 13.839,
+            "end_s": 14.153
+          },
+          {
+            "word": "thinks",
+            "start_s": 14.222,
+            "end_s": 14.489
+          },
+          {
+            "word": "sadly",
+            "start_s": 14.524,
+            "end_s": 14.907
+          },
+          {
+            "word": "to",
+            "start_s": 14.965,
+            "end_s": 15.035
+          },
+          {
+            "word": "himself",
+            "start_s": 15.116,
+            "end_s": 15.557
+          },
+          {
+            "word": "He",
+            "start_s": 16.37,
+            "end_s": 16.486
+          },
+          {
+            "word": "reaches",
+            "start_s": 16.556,
+            "end_s": 16.869
+          },
+          {
+            "word": "his",
+            "start_s": 16.915,
+            "end_s": 17.008
+          },
+          {
+            "word": "little",
+            "start_s": 17.066,
+            "end_s": 17.287
+          },
+          {
+            "word": "door",
+            "start_s": 17.31,
+            "end_s": 17.6
+          },
+          {
+            "word": "and",
+            "start_s": 17.751,
+            "end_s": 17.925
+          },
+          {
+            "word": "pushes",
+            "start_s": 17.995,
+            "end_s": 18.297
+          },
+          {
+            "word": "it",
+            "start_s": 18.343,
+            "end_s": 18.413
+          },
+          {
+            "word": "open",
+            "start_s": 18.459,
+            "end_s": 18.784
+          },
+          {
+            "word": "What",
+            "start_s": 19.342,
+            "end_s": 19.516
+          },
+          {
+            "word": "could",
+            "start_s": 19.551,
+            "end_s": 19.69
+          },
+          {
+            "word": "be",
+            "start_s": 19.713,
+            "end_s": 19.795
+          },
+          {
+            "word": "waiting",
+            "start_s": 19.841,
+            "end_s": 20.131
+          },
+          {
+            "word": "inside",
+            "start_s": 20.166,
+            "end_s": 20.607
+          },
+          {
+            "word": "for",
+            "start_s": 20.642,
+            "end_s": 20.747
+          },
+          {
+            "word": "a",
+            "start_s": 20.793,
+            "end_s": 20.816
+          },
+          {
+            "word": "forgotten",
+            "start_s": 20.874,
+            "end_s": 21.234
+          },
+          {
+            "word": "bear",
+            "start_s": 21.281,
+            "end_s": 21.582
+          }
+        ]
+      },
+      "image": "p6.9b00bf71.webp",
+      "next_page": "p7",
+      "choice": null
+    },
+    {
+      "id": "p7",
+      "text": "\"SURPRISE!\" all his friends shout together loudly and joyfully! Lanterns glow softly all around the cozy room. A beautiful honey cake sits on the wooden table. A colorful banner says \"Happy Birthday Bruno!\" in bright letters. Panda, Polar Bear, Sun Bear, and Spectacled Bear are all smiling. \"We were getting everything ready!\" they explain with warm hugs.",
+      "audio": {
+        "file": "p7.9cc1353c.mp3",
+        "timings": [
+          {
+            "word": "SURPRISE",
+            "start_s": 0.058,
+            "end_s": 0.975
+          },
+          {
+            "word": "all",
+            "start_s": 1.556,
+            "end_s": 1.741
+          },
+          {
+            "word": "his",
+            "start_s": 1.8,
+            "end_s": 1.904
+          },
+          {
+            "word": "friends",
+            "start_s": 1.962,
+            "end_s": 2.264
+          },
+          {
+            "word": "shout",
+            "start_s": 2.299,
+            "end_s": 2.566
+          },
+          {
+            "word": "together",
+            "start_s": 2.612,
+            "end_s": 2.984
+          },
+          {
+            "word": "loudly",
+            "start_s": 3.158,
+            "end_s": 3.587
+          },
+          {
+            "word": "and",
+            "start_s": 3.646,
+            "end_s": 3.727
+          },
+          {
+            "word": "joyfully",
+            "start_s": 3.796,
+            "end_s": 4.331
+          },
+          {
+            "word": "Lanterns",
+            "start_s": 5.201,
+            "end_s": 5.759
+          },
+          {
+            "word": "glow",
+            "start_s": 5.817,
+            "end_s": 6.049
+          },
+          {
+            "word": "softly",
+            "start_s": 6.13,
+            "end_s": 6.583
+          },
+          {
+            "word": "all",
+            "start_s": 6.653,
+            "end_s": 6.803
+          },
+          {
+            "word": "around",
+            "start_s": 6.861,
+            "end_s": 7.094
+          },
+          {
+            "word": "the",
+            "start_s": 7.129,
+            "end_s": 7.198
+          },
+          {
+            "word": "cozy",
+            "start_s": 7.233,
+            "end_s": 7.523
+          },
+          {
+            "word": "room",
+            "start_s": 7.593,
+            "end_s": 7.872
+          },
+          {
+            "word": "A",
+            "start_s": 8.742,
+            "end_s": 8.824
+          },
+          {
+            "word": "beautiful",
+            "start_s": 8.893,
+            "end_s": 9.3
+          },
+          {
+            "word": "honey",
+            "start_s": 9.369,
+            "end_s": 9.59
+          },
+          {
+            "word": "cake",
+            "start_s": 9.636,
+            "end_s": 9.903
+          },
+          {
+            "word": "sits",
+            "start_s": 9.938,
+            "end_s": 10.159
+          },
+          {
+            "word": "on",
+            "start_s": 10.205,
+            "end_s": 10.263
+          },
+          {
+            "word": "the",
+            "start_s": 10.31,
+            "end_s": 10.379
+          },
+          {
+            "word": "wooden",
+            "start_s": 10.414,
+            "end_s": 10.658
+          },
+          {
+            "word": "table",
+            "start_s": 10.704,
+            "end_s": 11.169
+          },
+          {
+            "word": "A",
+            "start_s": 11.668,
+            "end_s": 11.749
+          },
+          {
+            "word": "colorful",
+            "start_s": 11.831,
+            "end_s": 12.26
+          },
+          {
+            "word": "banner",
+            "start_s": 12.33,
+            "end_s": 12.632
+          },
+          {
+            "word": "says",
+            "start_s": 12.701,
+            "end_s": 12.992
+          },
+          {
+            "word": "Happy",
+            "start_s": 13.317,
+            "end_s": 13.607
+          },
+          {
+            "word": "Birthday",
+            "start_s": 13.665,
+            "end_s": 14.036
+          },
+          {
+            "word": "Bruno",
+            "start_s": 14.094,
+            "end_s": 14.454
+          },
+          {
+            "word": "in",
+            "start_s": 14.826,
+            "end_s": 14.954
+          },
+          {
+            "word": "bright",
+            "start_s": 15.012,
+            "end_s": 15.255
+          },
+          {
+            "word": "letters",
+            "start_s": 15.302,
+            "end_s": 15.731
+          },
+          {
+            "word": "Panda",
+            "start_s": 16.602,
+            "end_s": 17.113
+          },
+          {
+            "word": "Polar",
+            "start_s": 17.217,
+            "end_s": 17.565
+          },
+          {
+            "word": "Bear",
+            "start_s": 17.623,
+            "end_s": 17.89
+          },
+          {
+            "word": "Sun",
+            "start_s": 18.018,
+            "end_s": 18.25
+          },
+          {
+            "word": "Bear",
+            "start_s": 18.32,
+            "end_s": 18.564
+          },
+          {
+            "word": "and",
+            "start_s": 18.645,
+            "end_s": 18.796
+          },
+          {
+            "word": "Spectacled",
+            "start_s": 18.866,
+            "end_s": 19.4
+          },
+          {
+            "word": "Bear",
+            "start_s": 19.435,
+            "end_s": 19.702
+          },
+          {
+            "word": "are",
+            "start_s": 19.876,
+            "end_s": 20.085
+          },
+          {
+            "word": "all",
+            "start_s": 20.131,
+            "end_s": 20.317
+          },
+          {
+            "word": "smiling",
+            "start_s": 20.375,
+            "end_s": 20.863
+          },
+          {
+            "word": "We",
+            "start_s": 21.606,
+            "end_s": 21.733
+          },
+          {
+            "word": "were",
+            "start_s": 21.768,
+            "end_s": 21.908
+          },
+          {
+            "word": "getting",
+            "start_s": 21.942,
+            "end_s": 22.175
+          },
+          {
+            "word": "everything",
+            "start_s": 22.233,
+            "end_s": 22.627
+          },
+          {
+            "word": "ready",
+            "start_s": 22.697,
+            "end_s": 23.057
+          },
+          {
+            "word": "they",
+            "start_s": 23.475,
+            "end_s": 23.626
+          },
+          {
+            "word": "explain",
+            "start_s": 23.672,
+            "end_s": 24.102
+          },
+          {
+            "word": "with",
+            "start_s": 24.16,
+            "end_s": 24.288
+          },
+          {
+            "word": "warm",
+            "start_s": 24.357,
+            "end_s": 24.647
+          },
+          {
+            "word": "hugs",
+            "start_s": 24.706,
+            "end_s": 25.112
+          }
+        ]
+      },
+      "image": "p7.a9c5f8c9.webp",
+      "next_page": "p8",
+      "choice": null
+    },
+    {
+      "id": "p8",
+      "text": "Bruno's heart fills up with love and happiness again. His friends sing a soft birthday song together. They share sweet honey cake under the rising moon. Bruno yawns a big, happy yawn as the lanterns flicker. \"Best birthday ever,\" he whispers sleepily to his dear friends. Everyone snuggles close together as the stars twinkle outside. Good night, Bruno.",
+      "audio": {
+        "file": "p8.7e29bf05.mp3",
+        "timings": [
+          {
+            "word": "Bruno's",
+            "start_s": 0.0,
+            "end_s": 0.464
+          },
+          {
+            "word": "heart",
+            "start_s": 0.511,
+            "end_s": 0.778
+          },
+          {
+            "word": "fills",
+            "start_s": 0.848,
+            "end_s": 1.126
+          },
+          {
+            "word": "up",
+            "start_s": 1.184,
+            "end_s": 1.3
+          },
+          {
+            "word": "with",
+            "start_s": 1.358,
+            "end_s": 1.509
+          },
+          {
+            "word": "love",
+            "start_s": 1.579,
+            "end_s": 1.881
+          },
+          {
+            "word": "and",
+            "start_s": 1.916,
+            "end_s": 1.997
+          },
+          {
+            "word": "happiness",
+            "start_s": 2.067,
+            "end_s": 2.531
+          },
+          {
+            "word": "again",
+            "start_s": 2.566,
+            "end_s": 2.902
+          },
+          {
+            "word": "His",
+            "start_s": 3.622,
+            "end_s": 3.785
+          },
+          {
+            "word": "friends",
+            "start_s": 3.855,
+            "end_s": 4.191
+          },
+          {
+            "word": "sing",
+            "start_s": 4.238,
+            "end_s": 4.493
+          },
+          {
+            "word": "a",
+            "start_s": 4.54,
+            "end_s": 4.563
+          },
+          {
+            "word": "soft",
+            "start_s": 4.632,
+            "end_s": 4.934
+          },
+          {
+            "word": "birthday",
+            "start_s": 4.992,
+            "end_s": 5.352
+          },
+          {
+            "word": "song",
+            "start_s": 5.399,
+            "end_s": 5.596
+          },
+          {
+            "word": "together",
+            "start_s": 5.642,
+            "end_s": 6.026
+          },
+          {
+            "word": "They",
+            "start_s": 6.896,
+            "end_s": 7.059
+          },
+          {
+            "word": "share",
+            "start_s": 7.105,
+            "end_s": 7.361
+          },
+          {
+            "word": "sweet",
+            "start_s": 7.43,
+            "end_s": 7.709
+          },
+          {
+            "word": "honey",
+            "start_s": 7.767,
+            "end_s": 7.988
+          },
+          {
+            "word": "cake",
+            "start_s": 8.034,
+            "end_s": 8.29
+          },
+          {
+            "word": "under",
+            "start_s": 8.336,
+            "end_s": 8.51
+          },
+          {
+            "word": "the",
+            "start_s": 8.557,
+            "end_s": 8.626
+          },
+          {
+            "word": "rising",
+            "start_s": 8.684,
+            "end_s": 9.021
+          },
+          {
+            "word": "moon",
+            "start_s": 9.091,
+            "end_s": 9.392
+          },
+          {
+            "word": "Bruno",
+            "start_s": 10.263,
+            "end_s": 10.588
+          },
+          {
+            "word": "yawns",
+            "start_s": 10.658,
+            "end_s": 11.006
+          },
+          {
+            "word": "a",
+            "start_s": 11.053,
+            "end_s": 11.088
+          },
+          {
+            "word": "big",
+            "start_s": 11.169,
+            "end_s": 11.436
+          },
+          {
+            "word": "happy",
+            "start_s": 11.529,
+            "end_s": 11.831
+          },
+          {
+            "word": "yawn",
+            "start_s": 11.889,
+            "end_s": 12.272
+          },
+          {
+            "word": "as",
+            "start_s": 12.388,
+            "end_s": 12.55
+          },
+          {
+            "word": "the",
+            "start_s": 12.597,
+            "end_s": 12.666
+          },
+          {
+            "word": "lanterns",
+            "start_s": 12.725,
+            "end_s": 13.142
+          },
+          {
+            "word": "flicker",
+            "start_s": 13.201,
+            "end_s": 13.607
+          },
+          {
+            "word": "Best",
+            "start_s": 14.721,
+            "end_s": 15.058
+          },
+          {
+            "word": "birthday",
+            "start_s": 15.128,
+            "end_s": 15.581
+          },
+          {
+            "word": "ever",
+            "start_s": 15.674,
+            "end_s": 16.022
+          },
+          {
+            "word": "he",
+            "start_s": 16.684,
+            "end_s": 16.754
+          },
+          {
+            "word": "whispers",
+            "start_s": 16.812,
+            "end_s": 17.206
+          },
+          {
+            "word": "sleepily",
+            "start_s": 17.241,
+            "end_s": 17.682
+          },
+          {
+            "word": "to",
+            "start_s": 17.741,
+            "end_s": 17.81
+          },
+          {
+            "word": "his",
+            "start_s": 17.891,
+            "end_s": 17.984
+          },
+          {
+            "word": "dear",
+            "start_s": 18.042,
+            "end_s": 18.205
+          },
+          {
+            "word": "friends",
+            "start_s": 18.275,
+            "end_s": 18.693
+          },
+          {
+            "word": "Everyone",
+            "start_s": 19.563,
+            "end_s": 20.028
+          },
+          {
+            "word": "snuggles",
+            "start_s": 20.063,
+            "end_s": 20.469
+          },
+          {
+            "word": "close",
+            "start_s": 20.527,
+            "end_s": 20.782
+          },
+          {
+            "word": "together",
+            "start_s": 20.806,
+            "end_s": 21.212
+          },
+          {
+            "word": "as",
+            "start_s": 21.456,
+            "end_s": 21.618
+          },
+          {
+            "word": "the",
+            "start_s": 21.665,
+            "end_s": 21.734
+          },
+          {
+            "word": "stars",
+            "start_s": 21.781,
+            "end_s": 22.199
+          },
+          {
+            "word": "twinkle",
+            "start_s": 22.257,
+            "end_s": 22.605
+          },
+          {
+            "word": "outside",
+            "start_s": 22.64,
+            "end_s": 23.255
+          },
+          {
+            "word": "Good",
+            "start_s": 23.766,
+            "end_s": 23.952
+          },
+          {
+            "word": "night",
+            "start_s": 23.987,
+            "end_s": 24.172
+          },
+          {
+            "word": "Bruno",
+            "start_s": 24.219,
+            "end_s": 24.579
+          }
+        ]
+      },
+      "image": "p8.7d7ef61d.webp",
+      "next_page": null,
+      "choice": null
+    }
+  ],
+  "gloss": null
+}

@@ -13,6 +13,12 @@
       "title": "Pip and the Little Boat Biscuit",
       "wash": "wash-barchetta",
       "story": "/static/content/en/stories/pip-the-pirate/story.json"
+    },
+    {
+      "id": "bruno-birthday-bear",
+      "title": "Bruno's Surprise Birthday",
+      "wash": "wash-panetteria",
+      "story": "/static/content/en/stories/bruno-birthday-bear/story.json"
     }
   ]
 }
