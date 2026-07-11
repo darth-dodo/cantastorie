@@ -1,4 +1,4 @@
-"""Workshop run manager (AI-387, ADR-003): in-process pipeline execution.
+"""Workshop run manager (AI-387, ADR-004): in-process pipeline execution.
 
 One run at a time, as an asyncio background task in the same FastAPI process —
 not a queue framework. The pipeline is I/O-bound API calls behind sync code,
@@ -10,7 +10,7 @@ resume_on_boot() can find.
 
 Resume costs nothing repeated: the step functions run against the
 content-addressed ArtifactCache, so completed steps are pure lookups
-(docs/adr/ADR-003 — "a restart re-buys nothing").
+(docs/adr/ADR-004 — "a restart re-buys nothing").
 """
 
 from __future__ import annotations

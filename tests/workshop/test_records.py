@@ -1,4 +1,4 @@
-"""Behavior specs for workshop run records (AI-387, ADR-003).
+"""Behavior specs for workshop run records (AI-387, ADR-004).
 
 A run record is the durable trace of one pack request: queued → running →
 staged → approved | rejected, with a retryable failed. Records persist to R2
