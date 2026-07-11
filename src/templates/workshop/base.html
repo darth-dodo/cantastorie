@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Workshop{% endblock %} · Cantastorie</title>
+    <link rel="stylesheet" href="/static/css/tokens.css" />
+    <link rel="stylesheet" href="/static/css/workshop.css" />
+    <script src="/static/js/vendor/htmx.min.js" defer></script>
+  </head>
+  <body class="workshop">
+    <header class="workshop-header">
+      <a href="/workshop"><h1>Workshop</h1></a>
+      <span class="workshop-tagline">the room behind the piazza</span>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+  </body>
+</html>

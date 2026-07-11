@@ -1,0 +1,20 @@
+{% extends "workshop/base.html" %}
+{% block title %}{{ story.title }}{% endblock %}
+{% block content %}
+  <section class="workshop-card">
+    <h2>{{ story.title }}</h2>
+    <p class="workshop-meta">{{ story.id }} · {{ story.language }} · {{ story.shape }}</p>
+    {% for page in story.pages %}
+      <article class="workshop-page">
+        <h3>{{ page.id }}</h3>
+        {% if page.image %}
+          <img src="/workshop/staged/{{ story.id }}/assets/{{ page.image }}" alt="Illustration for {{ page.id }}" loading="lazy" />
+        {% endif %}
+        <p>{{ page.text }}</p>
+        {% if page.audio %}
+          <audio controls preload="none" src="/workshop/staged/{{ story.id }}/assets/{{ page.audio.file }}"></audio>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </section>
+{% endblock %}

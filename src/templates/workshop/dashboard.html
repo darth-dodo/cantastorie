@@ -1,0 +1,50 @@
+{% extends "workshop/base.html" %}
+{% block title %}Runs{% endblock %}
+{% block content %}
+  <section class="workshop-card">
+    <h2>Start a run</h2>
+    <form method="post" action="/workshop/runs" class="workshop-run-form">
+      <label>Theme
+        <select name="theme">
+          {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ") }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Language
+        <select name="language">
+          {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Stories
+        <select name="count">
+          <option>1</option><option>2</option><option>3</option>
+        </select>
+      </label>
+      <label>Premise (optional)
+        <input name="premise" type="text" placeholder="a small boat wants to see the moon" />
+      </label>
+      <button type="submit">Generate</button>
+    </form>
+  </section>
+
+  <section class="workshop-card">
+    <h2>Runs</h2>
+    {% if runs %}
+      <table class="workshop-runs">
+        <thead><tr><th>Requested</th><th>Theme</th><th>Lang</th><th>State</th><th></th></tr></thead>
+        <tbody>
+          {% for run in runs %}
+            <tr>
+              <td>{{ run.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+              <td>{{ run.request.theme.replace("_", " ") }}</td>
+              <td>{{ run.request.language }}</td>
+              <td><span class="state state-{{ run.state }}">{{ run.state }}</span></td>
+              <td><a href="/workshop/runs/{{ run.id }}">open</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="workshop-empty">No runs yet — the shelf is waiting for its first story.</p>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # (text, audio, images together) before publish reads it back.
     staging_dir: Path = Path("staging")
 
+    # The operator face at /workshop (AI-388, ADR-004). Empty means the
+    # workshop does not exist: every /workshop route answers 404. There are
+    # no accounts — this one secret is the whole operator access model.
+    workshop_secret: SecretStr = SecretStr("")
+
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
     # access keys follow the SecretStr pattern above — never logged, never
     # repr'd. r2_public_base is the URL the published/ prefix is served at,
