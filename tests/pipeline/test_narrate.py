@@ -139,16 +139,18 @@ def test_a_different_voice_or_model_never_reuses_cached_audio(tmp_path: Path) ->
 # ---------------------------------------------------------------------------
 
 
-def test_slice_one_ships_the_three_italian_prompts_as_final_copy() -> None:
-    """Given the locked copy in docs/product.md **Spoken Prompts**,
-    When the slice-1 utterance set is read,
-    Then it contains exactly the shelf greeting, story start, and end prompt
-    with their final Italian strings.
+def test_the_utterance_set_ships_final_italian_copy() -> None:
+    """Given docs/product.md **Spoken Prompts**,
+    When the utterance set is read,
+    Then it carries the slice-1 prompts plus the slice-2 failure prompts,
+    all as final copy, verbatim.
     """
     assert IT_UTTERANCES == {
         "shelf_greeting": "Ciao! Quale storia ascoltiamo oggi?",
         "story_start": "Si parte!",
         "end_prompt": "Fine! Ancora, o un'altra storia?",
+        "audio_retry": "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
+        "offline": "Le nuvole hanno preso le storie. Riprova tra poco!",
     }
 
 
@@ -169,7 +171,7 @@ def test_utterance_audio_lands_under_prompts_it_with_hashed_filenames(tmp_path: 
         client=_client(settings, calls),
     )
 
-    assert set(produced) == {"shelf_greeting", "story_start", "end_prompt"}
+    assert set(produced) == set(IT_UTTERANCES)
     for name, path in produced.items():
         assert path.parent == out_dir / "prompts" / "it"
         assert re.fullmatch(rf"{name}\.[0-9a-f]{{16}}\.mp3", path.name)

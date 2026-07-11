@@ -99,7 +99,7 @@ def _assembled(
 
 
 def _stage_prompts(client: S3Client, language: str = "it") -> None:
-    for name in ("shelf_greeting", "story_start", "end_prompt"):
+    for name in ("shelf_greeting", "story_start", "end_prompt", "audio_retry", "offline"):
         client.put_object(
             Bucket=BUCKET,
             Key=f"{STAGED_PREFIX}/prompts/{language}/{name}.0123456789abcdef.mp3",
@@ -182,6 +182,8 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
         "greeting": f"{PUBLIC_BASE}/prompts/it/shelf_greeting.0123456789abcdef.mp3",
         "story_start": f"{PUBLIC_BASE}/prompts/it/story_start.0123456789abcdef.mp3",
         "end": f"{PUBLIC_BASE}/prompts/it/end_prompt.0123456789abcdef.mp3",
+        "audio_retry": f"{PUBLIC_BASE}/prompts/it/audio_retry.0123456789abcdef.mp3",
+        "offline": f"{PUBLIC_BASE}/prompts/it/offline.0123456789abcdef.mp3",
     }
 
 
