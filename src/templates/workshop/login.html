@@ -1,0 +1,9 @@
+{% extends "workshop/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+  <form class="workshop-card workshop-login" method="post" action="/workshop/login">
+    <label for="secret">Operator secret</label>
+    <input id="secret" name="secret" type="password" autocomplete="current-password" autofocus />
+    <button type="submit">Enter the workshop</button>
+  </form>
+{% endblock %}
