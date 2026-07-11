@@ -191,3 +191,47 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
     expect(running.store.state.page).toBe(1);
   });
 });
+
+describe("published shelf: cross-origin R2 manifest", () => {
+  const r2Manifest = {
+    language: "en",
+    prompts: {
+      greeting: "https://pub-test.r2.dev/published/prompts/en/shelf_greeting.abc123.mp3",
+      story_start: "https://pub-test.r2.dev/published/prompts/en/story_start.abc123.mp3",
+      end: "https://pub-test.r2.dev/published/prompts/en/end_prompt.abc123.mp3",
+    },
+    stories: [
+      {
+        id: "animals-helping-each-other-en-0397c7d0",
+        title: "The Helpful Friends",
+        wash: "wash-bosco",
+        story: "https://pub-test.r2.dev/published/stories/animals-helping-each-other-en-0397c7d0/story.json",
+      },
+    ],
+  };
+
+  const r2Fetch = async (url) => {
+    const path = String(url);
+    if (path.endsWith("manifest.json")) return { ok: true, json: async () => r2Manifest };
+    if (path.endsWith("story.json")) return { ok: true, json: async () => storyFixture };
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+  };
+
+  it("boots from an R2-shaped manifest with absolute cross-origin URLs", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: r2Fetch, engine: fakeEngine() });
+    expect(running.manifestLoaded).toBe(true);
+    const covers = [...document.querySelectorAll(".shelf .cover")];
+    expect(covers.map((c) => c.getAttribute("aria-label"))).toEqual(["The Helpful Friends"]);
+    expect(covers[0].classList.contains("wash-bosco")).toBe(true);
+  });
+
+  it("a cover tap loads story.json from the R2 URL and renders 8 beads", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: r2Fetch, engine: fakeEngine() });
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
+    expect(running.playback.hasStory()).toBe(true);
+    expect(document.querySelectorAll(".bead")).toHaveLength(8);
+  });
+});

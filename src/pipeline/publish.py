@@ -30,7 +30,7 @@ import boto3
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
-from src.pipeline.models import Story
+from src.pipeline.models import Story, Theme
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -42,6 +42,21 @@ PUBLISHED_PREFIX = "published"
 STORY_FILE = "story.json"
 
 CONTENT_TYPES = {".mp3": "audio/mpeg", ".webp": "image/webp", ".json": "application/json"}
+
+THEME_WASH: dict[Theme, str] = {
+    "animals_helping_each_other": "wash-bosco",
+    "tiny_garden_adventure": "wash-bosco",
+    "the_sleepy_sea": "wash-barchetta",
+    "rain_and_puddles": "wash-barchetta",
+    "bakery_morning": "wash-panetteria",
+    "grandparent_visit": "wash-bosco",
+    "the_lost_mitten": "wash-guanto",
+    "gentle_forest_friends": "wash-bosco",
+    "the_moon_says_goodnight": "wash-guanto",
+    "picnic_surprise": "wash-panetteria",
+    "the_little_boat": "wash-barchetta",
+    "first_snow": "wash-guanto",
+}
 
 # Utterance file-name stems (narrate.py: shelf_greeting/story_start/end_prompt)
 # → the manifest's prompt keys the player reads (the dev fixture's
@@ -138,7 +153,7 @@ def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> N
     entry = {
         "id": story.id,
         "title": story.title,
-        "wash": f"wash-{story.id}",
+        "wash": THEME_WASH[story.theme],
         "story": f"{public_base}/stories/{story.id}/{STORY_FILE}",
     }
     stories: list[dict[str, Any]] = manifest.setdefault("stories", [])
