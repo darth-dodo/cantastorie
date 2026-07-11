@@ -49,6 +49,8 @@ Today the player fetches story assets from the app's own `/static/content/` moun
 
 **Trust boundary:** the two API keys (OpenRouter, ElevenLabs) exist only in the pipeline environment as `SecretStr`, unwrapped at the transport boundary. The web app and browser never see a key; a played story costs zero API calls.
 
+> **Decided, not yet built:** [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) retires ElevenLabs — narration moves to Voxtral via OpenRouter, with word timings from a Deepgram STT transcription pass at slice 6. The provider switch is a pending code change, so this document (and the diagrams above and below) still shows ElevenLabs because the code still implements it. When the switch lands, update this file: delete the ElevenLabs transport from `providers.py`, the `elevenlabs_*` fields from `config.py`, and the alignment-collapse logic in `steps/narrate.py`.
+
 ---
 
 ## The Player (`src/static/js/`)

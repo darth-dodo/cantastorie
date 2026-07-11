@@ -8,7 +8,7 @@ Cantastorie has two deployed pieces and one that never deploys:
 | **Content bucket** | Cloudflare R2 | Published stories and prompts, fetched bucket-direct |
 | **Authoring pipeline** | Your laptop only | Runs the CLI; its two API keys stay in local `.env` |
 
-The pipeline's keys (`OPENROUTER_API_KEY`, `ELEVENLABS_API_KEY`) are **never** deployed — the running site needs no secrets. See [architecture.md → Content Storage](architecture.md#content-storage).
+The pipeline's keys are **never** deployed — the running site needs no secrets. `OPENROUTER_API_KEY` is the one key that runs the pipeline (`ELEVENLABS_API_KEY` disappears with the [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) provider switch; a pipeline-only `DEEPGRAM_API_KEY` exists only if OpenRouter turns out not to carry the Deepgram timing models). See [architecture.md → Content Storage](architecture.md#content-storage).
 
 ---
 

@@ -1,7 +1,7 @@
 # ADR-002: Narration Provider — Voxtral via OpenRouter to Start
 
 **Date**: 2026-07-07
-**Status**: Accepted
+**Status**: Superseded by [ADR-004](ADR-004-narration-deepgram-voxtral.md) — the Voxtral choice carries forward; ElevenLabs' fallback and timestamp roles pass to Deepgram
 **Context**: Choosing the text-to-speech provider for story narration and spoken prompts
 **Decider(s)**: Project Owner
 
@@ -318,6 +318,10 @@ The narration code change is tracked as a separate task; this plan records the i
 
 ## Related Decisions
 
+**Superseded by**:
+
+- [ADR-004](ADR-004-narration-deepgram-voxtral.md) — Narration: Voxtral TTS plus Deepgram, ElevenLabs retired. The Voxtral-via-OpenRouter choice made here is reaffirmed; what ADR-004 replaces is this document's ElevenLabs fallback and its "switch to ElevenLabs for timestamps" path (Deepgram STT takes the timestamp role, Deepgram Aura the fallback-voice role).
+
 **Supersedes**:
 
 - The prior settled choice of ElevenLabs multilingual_v2 with character-level timestamps as the starting narration provider (ElevenLabs is now deferred and under evaluation, not the default)
@@ -354,8 +358,8 @@ The narration code change is tracked as a separate task; this plan records the i
 
 **ADR Number**: 002
 **Created**: 2026-07-07
-**Last Updated**: 2026-07-07
-**Version**: 1.0
+**Last Updated**: 2026-07-11 (marked Superseded by ADR-004)
+**Version**: 1.1
 
 **Authors**: Claude (AI Assistant)
 **Reviewers**: Project Owner
