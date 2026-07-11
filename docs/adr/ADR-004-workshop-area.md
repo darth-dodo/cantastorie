@@ -1,4 +1,4 @@
-# ADR-003: The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs
+# ADR-004: The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs
 
 **Date**: 2026-07-11
 **Status**: Accepted
@@ -274,6 +274,7 @@ Exact slicing is decided in `docs/plans/` per slice; this ADR fixes the architec
 
 - [ADR-001: Foundational Technology Stack](ADR-001-technology-stack.md) — the one-app shape, the no-framework pipeline, and the filesystem checkpointing this design leans on
 - [ADR-002: Narration Provider](ADR-002-narration-provider.md) — the narrate step the workshop invokes unchanged
+- [ADR-003: Parent Authentication via Clerk](ADR-003-parent-authentication-clerk.md) — a Proposed revision of how the parent face identifies families; if accepted, Clerk session verification replaces the bare family token on parent workshop routes (the operator secret and the run/staging machinery are unaffected)
 - [architecture.md — The Parent Area](../architecture.md#the-parent-area) — the rendering pattern the workshop faces adopt
 - [product.md — Pack requests & review](../product.md) — the Phase 2 behavior this architecture serves
 
@@ -297,6 +298,6 @@ Exact slicing is decided in `docs/plans/` per slice; this ADR fixes the architec
 
 ## Metadata
 
-- **ADR Number**: 003
+- **ADR Number**: 004
 - **Created**: 2026-07-11
 - **Tags**: workshop, authoring, pipeline, parent-area, execution-model, render, r2
