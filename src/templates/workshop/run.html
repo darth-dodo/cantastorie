@@ -1,0 +1,12 @@
+{% extends "workshop/base.html" %}
+{% block title %}Run {{ record.id[:8] }}{% endblock %}
+{% block content %}
+  <section class="workshop-card">
+    <h2>{{ record.request.theme.replace("_", " ") }} · {{ record.request.language }}</h2>
+    <p class="workshop-meta">
+      run {{ record.id[:8] }} · {{ record.request.count }} story{{ "" if record.request.count == 1 else "ies" }}
+      {% if record.request.premise %} · “{{ record.request.premise }}”{% endif %}
+    </p>
+    {% include "workshop/_progress.html" %}
+  </section>
+{% endblock %}

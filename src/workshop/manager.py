@@ -59,6 +59,11 @@ class RunManager:
         self._generate_pack = generate_pack or _generate_pack
         self._lock = asyncio.Lock()  # single-run concurrency, by design
 
+    @property
+    def store(self) -> RunStore:
+        """The record store — routes read runs through the manager they hold."""
+        return self._store
+
     async def submit(self, family_token: str, request: PackRequest) -> RunRecord:
         """Persist a queued run. Execution is a separate call, so callers
         decide whether to await it or schedule it as a background task."""

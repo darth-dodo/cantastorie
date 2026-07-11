@@ -1,0 +1,26 @@
+{# The polled fragment: run state + checkpoint-derived steps. While the run is
+   live it re-requests itself; once settled the hx-get is gone and polling
+   stops with it. #}
+<div id="run-progress"
+     {% if record.state in live %}hx-get="/workshop/runs/{{ record.id }}/progress"
+     hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <p><span class="state state-{{ record.state }}">{{ record.state }}</span></p>
+  {% if steps %}
+    <ol class="workshop-steps">
+      {% for step in steps %}<li>{{ step }} ✓</li>{% endfor %}
+    </ol>
+  {% endif %}
+  {% if record.error %}<p class="workshop-error">{{ record.error }}</p>{% endif %}
+  {% if record.story_ids %}
+    <ul class="workshop-staged">
+      {% for story_id in record.story_ids %}
+        <li><a href="/workshop/staged/{{ story_id }}">{{ story_id }}</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if record.state == "staged" %}
+    <form method="post" action="/workshop/runs/{{ record.id }}/approve">
+      <button type="submit">Approve &amp; publish</button>
+    </form>
+  {% endif %}
+</div>
