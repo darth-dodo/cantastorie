@@ -18,7 +18,7 @@ from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
 from src.pipeline.content_rules import check_story
-from src.pipeline.models import Page, PageAudio, Story, WordTiming
+from src.pipeline.models import Page, PageAudio, Story, Theme, WordTiming
 from src.pipeline.publish import publish_story, stage_story
 from src.pipeline.steps.assemble import AssembledStory, assemble_story
 from src.pipeline.steps.illustrate import IllustrationSet
@@ -53,6 +53,7 @@ def _assembled(
     *,
     story_id: str = "the-sleepy-sea-it-abc12345",
     title: str = "La barchetta",
+    theme: Theme = "the_sleepy_sea",
 ) -> AssembledStory:
     """A validated, assembled story with its source artifacts on disk."""
     art = tmp_path / f"art-{story_id}"
@@ -88,7 +89,7 @@ def _assembled(
         id=story_id,
         language="it",
         title=title,
-        theme="the_sleepy_sea",
+        theme=theme,
         shape="linear",
         pages=pages,
     )
@@ -184,12 +185,37 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
     entry = next(s for s in manifest["stories"] if s["id"] == story_id)
     assert entry["title"] == "La barchetta"
     assert entry["story"] == f"{PUBLIC_BASE}/stories/{story_id}/story.json"
+    assert entry["wash"] == "wash-barchetta"
     assert set(entry) == {"id", "title", "wash", "story"}
     assert manifest["prompts"] == {
         "greeting": f"{PUBLIC_BASE}/prompts/it/shelf_greeting.0123456789abcdef.mp3",
         "story_start": f"{PUBLIC_BASE}/prompts/it/story_start.0123456789abcdef.mp3",
         "end": f"{PUBLIC_BASE}/prompts/it/end_prompt.0123456789abcdef.mp3",
     }
+
+
+def test_published_manifest_wash_is_theme_mapped_not_story_id(tmp_path: Path, s3: S3Client) -> None:
+    """Given stories with known themes,
+    When they are published,
+    Then each manifest entry's wash is the CSS class mapped from the story's
+    theme — not the synthetic wash-{story-id} that produces no styling.
+    """
+    settings = _settings(tmp_path)
+
+    sea = _assembled(tmp_path, story_id="sea-story", theme="the_sleepy_sea")
+    bakery = _assembled(tmp_path, story_id="bakery-story", theme="bakery_morning")
+    stage_story(sea, settings)
+    stage_story(bakery, settings)
+    _stage_prompts(settings)
+
+    publish_story("sea-story", settings, client=s3)
+    publish_story("bakery-story", settings, client=s3)
+
+    manifest = _manifest(s3)
+    washes = {entry["id"]: entry["wash"] for entry in manifest["stories"]}
+    assert washes["sea-story"] == "wash-barchetta"
+    assert washes["bakery-story"] == "wash-panetteria"
+    assert washes["sea-story"] != "wash-sea-story"
 
 
 def test_republishing_an_unchanged_story_uploads_nothing(tmp_path: Path, s3: S3Client) -> None:
