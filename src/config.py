@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     r2_bucket: str = ""
     r2_public_base: str = ""
 
+    # Where workshop run records and staged pack artifacts live (ADR-004).
+    # The published bucket is public by design, so pending content gets its
+    # own private bucket in production (setup.md). Empty falls back to
+    # r2_bucket for local/dev use; the audit (AI-390) flags pending/ objects
+    # found in the public bucket.
+    r2_pending_bucket: str = ""
+
+    @property
+    def pending_bucket(self) -> str:
+        return self.r2_pending_bucket or self.r2_bucket
+
     @model_validator(mode="after")
     def blank_voice_id_falls_back_to_the_default(self) -> Self:
         # An empty ELEVENLABS_VOICE_ID in .env would otherwise shadow the field
