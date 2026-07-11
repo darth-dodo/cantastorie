@@ -13,6 +13,42 @@ Phase 2's parent features (pack requests, the review queue, approve/reject, per-
 
 This proposal **revises two settled positions** and says so explicitly: the tenancy decision (a random local family token as the only family identifier) and the absolutism of the "no accounts" privacy pillar. On acceptance, the pillar's wording changes from "no accounts" to "**no child accounts — nothing about the child ever leaves the device; a parent signs in only to request and review stories**." `docs/product.md`, `docs/architecture.md`, the README, and the `settled-architecture` skill are amended together in the acceptance commit; none are touched while this is Proposed.
 
+### The Boundary in One Picture
+
+```mermaid
+flowchart LR
+    subgraph Child["Child side — unchanged, auth-free"]
+        iPad["Player page<br/>vanilla ES modules"]
+        IDB[("IndexedDB<br/>progress · settings ·<br/>lockout · family token")]
+        iPad <--> IDB
+    end
+
+    subgraph Parent["Parent side — Phase 2, behind sign-in"]
+        PA["Parent area<br/>Jinja2 + HTMX pages"]
+        CJS["Clerk browser SDK<br/>(parent pages only)"]
+        PA --- CJS
+    end
+
+    subgraph Server["FastAPI"]
+        Pub["/ and /static<br/>no auth, no cookies"]
+        Priv["/parent routes<br/>JWT verified via JWKS"]
+    end
+
+    Clerk["Clerk<br/>magic link · OAuth ·<br/>sessions · JWKS"]
+    R2["Cloudflare R2"]
+
+    iPad --> Pub
+    iPad -- "bucket-direct, anonymous" --> R2
+    PA --> Priv
+    CJS <--> Clerk
+    Priv -- "verify JWT (PyJWT + JWKS)" --> Clerk
+
+    style Child fill:#e8f5e9,stroke:#2e7d32
+    style Parent fill:#fff3e0,stroke:#ef6c00
+```
+
+Everything green ships exactly as it does today. Clerk appears only inside the orange boundary; the automated guard test asserts the green side loads no Clerk script and writes no cookie.
+
 ---
 
 ## Problem Statement
@@ -200,6 +236,33 @@ Weights reflect this product's priorities: the child-side privacy pillar is non-
 - The README/product privacy wording loses its cleanest sentence and gains a more precise one.
 - A vendor sits on the parent sign-in path (never on the story path).
 
+### How a Parent Request Flows
+
+```mermaid
+sequenceDiagram
+    actor Parent
+    participant PA as Parent area<br/>(Jinja2 + HTMX)
+    participant Clerk
+    participant API as FastAPI /parent routes
+    participant Pipe as Pipeline (Phase 2 service)
+
+    Parent->>PA: opens /parent
+    PA->>Clerk: no session → sign-in (magic link)
+    Clerk-->>Parent: email link
+    Parent->>Clerk: taps link
+    Clerk-->>PA: session established (JWT)
+    Parent->>PA: requests a pack (theme, language)
+    PA->>API: POST /parent/packs (session JWT)
+    API->>API: verify JWT against Clerk JWKS (PyJWT, cached keys)
+    API->>API: resolve family_id from user metadata
+    API->>Pipe: enqueue generation for family_id
+    Pipe-->>API: pack ready for review
+    Parent->>PA: previews every page, approves
+    API->>API: publish to the family's shelf overlay
+
+    Note over Parent,API: The child's iPad appears nowhere in this diagram —<br/>it later fetches the updated overlay from R2, anonymously.
+```
+
 ---
 
 ## Consequences
@@ -234,6 +297,16 @@ Phase 2 work, gated on this ADR flipping to Accepted:
 2. **Clerk setup**: application config (magic link + optional OAuth), EU residency confirmed and recorded here.
 3. **Server verification**: a FastAPI dependency verifying Clerk session JWTs via JWKS (PyJWT; no vendor SDK), applied to `/parent` routes only.
 4. **Family linking**: mint-or-link the family token as user metadata at first sign-in; export/import remains the child-device escape hatch.
+
+   ```mermaid
+   flowchart TD
+       S["Parent signs in (first time)"] --> Q{"Family token in<br/>user metadata?"}
+       Q -- yes --> Use["Use it — same shelf overlay<br/>from any device"]
+       Q -- no --> Q2{"Parent pastes a token from<br/>an existing child device?<br/>(export/import)"}
+       Q2 -- yes --> Link["Link that token to the account —<br/>existing shelf adopted, nothing orphaned"]
+       Q2 -- no --> Mint["Mint a fresh token,<br/>store as user metadata"]
+       Use & Link & Mint --> Done["Token recoverable via sign-in;<br/>device loss no longer orphans packs"]
+   ```
 5. **Guard test**: the zero-third-party-JS/zero-cookie assertion on the player page enters the Vitest/Playwright suites alongside the feature.
 
 **Rollback plan**: while unaccepted, delete nothing — this document is the only artifact. Post-acceptance, the parent area degrades to token-only read access behind a flag; the child player never depended on any of it.
