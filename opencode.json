@@ -1,0 +1,90 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp"],
+      "enabled": true,
+      "timeout": 10000
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest"],
+      "enabled": true,
+      "timeout": 10000
+    },
+    "linear": {
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp",
+      "enabled": true,
+      "timeout": 10000
+    },
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true,
+      "timeout": 10000,
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  },
+  "permission": {
+    "bash": {
+      "make *": "allow",
+      "uv run *": "allow",
+      "uv sync *": "allow",
+      "npx vitest *": "allow",
+      "npx @tailwindcss/cli *": "allow",
+      "npx playwright *": "allow",
+      "git status": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git branch *": "allow",
+      "git add *": "allow",
+      "gh pr *": "allow",
+      "gh issue *": "allow",
+      "rg *": "allow",
+      "ls *": "allow"
+    },
+    "read": "allow",
+    "edit": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "webfetch": "allow",
+    "todowrite": "allow",
+    "question": "allow"
+  },
+  "formatter": {
+    "ruff": {
+      "command": ["uv", "run", "ruff", "format"],
+      "extensions": [".py"]
+    }
+  },
+  "skills": {
+    "paths": [".claude/skills", ".opencode/skills"]
+  },
+  "share": "manual",
+  "snapshot": true,
+  "agent": {
+    "pipeline": {
+      "description": "For authoring pipeline work: story generation, safety gates, narration, publishing to R2, Pydantic AI agents, OpenRouter integration.",
+      "mode": "subagent",
+      "prompt": "You are the cantastorie pipeline agent. You work on the plain-Python authoring pipeline (src/pipeline/) that generates stories, images, narration, and glosses via OpenRouter and publishes to Cloudflare R2. The pipeline uses Pydantic AI for structured outputs and filesystem checkpoints — no graph framework. All LLM/image/narration access goes through OpenRouter only — never suggest direct provider SDKs. Narration uses Voxtral Mini TTS via OpenRouter (mistralai/voxtral-mini-tts-2603); ElevenLabs is a deferred fallback, not the default. Read docs/architecture.md and the relevant ADRs before proposing changes. Run `make check` before finishing.",
+      "color": "#F38020"
+    },
+    "player": {
+      "description": "For child player frontend work: vanilla ES modules, Web Audio API, FSM-managed states, IndexedDB, no frameworks.",
+      "mode": "subagent",
+      "prompt": "You are the cantastorie player agent. You work on the child player (src/static/js/) — a vanilla ES modules frontend with no framework, no bundler. Audio playback uses the Web Audio API (decoded buffers + gain nodes), never <audio> tags — iOS makes media-element volume read-only. The player is FSM-managed. Child state lives in IndexedDB only — no cookies, no server-side state. Story assets are fetched bucket-direct from Cloudflare R2, never through the app server. Read docs/architecture.md before proposing any dependency or structural change. Never suggest React, Vue, Svelte, a bundler, or TypeScript. Run `npx vitest run` for JS tests.",
+      "color": "#009688"
+    },
+    "parent-area": {
+      "description": "For parent area work: Jinja2 templates, HTMX, Tailwind CSS, parent gate, review queue.",
+      "mode": "subagent",
+      "prompt": "You are the cantastorie parent-area agent. You work on the parent area (src/templates/, src/api/routes/) — server-rendered Jinja2 + HTMX + Tailwind. Tailwind CLI is the only build tool for parent UI — no Vite, webpack, or esbuild. The parent gate must protect all parent routes. Follow hermano's SSR pattern. Read docs/architecture.md before proposing changes. Run `make dev` to test locally and `make check` before finishing.",
+      "color": "#7C3AED"
+    }
+  }
+}
