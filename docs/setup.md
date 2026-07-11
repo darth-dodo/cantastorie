@@ -40,7 +40,15 @@ wrangler r2 bucket dev-url enable cantastorie -J eu
 
 This returns a `https://pub-<hash>.r2.dev` URL — the live bucket's is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev`. For a stable name, connect a custom domain instead (Dashboard → R2 → the bucket → Settings → Custom Domains) and add that origin to the CORS file below.
 
-> Phase 2 introduces generated-but-unapproved content under a private `pending/` prefix with separate credentials. Keep that out of this public bucket when it arrives.
+### The private pending bucket (workshop, ADR-004)
+
+Workshop run records and staged pack artifacts live under a `pending/` prefix — and the public bucket exposes **everything** under its public URL, with no prefix scoping. Pending content therefore gets its **own private bucket** (no public URL, no custom domain, no CORS):
+
+```
+wrangler r2 bucket create cantastorie-pending -J eu
+```
+
+Set **`R2_PENDING_BUCKET=cantastorie-pending`** wherever the workshop runs (Render dashboard, local `.env`). With it unset the workshop falls back to `R2_BUCKET` — acceptable against a local/dev bucket, **never against the live public one**. The audit script (AI-390) fails on any `pending/` object found in the public bucket.
 
 ### Access logs OFF
 

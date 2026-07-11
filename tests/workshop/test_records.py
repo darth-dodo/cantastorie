@@ -39,6 +39,25 @@ def _settings() -> Settings:
     return Settings(_env_file=None, r2_bucket=BUCKET)
 
 
+def test_records_live_in_the_private_pending_bucket_when_configured(s3: S3Client) -> None:
+    """The published bucket is public by design (setup.md); pending content
+    must never share it in production. R2_PENDING_BUCKET points the store at
+    a private bucket; the public one stays untouched."""
+    s3.create_bucket(Bucket="cantastorie-pending")
+    settings = Settings(_env_file=None, r2_bucket=BUCKET, r2_pending_bucket="cantastorie-pending")
+    store = RunStore(settings, client=s3)
+    record = new_run("family-abc", REQUEST)
+
+    store.save(record)
+
+    pending = s3.list_objects_v2(Bucket="cantastorie-pending")
+    assert [obj["Key"] for obj in pending["Contents"]] == [
+        f"pending/family-abc/runs/{record.id}.json"
+    ]
+    assert "Contents" not in s3.list_objects_v2(Bucket=BUCKET)  # public bucket untouched
+    assert store.load("family-abc", record.id) == record
+
+
 def test_new_run_starts_queued_with_identity_and_timestamps() -> None:
     record = new_run("family-abc", REQUEST)
 

@@ -126,7 +126,9 @@ class RunStore:
 
     def __init__(self, settings: Settings, *, client: S3Client | None = None) -> None:
         self._client = client or _build_client(settings)
-        self._bucket = settings.r2_bucket
+        # Pending content never belongs in the public published bucket;
+        # production points R2_PENDING_BUCKET at a private one (setup.md).
+        self._bucket = settings.pending_bucket
 
     def save(self, record: RunRecord) -> None:
         self._client.put_object(
