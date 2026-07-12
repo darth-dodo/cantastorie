@@ -23,23 +23,28 @@ from pathlib import Path
 from typing import Annotated, Protocol, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
-from src.pipeline.publish import publish_story, unpublish_story
+from src.pipeline.publish import (
+    STAGED_PREFIX,
+    STORY_FILE,
+    _build_client,
+    _content_type,
+    delete_staged_story,
+    publish_story,
+    unpublish_story,
+)
 from src.workshop.manager import RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 SESSION_COOKIE = "workshop_session"
 
-# Operator-initiated runs are keyed like any pack, under the operator's own
-# token; parent-requested packs (AI-389) will carry real family tokens.
 OPERATOR_TOKEN = "operator"
 
-# States the fragment keeps polling for; the rest are settled.
 LIVE_STATES = frozenset({"queued", "running"})
 
 router = APIRouter(prefix="/workshop")
@@ -78,7 +83,7 @@ def _authed(request: Request, settings: Settings) -> bool:
 
 def _require_workshop(settings: Annotated[Settings, Depends(get_settings)]) -> Settings:
     if not settings.workshop_secret.get_secret_value():
-        raise HTTPException(status_code=404)  # unconfigured → the workshop does not exist
+        raise HTTPException(status_code=404)
     return settings
 
 
@@ -105,10 +110,6 @@ def _story_record_or_404(manager: RunManager, story_id: str) -> RunRecord:
 
 
 def _checkpointed_steps(record: RunRecord, settings: Settings) -> list[str]:
-    """Step names with artifacts on disk — progress derived from the working
-    folder's checkpoint dirs, never a parallel store. Best-effort: the story
-    folder may not exist yet (queued) or ever (records survive restarts that
-    working folders on ephemeral disk do not)."""
     steps: list[str] = []
     if not settings.content_dir.is_dir():
         return steps
@@ -225,7 +226,7 @@ async def delete_run(
             other for other in runs if other.id != record.id and story_id in other.story_ids
         ]
         if not other_records:
-            shutil.rmtree(settings.staging_dir / story_id, ignore_errors=True)
+            delete_staged_story(story_id, settings)
             shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
         if record.state == "approved" and not any(
             other.state == "approved" for other in other_records
@@ -238,7 +239,7 @@ async def delete_run(
 
 
 @router.post("/staged/{story_id}/delete")
-async def delete_staged_story(
+async def delete_staged_story_route(
     request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
 ) -> Response:
     if not _authed(request, settings):
@@ -248,7 +249,7 @@ async def delete_staged_story(
         raise HTTPException(status_code=400)
     if record.state not in {"staged", "failed"}:
         raise HTTPException(status_code=400)
-    shutil.rmtree(settings.staging_dir / story_id, ignore_errors=True)
+    delete_staged_story(story_id, settings)
     shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
     updated = record.model_copy(
         update={"story_ids": [s for s in record.story_ids if s != story_id]}
@@ -265,10 +266,13 @@ async def staged_story(
 ) -> HTMLResponse:
     if not _authed(request, settings):
         return templates.TemplateResponse(request, "workshop/login.html", {})
-    story_file = settings.staging_dir / story_id / "story.json"
-    if not story_file.is_file():
-        raise HTTPException(status_code=404)
-    story = Story.model_validate_json(story_file.read_text())
+    client = _build_client(settings)
+    bucket = settings.pending_bucket
+    try:
+        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}")
+    except Exception:
+        raise HTTPException(status_code=404) from None
+    story = Story.model_validate_json(obj["Body"].read())
     record = None
     for candidate in manager.store.list_runs():
         if story_id in candidate.story_ids:
@@ -282,12 +286,19 @@ async def staged_story(
 @router.get("/staged/{story_id}/assets/{name}")
 async def staged_asset(
     request: Request, settings: WorkshopSettings, story_id: str, name: str
-) -> FileResponse:
+) -> Response:
     if not _authed(request, settings):
         raise HTTPException(status_code=404)
-    story_dir = (settings.staging_dir / story_id).resolve()
-    asset = (story_dir / name).resolve()
-    # The asset must resolve inside the story's staging folder — no traversal.
-    if not asset.is_relative_to(story_dir) or not asset.is_file():
+    if "/" in name or ".." in name:
         raise HTTPException(status_code=404)
-    return FileResponse(asset)
+    client = _build_client(settings)
+    bucket = settings.pending_bucket
+    try:
+        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}")
+    except Exception:
+        raise HTTPException(status_code=404) from None
+    return Response(
+        content=obj["Body"].read(),
+        media_type=_content_type(name),
+        headers={"Cache-Control": "private, no-cache"},
+    )
