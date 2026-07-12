@@ -30,7 +30,7 @@ from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import publish_story, unpublish_story
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunRecord, RunStore
+from src.workshop.records import InvalidTransition, PackRequest, RunRecord, RunStore
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 SESSION_COOKIE = "workshop_session"
@@ -208,6 +208,36 @@ async def approve_run(
         publisher(story_id)
     manager.store.save(record.advance("approved"))
     return _to_login()
+
+
+@router.post("/runs/{run_id}/reject")
+async def reject_run(
+    request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
+) -> RedirectResponse:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _record_or_404(manager, run_id)
+    try:
+        manager.store.save(record.advance("rejected"))
+    except InvalidTransition:
+        raise HTTPException(status_code=400) from None
+    return _to_login()
+
+
+@router.post("/runs/{run_id}/again")
+async def run_again(
+    request: Request,
+    settings: WorkshopSettings,
+    manager: Manager,
+    background: BackgroundTasks,
+    run_id: str,
+) -> RedirectResponse:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _record_or_404(manager, run_id)
+    new_record = await manager.submit(OPERATOR_TOKEN, record.request)
+    background.add_task(manager.execute, new_record)
+    return RedirectResponse(f"/workshop/runs/{new_record.id}", status_code=303)
 
 
 @router.post("/runs/{run_id}/delete")

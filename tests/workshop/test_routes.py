@@ -553,3 +553,131 @@ def test_delete_route_redirects_for_non_htmx_requests(tmp_path: Path, s3: S3Clie
 
     assert response.status_code == 303
     assert response.headers["location"] == "/workshop"
+
+
+# ---------------------------------------------------------------------------
+# reject route
+# ---------------------------------------------------------------------------
+
+
+def test_rejecting_a_staged_run_settles_it_to_rejected(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    staged = record.advance("running").advance("staged")
+    harness.store.save(staged)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/reject", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "rejected"
+
+
+def test_rejecting_a_non_staged_run_returns_400(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
+        "running"
+    )
+    harness.store.save(record)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/reject", follow_redirects=False)
+
+    assert response.status_code == 400
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "running"
+
+
+def test_reject_route_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    staged = record.advance("running").advance("staged")
+    harness.store.save(staged)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/reject", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "staged"  # unchanged
+
+
+def test_reject_route_returns_404_for_unknown_run(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post("/workshop/runs/no-such-run/reject", follow_redirects=False)
+
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# again route
+# ---------------------------------------------------------------------------
+
+
+def test_run_again_creates_a_new_run_with_the_same_request_and_executes_it(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    record = new_run("operator", request)
+    failed = record.advance("running").advance("failed")
+    harness.store.save(failed)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
+
+    assert response.status_code == 303
+    all_runs = harness.store.list_runs()
+    assert len(all_runs) == 2  # original + new
+    new_records = [r for r in all_runs if r.id != record.id]
+    assert len(new_records) == 1
+    new_record = new_records[0]
+    assert new_record.request == request
+    assert new_record.state == "staged"  # TestClient runs background tasks to completion
+    assert response.headers["location"] == f"/workshop/runs/{new_record.id}"
+
+
+def test_run_again_works_on_any_settled_state(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
+
+    assert response.status_code == 303
+    new_run_id = response.headers["location"].split("/")[-1]
+    new_record = harness.store.load("operator", new_run_id)
+    assert new_record is not None
+    assert new_record.state == "staged"
+
+
+def test_again_route_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    failed = record.advance("running").advance("failed")
+    harness.store.save(failed)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    assert len(harness.store.list_runs()) == 1  # no new run created
+
+
+def test_again_route_returns_404_for_unknown_run(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post("/workshop/runs/no-such-run/again", follow_redirects=False)
+
+    assert response.status_code == 404
