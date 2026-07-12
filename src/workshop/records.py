@@ -149,6 +149,9 @@ class RunStore:
             raise
         return RunRecord.model_validate(json.loads(obj["Body"].read()))
 
+    def delete(self, family_token: str, run_id: str) -> None:
+        self._client.delete_object(Bucket=self._bucket, Key=_record_key(family_token, run_id))
+
     def list_runs(
         self,
         *,

@@ -38,7 +38,16 @@
               <td>{{ run.request.theme.replace("_", " ") }}</td>
               <td>{{ run.request.language }}</td>
               <td><span class="state state-{{ run.state }}">{{ run.state }}</span></td>
-              <td><a href="/workshop/runs/{{ run.id }}">open</a></td>
+              <td>
+                <a href="/workshop/runs/{{ run.id }}">open</a>
+                {% if run.state not in live %}
+                  <button hx-post="/workshop/runs/{{ run.id }}/delete"
+                          hx-confirm="Delete this run and all its artifacts?"
+                          hx-target="closest tr"
+                          hx-swap="outerHTML"
+                          class="delete-btn">Delete</button>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

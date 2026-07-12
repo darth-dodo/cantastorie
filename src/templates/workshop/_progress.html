@@ -14,7 +14,16 @@
   {% if record.story_ids %}
     <ul class="workshop-staged">
       {% for story_id in record.story_ids %}
-        <li><a href="/workshop/staged/{{ story_id }}">{{ story_id }}</a></li>
+        <li>
+          <a href="/workshop/staged/{{ story_id }}">{{ story_id }}</a>
+          {% if record.state not in live and record.state != "approved" %}
+            <button hx-post="/workshop/staged/{{ story_id }}/delete"
+                    hx-confirm="Delete this staged story?"
+                    hx-target="closest li"
+                    hx-swap="outerHTML"
+                    class="delete-btn">Delete</button>
+          {% endif %}
+        </li>
       {% endfor %}
     </ul>
   {% endif %}
@@ -22,5 +31,12 @@
     <form method="post" action="/workshop/runs/{{ record.id }}/approve">
       <button type="submit">Approve &amp; publish</button>
     </form>
+  {% endif %}
+  {% if record.state not in live %}
+    <button hx-post="/workshop/runs/{{ record.id }}/delete"
+            hx-confirm="Delete this run and all its artifacts?"
+            hx-target="closest #run-progress"
+            hx-swap="outerHTML"
+            class="delete-btn">Delete</button>
   {% endif %}
 </div>

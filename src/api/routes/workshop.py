@@ -17,17 +17,18 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Protocol, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
-from src.pipeline.publish import publish_story
+from src.pipeline.publish import publish_story, unpublish_story
 from src.workshop.manager import RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore
 
@@ -96,6 +97,13 @@ def _record_or_404(manager: RunManager, run_id: str) -> RunRecord:
     return record
 
 
+def _story_record_or_404(manager: RunManager, story_id: str) -> RunRecord:
+    for record in manager.store.list_runs():
+        if story_id in record.story_ids:
+            return record
+    raise HTTPException(status_code=404)
+
+
 def _checkpointed_steps(record: RunRecord, settings: Settings) -> list[str]:
     """Step names with artifacts on disk — progress derived from the working
     folder's checkpoint dirs, never a parallel store. Best-effort: the story
@@ -120,7 +128,12 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
     return templates.TemplateResponse(
         request,
         "workshop/dashboard.html",
-        {"runs": runs, "themes": get_args(Theme), "languages": get_args(Language)},
+        {
+            "runs": runs,
+            "themes": get_args(Theme),
+            "languages": get_args(Language),
+            "live": LIVE_STATES,
+        },
     )
 
 
@@ -197,15 +210,73 @@ async def approve_run(
     return _to_login()
 
 
+@router.post("/runs/{run_id}/delete")
+async def delete_run(
+    request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
+) -> Response:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _record_or_404(manager, run_id)
+    if record.state in LIVE_STATES:
+        raise HTTPException(status_code=400)
+    runs = manager.store.list_runs()
+    for story_id in record.story_ids:
+        other_records = [
+            other for other in runs if other.id != record.id and story_id in other.story_ids
+        ]
+        if not other_records:
+            shutil.rmtree(settings.staging_dir / story_id, ignore_errors=True)
+            shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
+        if record.state == "approved" and not any(
+            other.state == "approved" for other in other_records
+        ):
+            unpublish_story(story_id, settings)
+    manager.store.delete(OPERATOR_TOKEN, run_id)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return _to_login()
+
+
+@router.post("/staged/{story_id}/delete")
+async def delete_staged_story(
+    request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
+) -> Response:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _story_record_or_404(manager, story_id)
+    if record.state in LIVE_STATES or record.state == "approved":
+        raise HTTPException(status_code=400)
+    if record.state not in {"staged", "failed"}:
+        raise HTTPException(status_code=400)
+    shutil.rmtree(settings.staging_dir / story_id, ignore_errors=True)
+    shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
+    updated = record.model_copy(
+        update={"story_ids": [s for s in record.story_ids if s != story_id]}
+    )
+    manager.store.save(updated)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return _to_login()
+
+
 @router.get("/staged/{story_id}", response_class=HTMLResponse)
-async def staged_story(request: Request, settings: WorkshopSettings, story_id: str) -> HTMLResponse:
+async def staged_story(
+    request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
+) -> HTMLResponse:
     if not _authed(request, settings):
         return templates.TemplateResponse(request, "workshop/login.html", {})
     story_file = settings.staging_dir / story_id / "story.json"
     if not story_file.is_file():
         raise HTTPException(status_code=404)
     story = Story.model_validate_json(story_file.read_text())
-    return templates.TemplateResponse(request, "workshop/story.html", {"story": story})
+    record = None
+    for candidate in manager.store.list_runs():
+        if story_id in candidate.story_ids:
+            record = candidate
+            break
+    return templates.TemplateResponse(
+        request, "workshop/story.html", {"story": story, "record": record, "live": LIVE_STATES}
+    )
 
 
 @router.get("/staged/{story_id}/assets/{name}")
