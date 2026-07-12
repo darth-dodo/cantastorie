@@ -33,23 +33,19 @@ flowchart LR
         CLI <--> Cache
     end
 
-    OR["OpenRouter<br/>write · safety · gloss · images"]
-    EL["ElevenLabs<br/>narration + word timings"]
+    OR["OpenRouter<br/>write · safety · gloss · images<br/>narration (Voxtral)"]
     R2["Cloudflare R2<br/>(future: published stories)"]
 
     Browser -- "page load" --> App
     P -- "manifest.json, story.json,<br/>audio, images" --> S
     CLI --> OR
-    CLI --> EL
     CLI -. "publish (AI-361)" .-> R2
     P -. "bucket-direct (future)" .-> R2
 ```
 
 Today the player fetches story assets from the app's own `/static/content/` mount (a dev fixture, an Italian manifest). The settled end state is bucket-direct from R2; the seam is already in place — the shell's `<meta name="asset-base">` tag is the only place the base URL lives.
 
-**Trust boundary:** the two API keys (OpenRouter, ElevenLabs) exist only in the pipeline environment as `SecretStr`, unwrapped at the transport boundary. The web app and browser never see a key; a played story costs zero API calls.
-
-> **Decided, not yet built:** [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) retires ElevenLabs — narration moves to Voxtral via OpenRouter, with word timings from a Deepgram STT transcription pass at slice 6. The provider switch is a pending code change, so this document (and the diagrams above and below) still shows ElevenLabs because the code still implements it. When the switch lands, update this file: delete the ElevenLabs transport from `providers.py`, the `elevenlabs_*` fields from `config.py`, and the alignment-collapse logic in `steps/narrate.py`.
+**Trust boundary:** the single API key (OpenRouter) exists only in the pipeline environment as `SecretStr`, unwrapped at the transport boundary. The web app and browser never see a key; a played story costs zero API calls.
 
 ---
 
@@ -179,7 +175,7 @@ Plain Python, typed end to end. The CLI is a scaffold (each command validates in
 flowchart LR
     G["generate<br/>(CLI)"] --> W["write<br/>(AI-358)"]
     W --> SG{"safety gate<br/>9 rules, judge ≠ writer family"}
-    SG -- pass --> N["narrate<br/>ElevenLabs + timings"]
+    SG -- pass --> N["narrate<br/>Voxtral TTS (no timings)"]
     SG -- fail --> RV["revise (bounded)"]
     RV --> SG
     N --> I["illustrate ✅<br/>sheet → pages + cover"]
@@ -198,7 +194,7 @@ flowchart LR
 |--------|------|--------------------------------------|
 | `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `ChoicePoint` is exactly two options; `SafetyReport` must contain each of the nine rules exactly once |
 | `cache.py` | Content-addressed artifact store; the filesystem **is** the checkpoint | `cache_key()` = sha256 of canonical-JSON inputs; writes are tmp-then-rename atomic; `run_step()` makes unchanged inputs a pure lookup — zero API calls |
-| `providers.py` | The only two transports: Pydantic AI over OpenRouter, ElevenLabs over httpx | Keys are `SecretStr`, unwrapped only at the transport boundary; narration always requests `with-timestamps` |
+| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Voxtral Mini TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration returns raw audio bytes with no timestamps (ADR-004; Deepgram STT reconstructs them at slice 6) |
 | `cli.py` | `generate` / `publish` / `audit` entry points | Input validation is live; behaviors land with AI-358/361/378 |
 | `steps/illustrate.py` | Character sheet first, then every page and the cover generated **against that sheet** — never page-to-page chaining (drift compounds) | `STYLE_PROMPT` is a module constant participating verbatim in every cache key: edit it and every image knowingly regenerates. Uses httpx against OpenRouter chat completions directly because pydantic-ai 2.5.0 can't parse image *outputs*; the ban is on direct vendor SDKs, and OpenRouter remains the only gateway |
 | `src/config.py` | Settings for both halves (shared with the API) | A model validator **refuses config where the safety judge and writer share a model family** — the shared-blind-spot failure mode |

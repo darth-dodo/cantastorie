@@ -34,7 +34,7 @@ def _settings() -> Settings:
 
 
 def _story(page_texts: list[str] | None = None) -> Story:
-    texts = page_texts or [f"The little boat rocks, page {n}." for n in range(1, 9)]
+    texts = page_texts or [f"The little boat rocks, page {n}." for n in range(1, 11)]
     pages = [
         Page(id=f"page-{n}", text=text, next_page=f"page-{n + 1}" if n < len(texts) else None)
         for n, text in enumerate(texts, start=1)
@@ -112,22 +112,22 @@ def test_the_style_prompt_forbids_any_text_inside_images() -> None:
 # --- Sheet first, everything derived from it ----------------------------
 
 
-def test_one_story_yields_a_sheet_eight_page_images_and_a_cover(tmp_path: Path) -> None:
-    """Given an eight-page story and a mocked image model,
+def test_one_story_yields_a_sheet_ten_page_images_and_a_cover(tmp_path: Path) -> None:
+    """Given a ten-page story and a mocked image model,
     When the illustration step runs,
     Then it persists exactly one character sheet, one image per page and a
-    cover — ten .png artifacts on disk, ten model calls, no more.
+    cover — twelve .png artifacts on disk, twelve model calls, no more.
     """
     model = _FakeImageModel()
     cache = ArtifactCache(tmp_path / "story-1")
 
     result = illustrate_story(_story(), _settings(), cache, transport=model.transport())
 
-    assert len(result.page_images) == 8
+    assert len(result.page_images) == 10
     for path in [result.character_sheet, result.cover, *result.page_images.values()]:
         assert path.suffix == ".png"
         assert path.exists()
-    assert len(model.requests) == 10  # 1 sheet + 8 pages + 1 cover
+    assert len(model.requests) == 12  # 1 sheet + 10 pages + 1 cover
 
 
 def test_every_page_receives_the_same_character_sheet_never_the_previous_page(
@@ -149,7 +149,7 @@ def test_every_page_receives_the_same_character_sheet_never_the_previous_page(
 
     sheet_request, *derived_requests = model.requests
     assert _image_parts(sheet_request) == []  # the sheet is generated first, from nothing
-    assert len(derived_requests) == 9
+    assert len(derived_requests) == 11  # 10 pages + 1 cover, all derived from the sheet
     for request in derived_requests:
         assert _image_parts(request) == [sheet_data_url]
 
@@ -201,7 +201,7 @@ def test_editing_one_pages_text_regenerates_only_that_pages_image(tmp_path: Path
     pages and the cover are untouched.
     """
     cache = ArtifactCache(tmp_path / "story-1")
-    texts = [f"The little boat rocks, page {n}." for n in range(1, 9)]
+    texts = [f"The little boat rocks, page {n}." for n in range(1, 11)]
     first = illustrate_story(
         _story(texts), _settings(), cache, transport=_FakeImageModel().transport()
     )
@@ -232,7 +232,7 @@ def test_swapping_the_image_model_regenerates_everything(tmp_path: Path) -> None
     rerun_model = _FakeImageModel()
     illustrate_story(_story(), swapped, cache, transport=rerun_model.transport())
 
-    assert len(rerun_model.requests) == 10
+    assert len(rerun_model.requests) == 12  # 1 sheet + 10 pages + 1 cover
 
 
 # --- Transport hygiene ---------------------------------------------------

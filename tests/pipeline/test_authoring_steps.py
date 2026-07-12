@@ -33,19 +33,22 @@ from src.pipeline.steps.write import (
     write_story,
 )
 
-# Five words per sentence; eight sentences per page; eight pages = 320 words.
+# Five words per sentence; eight sentences per page; ten pages = 400 words.
 SENTENCE = "The water sings {word} {word}."
 
 
 def good_draft(word: str = "shh") -> StoryDraft:
     page = " ".join([SENTENCE.format(word=word)] * 8)
-    return StoryDraft(title="La barchetta", pages=[page] * 8)
+    return StoryDraft(title="La barchetta", pages=[page] * 10)
 
 
 def draft_with_long_sentence() -> StoryDraft:
-    """A draft whose page 1 breaks the 12-word sentence cap."""
+    """A draft whose page 1 breaks the 20-word sentence cap."""
     draft = good_draft()
-    long_sentence = "The little boat rocks and rocks and rocks and rocks and rocks tonight."
+    long_sentence = (
+        "The little boat rocks and rocks and rocks and rocks and rocks and rocks "
+        "and rocks and rocks and rocks and rocks tonight."
+    )
     pages = list(draft.pages)
     pages[0] = f"{long_sentence} " + " ".join([SENTENCE.format(word="shh")] * 4)
     return StoryDraft(title=draft.title, pages=pages)
@@ -123,7 +126,7 @@ def test_write_authors_a_typed_linear_story_that_passes_the_content_rules(
 ) -> None:
     """Given a locked theme and language,
     When the write step runs against a model returning a conforming draft,
-    Then it yields a typed linear Story in that language, eight chained
+    Then it yields a typed linear Story in that language, ten chained
     pages, and zero content-rule violations (product.md "Content Rules").
     """
     model = TestModel(custom_output_args=good_draft().model_dump())
@@ -133,7 +136,7 @@ def test_write_authors_a_typed_linear_story_that_passes_the_content_rules(
     assert story.language == "it"
     assert story.theme == "the_sleepy_sea"
     assert story.shape == "linear"
-    assert [page.id for page in story.pages] == [f"p{i}" for i in range(1, 9)]
+    assert [page.id for page in story.pages] == [f"p{i}" for i in range(1, 11)]
     assert [page.next_page for page in story.pages] == [
         "p2",
         "p3",
@@ -142,6 +145,8 @@ def test_write_authors_a_typed_linear_story_that_passes_the_content_rules(
         "p6",
         "p7",
         "p8",
+        "p9",
+        "p10",
         None,
     ]
     assert check_story(story) == []
@@ -371,7 +376,7 @@ def test_two_failed_revisions_reject_the_story(tmp_path: Path) -> None:
 def test_a_story_violating_a_content_limit_routes_to_revise_even_when_the_judge_passes_it(
     tmp_path: Path,
 ) -> None:
-    """Given a writer that breaks the 12-word sentence cap while the judge
+    """Given a writer that breaks the 20-word sentence cap while the judge
     passes everything,
     When the authoring loop runs,
     Then code validation — not prompt hope — routes the story to revise with

@@ -1,10 +1,9 @@
-"""Behavior specs for provider wiring: OpenRouter via pydantic-ai, ElevenLabs via httpx.
+"""Behavior specs for provider wiring: OpenRouter via pydantic-ai, narration via OpenRouter.
 
-docs/architecture.md: two API keys total, living only in the pipeline
+docs/architecture.md: one API key total, living only in the pipeline
 environment — never in the browser, never in logs.
 """
 
-import base64
 import json
 
 import httpx
@@ -18,8 +17,6 @@ def _settings() -> Settings:
     return Settings(
         _env_file=None,
         openrouter_api_key=SecretStr("sk-or-test"),
-        elevenlabs_api_key=SecretStr("el-test"),
-        elevenlabs_voice_id="voice-1",
     )
 
 
@@ -34,38 +31,33 @@ def test_every_llm_model_is_bound_to_openrouter_not_a_vendor_api() -> None:
     assert "openrouter.ai" in str(model.base_url)
 
 
-def test_narration_requests_timestamps_and_decodes_the_returned_audio() -> None:
-    """Given an ElevenLabs voice configured in settings,
+def test_narration_posts_to_openrouter_audio_speech_and_returns_raw_audio() -> None:
+    """Given Voxtral configured in settings,
     When text is synthesized,
-    Then the client POSTs to /with-timestamps with the xi-api-key header and
-    model id, and returns decoded audio plus the raw character alignment
-    (timestamps captured on every call — word timings arrive with AI-359).
+    Then the client POSTs to /audio/speech with the OpenRouter bearer key and
+    the narration model id, and returns the raw audio bytes — no timestamps
+    (ADR-004: Voxtral returns raw audio; Deepgram STT reconstructs timings later).
     """
     seen: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
-        seen["api_key"] = request.headers.get("xi-api-key")
+        seen["auth"] = request.headers.get("Authorization")
         seen["body"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={
-                "audio_base64": base64.b64encode(b"mp3-bytes").decode(),
-                "alignment": {
-                    "characters": ["s", "h"],
-                    "character_start_times_seconds": [0.0, 0.1],
-                },
-            },
-        )
+        return httpx.Response(200, content=b"mp3-bytes", headers={"Content-Type": "audio/mpeg"})
 
     client = NarrationClient(_settings(), transport=httpx.MockTransport(handler))
-    result = client.synthesize("shh, shh")
+    result = client.synthesize("shh, shh", "it")
 
     assert result.audio == b"mp3-bytes"
-    assert "characters" in result.alignment
-    assert "/v1/text-to-speech/voice-1/with-timestamps" in str(seen["url"])
-    assert seen["api_key"] == "el-test"
-    assert seen["body"] == {"text": "shh, shh", "model_id": "eleven_multilingual_v2"}
+    assert "/audio/speech" in str(seen["url"])
+    assert seen["auth"] == "Bearer sk-or-test"
+    assert seen["body"] == {
+        "model": "mistralai/voxtral-mini-tts-2603",
+        "input": "shh, shh",
+        "voice": "en_paul_happy",
+        "response_format": "mp3",
+    }
 
 
 def test_the_narration_client_never_leaks_its_key_when_rendered() -> None:
@@ -74,4 +66,4 @@ def test_the_narration_client_never_leaks_its_key_when_rendered() -> None:
     Then the key's secret value does not appear — keys only in env, never logged.
     """
     client = NarrationClient(_settings())
-    assert "el-test" not in repr(client)
+    assert "sk-or-test" not in repr(client)

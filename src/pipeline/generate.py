@@ -68,7 +68,7 @@ def generate_story(
         revise_model=revise_model,
         premise=premise,
     )
-    narrated = narrate_pages(story.pages, settings, cache, narration_client)
+    narrated = narrate_pages(story.pages, language, settings, cache, narration_client)
     story = story.model_copy(update={"pages": narrated})
     illustrations = illustrate_story(story, settings, cache, transport=image_transport)
     assembled = assemble_story(story, illustrations)

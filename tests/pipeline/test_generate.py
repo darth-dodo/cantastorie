@@ -3,7 +3,7 @@
 generate braids the whole pipeline — write → safety → narrate → illustrate →
 assemble → stage (docs/architecture.md "The Authoring Pipeline"). Every
 provider seam is mocked, so the run touches no network: the writer and judge are
-pydantic-ai doubles, ElevenLabs and OpenRouter images are httpx.MockTransport.
+pydantic-ai doubles, narration and OpenRouter images are httpx.MockTransport.
 The proof is a staged story.json in exactly the shape the player already plays.
 """
 
@@ -23,9 +23,9 @@ from src.pipeline.models import Story
 from src.pipeline.providers import NarrationClient
 from src.pipeline.steps.narrate import IT_UTTERANCES
 
-# Five words a sentence, eight sentences a page, eight pages: clears every limit.
+# Five words a sentence, eight sentences a page, ten pages: clears every limit.
 _PAGE = " ".join(["The water sings shh shh."] * 8)
-_GOOD_DRAFT = {"title": "La barchetta e la luna", "pages": [_PAGE] * 8}
+_GOOD_DRAFT = {"title": "La barchetta e la luna", "pages": [_PAGE] * 10}
 _PASSING_REPORT = {
     "verdicts": [
         {"rule": rule, "passed": True, "reason": "ok"}
@@ -48,37 +48,22 @@ def _settings(tmp_path: Path) -> Settings:
     return Settings(
         _env_file=None,
         openrouter_api_key=SecretStr("sk-or-test"),
-        elevenlabs_api_key=SecretStr("el-test"),
-        elevenlabs_voice_id="voice-1",
         content_dir=tmp_path / "content",
         staging_dir=tmp_path / "staging",
     )
 
 
-def _fake_elevenlabs() -> NarrationClient:
-    """A NarrationClient over MockTransport: deterministic audio + a real-shaped
-    character alignment for whatever text arrives."""
+def _fake_narration() -> NarrationClient:
+    """A NarrationClient over MockTransport: deterministic audio bytes for
+    whatever text arrives (Voxtral returns raw audio, no timestamps — ADR-004)."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        text = json.loads(request.content)["text"]
-        chars = list(text)
+        text = json.loads(request.content)["input"]
         return httpx.Response(
-            200,
-            json={
-                "audio_base64": base64.b64encode(f"mp3:{text}".encode()).decode(),
-                "alignment": {
-                    "characters": chars,
-                    "character_start_times_seconds": [round(i * 0.1, 1) for i in range(len(chars))],
-                    "character_end_times_seconds": [
-                        round((i + 1) * 0.1, 1) for i in range(len(chars))
-                    ],
-                },
-            },
+            200, content=f"mp3:{text}".encode(), headers={"Content-Type": "audio/mpeg"}
         )
 
-    settings = Settings(
-        _env_file=None, elevenlabs_api_key=SecretStr("el-test"), elevenlabs_voice_id="voice-1"
-    )
+    settings = Settings(_env_file=None, openrouter_api_key=SecretStr("sk-or-test"))
     return NarrationClient(settings, transport=httpx.MockTransport(handler))
 
 
@@ -110,7 +95,7 @@ def _generate(tmp_path: Path) -> tuple[Settings, Path]:
         write_model=TestModel(custom_output_args=_GOOD_DRAFT),
         safety_model=TestModel(custom_output_args=_PASSING_REPORT),
         revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
-        narration_client=_fake_elevenlabs(),
+        narration_client=_fake_narration(),
         image_transport=_fake_images(),
     )
     return settings, staged
@@ -138,13 +123,13 @@ def test_the_staged_story_validates_typed_and_conforms_to_the_content_rules(
 ) -> None:
     """Given the staged story,
     When it is parsed as a Story and checked,
-    Then it is a valid eight-page Story that breaks no content rule — validation
+    Then it is a valid ten-page Story that breaks no content rule — validation
     is enforced as code, not prompt hope (docs/architecture.md "Testing").
     """
     _settings_used, staged = _generate(tmp_path)
 
     story = Story.model_validate_json((staged / "story.json").read_bytes())
-    assert len(story.pages) == 8
+    assert len(story.pages) == 10
     assert check_story(story) == []
     assert story.language == "it"
 
@@ -194,7 +179,7 @@ def test_rerunning_generate_reproduces_an_identical_staged_story(tmp_path: Path)
         write_model=TestModel(custom_output_args=_GOOD_DRAFT),
         safety_model=TestModel(custom_output_args=_PASSING_REPORT),
         revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
-        narration_client=_fake_elevenlabs(),
+        narration_client=_fake_narration(),
         image_transport=_fake_images(),
     )
     assert (staged_again / "story.json").read_bytes() == first
@@ -214,7 +199,7 @@ def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path) -> None
             write_model=TestModel(custom_output_args=_GOOD_DRAFT),
             safety_model=TestModel(custom_output_args=_PASSING_REPORT),
             revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
-            narration_client=_fake_elevenlabs(),
+            narration_client=_fake_narration(),
             image_transport=_fake_images(),
             premise=premise,
         )

@@ -2,9 +2,12 @@
 
 **Content Rules** are enforced as code here, not left to prompt hope
 (docs/architecture.md "Testing"); every referenced asset must resolve to real
-bytes; and word timings must be present for every page (banked from slice 1).
-Assembled asset names embed a content hash — immutable, cache-forever
+bytes. Assembled asset names embed a content hash — immutable, cache-forever
 (docs/architecture.md "R2 layout").
+
+Word timings are empty at slice 1 (ADR-004: Voxtral returns no timestamps);
+Deepgram STT reconstructs them at slice 6. Assembly passes timings through
+unchanged — whatever a page carries, assembled or empty, reaches story.json.
 """
 
 import re
@@ -17,13 +20,12 @@ from src.pipeline.steps.assemble import (
     AssembledStory,
     ContentRulesViolation,
     MissingAssetError,
-    MissingTimingsError,
     assemble_story,
 )
 from src.pipeline.steps.illustrate import IllustrationSet
 
-# Five words a sentence, eight sentences a page, eight pages: a story that
-# clears every content limit (30-70 words/page, 250-600 total, 12-word cap).
+# Five words a sentence, eight sentences a page, ten pages: a story that
+# clears every content limit (30-70 words/page, 250-600 total, 20-word cap).
 SENTENCE = "The water sings shh shh."
 PAGE_TEXT = " ".join([SENTENCE] * 8)
 
@@ -39,7 +41,7 @@ def _narrated_story_with_illustrations(
     image_bytes: dict[str, bytes] | None = None,
     drop_image: str | None = None,
     drop_timings: str | None = None,
-    pages_count: int = 8,
+    pages_count: int = 10,
     page_text: str = PAGE_TEXT,
 ) -> tuple[Story, IllustrationSet]:
     """A fully narrated + illustrated story with its artifacts on disk.
@@ -113,7 +115,7 @@ def test_assembly_rewrites_every_asset_to_its_immutable_hashed_name(tmp_path: Pa
         assert page.audio.file in assembled.assets
         assert page.image in assembled.assets
     # Two assets per page — audio and image — all present on disk.
-    assert len(assembled.assets) == 16
+    assert len(assembled.assets) == 20
     assert all(source.exists() for source in assembled.assets.values())
 
 
@@ -140,8 +142,8 @@ def test_the_hash_is_the_asset_content_so_identical_bytes_share_it(tmp_path: Pat
 def test_word_timings_survive_assembly_untouched(tmp_path: Path) -> None:
     """Given pages narrated with word timings,
     When the story is assembled,
-    Then every page keeps its timings verbatim — karaoke is slice 6, but the
-    timings ride in story.json from slice 1.
+    Then every page keeps its timings verbatim — assembly never modifies timing
+    data (ADR-004: timings are empty at slice 1, reconstructed at slice 6).
     """
     story, illustrations = _narrated_story_with_illustrations(tmp_path)
 
@@ -152,9 +154,24 @@ def test_word_timings_survive_assembly_untouched(tmp_path: Path) -> None:
         assert page.audio.timings == _timings()
 
 
+def test_empty_timings_survive_assembly_untouched(tmp_path: Path) -> None:
+    """Given pages narrated without word timings (the Voxtral/ADR-004 default),
+    When the story is assembled,
+    Then every page keeps its empty timings — assembly does not require or
+    synthesize timings; they arrive empty from narrate and stay that way.
+    """
+    story, illustrations = _narrated_story_with_illustrations(tmp_path, drop_timings="p1")
+
+    assembled = assemble_story(story, illustrations)
+
+    page = next(p for p in assembled.story.pages if p.id == "p1")
+    assert page.audio is not None
+    assert page.audio.timings == []
+
+
 def test_a_content_rule_violation_fails_hard_with_the_typed_violation(tmp_path: Path) -> None:
     """Given a story with only seven pages (product.md "Content Rules": exactly
-    eight),
+    ten),
     When assembly runs,
     Then it raises before touching any asset, and the error carries the typed
     page_count ContentViolation — precise enough to have driven a revise.
@@ -213,20 +230,6 @@ def test_a_missing_audio_file_fails_hard(tmp_path: Path) -> None:
     assert excinfo.value.kind == "audio"
 
 
-def test_a_page_without_timings_fails_hard(tmp_path: Path) -> None:
-    """Given a page whose audio carries no word timings,
-    When assembly runs,
-    Then it raises MissingTimingsError — timings are mandatory from slice 1, so
-    narration is never re-bought later.
-    """
-    story, illustrations = _narrated_story_with_illustrations(tmp_path, drop_timings="p2")
-
-    with pytest.raises(MissingTimingsError) as excinfo:
-        assemble_story(story, illustrations)
-
-    assert excinfo.value.page_id == "p2"
-
-
 def test_assembled_story_json_matches_the_player_fixture_shape(tmp_path: Path) -> None:
     """Given the dev fixture the player already plays,
     When a freshly assembled story is dumped to JSON,
@@ -244,6 +247,3 @@ def test_assembled_story_json_matches_the_player_fixture_shape(tmp_path: Path) -
     assert dumped.keys() == expected.keys()
     assert dumped["pages"][0].keys() == expected["pages"][0].keys()
     assert dumped["pages"][0]["audio"].keys() == expected["pages"][0]["audio"].keys()
-    assert dumped["pages"][0]["audio"]["timings"][0].keys() == (
-        expected["pages"][0]["audio"]["timings"][0].keys()
-    )

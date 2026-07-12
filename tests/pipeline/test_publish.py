@@ -60,7 +60,7 @@ def _assembled(
     art.mkdir(parents=True, exist_ok=True)
     pages: list[Page] = []
     page_images: dict[str, Path] = {}
-    for n in range(1, 9):
+    for n in range(1, 11):
         pid = f"p{n}"
         audio = art / f"{pid}.mp3"
         audio.write_bytes(f"mp3:{story_id}:{pid}".encode())
@@ -74,7 +74,7 @@ def _assembled(
                 audio=PageAudio(
                     file=str(audio), timings=[WordTiming(word="the", start_s=0.0, end_s=0.1)]
                 ),
-                next_page=f"p{n + 1}" if n < 8 else None,
+                next_page=f"p{n + 1}" if n < 10 else None,
             )
         )
     (art / "sheet.png").write_bytes(b"png:sheet")
@@ -134,7 +134,7 @@ def test_stage_lays_story_json_and_every_asset_out_locally(tmp_path: Path, s3: S
     assert (story_dir / "story.json").exists()
     staged = {path.name for path in story_dir.iterdir()}
     assert staged == {"story.json", *assembled.assets.keys()}
-    assert len(assembled.assets) == 16  # 8 pages, each an audio and an image
+    assert len(assembled.assets) == 20  # 10 pages, each an audio and an image
 
 
 def test_staging_reaches_no_bucket_only_publish_writes_to_published(

@@ -2,8 +2,8 @@
 
 The narrate and illustrate steps each leave content-addressed artifacts in the
 story's cache folder; assemble braids them into the one document the player
-plays — page texts, structure, word timings, and asset references — and refuses
-to hand on anything that would fail at bedtime.
+plays — page texts, structure, and asset references — and refuses to hand on
+anything that would fail at bedtime.
 
 Three checks are HARD errors, not warnings (docs/architecture.md "Testing": the
 content rules are enforced as pipeline validation in assemble):
@@ -12,8 +12,8 @@ content rules are enforced as pipeline validation in assemble):
   raises with the typed ``ContentViolation`` list, precise enough to have
   driven a revise;
 - every referenced asset resolves to real bytes on disk;
-- every page carries word timings (banked from slice 1 even though karaoke is
-  slice 6 — discarding them would re-buy all narration later).
+- every page carries audio (word timings are empty until slice 6's Deepgram
+  STT pass reconstructs them — ADR-004).
 
 Published asset names embed a content hash and so are immutable, cache-forever
 (docs/architecture.md "R2 layout"): ``p1.{hash8}.mp3`` for audio, ``p1.{hash8}
@@ -66,14 +66,6 @@ class MissingAssetError(Exception):
         super().__init__(f"page {page_id} is missing its {kind} asset{where}")
 
 
-class MissingTimingsError(Exception):
-    """A page carries audio but no word timings — they must be banked from slice 1."""
-
-    def __init__(self, page_id: str) -> None:
-        self.page_id = page_id
-        super().__init__(f"page {page_id} has no word timings; timings are banked from slice 1")
-
-
 class AssembledStory(BaseModel):
     """The validated story.json plus the assets it now references by hashed name.
 
@@ -110,8 +102,6 @@ def assemble_story(story: Story, illustrations: IllustrationSet) -> AssembledSto
         audio_src = Path(page.audio.file)
         if not audio_src.exists():
             raise MissingAssetError(page.id, "audio", audio_src)
-        if not page.audio.timings:
-            raise MissingTimingsError(page.id)
 
         image_src = illustrations.page_images.get(page.id)
         if image_src is None or not image_src.exists():

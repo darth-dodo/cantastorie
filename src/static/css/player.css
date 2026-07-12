@@ -365,7 +365,9 @@ button.presses:active {
 }
 
 /* Full-bleed page art from the published story, layered over the wash;
-   it rides the same slow opacity ramp — nothing snaps at bedtime. */
+   it rides the same slow opacity ramp — nothing snaps at bedtime.
+   Landscape images on a portrait screen would crop badly with cover,
+   so portrait uses contain to show the whole image. */
 .page-art {
   position: absolute;
   inset: 0;
@@ -373,6 +375,12 @@ button.presses:active {
   transition: opacity var(--fade);
   background-size: cover;
   background-position: center;
+}
+
+@media (orientation: portrait) {
+  .page-art {
+    background-size: contain;
+  }
 }
 
 .page-art.current {
