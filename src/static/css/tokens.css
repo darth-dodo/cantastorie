@@ -36,8 +36,7 @@
    INDIGO — light  (also the :root no-JS fallback)
    =================================================================== */
 :root,
-[data-palette="indigo"],
-[data-palette="indigo"] [data-theme="light"] {
+[data-palette="indigo"] {
   --surface:  #F2F4F8;
   --card:     #FFFFFF;
   --field:    #EEF1F6;
@@ -84,8 +83,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    WARM — light
    =================================================================== */
-[data-palette="warm"],
-[data-palette="warm"] [data-theme="light"] {
+[data-palette="warm"] {
   --surface:  #FAF3E7;
   --card:     #FFFDF7;
   --field:    #FAF3E7;
@@ -129,8 +127,7 @@
 }
 
 /* WARM — dusk */
-[data-palette="warm"][data-theme="dusk"],
-[data-palette="warm"] [data-theme="dusk"] {
+[data-palette="warm"][data-theme="dusk"] {
   --surface:  #2A2119;
   --card:     #3B3022;
   --field:    #322A1D;
@@ -174,8 +171,7 @@
 }
 
 /* INDIGO — dusk */
-[data-palette="indigo"][data-theme="dusk"],
-[data-palette="indigo"] [data-theme="dusk"] {
+[data-palette="indigo"][data-theme="dusk"] {
   --surface:  #1C2130;
   --card:     #2A3044;
   --field:    #232940;
@@ -221,8 +217,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    SEAGLASS — light
    =================================================================== */
-[data-palette="seaglass"],
-[data-palette="seaglass"] [data-theme="light"] {
+[data-palette="seaglass"] {
   --surface:  #EFF4F3;
   --card:     #FDFFFE;
   --field:    #EAF1F0;
@@ -266,8 +261,7 @@
 }
 
 /* SEAGLASS — dusk */
-[data-palette="seaglass"][data-theme="dusk"],
-[data-palette="seaglass"] [data-theme="dusk"] {
+[data-palette="seaglass"][data-theme="dusk"] {
   --surface:  #172426;
   --card:     #24363A;
   --field:    #1E2E31;
@@ -313,8 +307,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    PLUM — light
    =================================================================== */
-[data-palette="plum"],
-[data-palette="plum"] [data-theme="light"] {
+[data-palette="plum"] {
   --surface:  #F5F1F6;
   --card:     #FFFEFF;
   --field:    #F0EAF2;
@@ -358,8 +351,7 @@
 }
 
 /* PLUM — dusk */
-[data-palette="plum"][data-theme="dusk"],
-[data-palette="plum"] [data-theme="dusk"] {
+[data-palette="plum"][data-theme="dusk"] {
   --surface:  #241D2E;
   --card:     #352C44;
   --field:    #2C2438;
@@ -507,5 +499,25 @@
 /* dusk sticker-ring (translucent) — mirrors the original tokens.css behaviour */
 [data-theme="dusk"],
 .night {
+  --sticker-ring: 0 0 0 7px rgba(232,235,242,.14);
+}
+
+[data-palette="warm"][data-theme="dusk"],
+[data-palette="warm"] .night {
   --sticker-ring: 0 0 0 7px rgba(243,233,218,.14);
+}
+
+[data-palette="indigo"][data-theme="dusk"],
+[data-palette="indigo"] .night {
+  --sticker-ring: 0 0 0 7px rgba(232,235,242,.14);
+}
+
+[data-palette="seaglass"][data-theme="dusk"],
+[data-palette="seaglass"] .night {
+  --sticker-ring: 0 0 0 7px rgba(226,237,235,.14);
+}
+
+[data-palette="plum"][data-theme="dusk"],
+[data-palette="plum"] .night {
+  --sticker-ring: 0 0 0 7px rgba(239,233,244,.14);
 }
