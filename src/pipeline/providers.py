@@ -15,14 +15,18 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from src.config import Settings
+from src.observability import build_traced_openai_client, typed_traceable
 from src.pipeline.models import Language
 
 
 def build_model(model_id: str, settings: Settings) -> OpenAIChatModel:
-    provider = OpenAIProvider(
-        base_url=settings.openrouter_base_url,
-        api_key=settings.openrouter_api_key.get_secret_value(),
-    )
+    if settings.langsmith_tracing:
+        provider = OpenAIProvider(openai_client=build_traced_openai_client(settings))
+    else:
+        provider = OpenAIProvider(
+            base_url=settings.openrouter_base_url,
+            api_key=settings.openrouter_api_key.get_secret_value(),
+        )
     return OpenAIChatModel(model_id, provider=provider)
 
 
@@ -43,6 +47,7 @@ class NarrationClient:
     def __repr__(self) -> str:
         return f"NarrationClient(model={self._settings.narration_model!r})"
 
+    @typed_traceable(name="narration.synthesize")
     def synthesize(self, text: str, language: Language = "it") -> NarrationResult:
         voice = self._settings.narration_voices.get(language, "alloy")
         response = self._client.post(

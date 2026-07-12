@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     # the audit (AI-390) flags pending/ objects that were never published.
     r2_pending_bucket: str = ""
 
+    # LangSmith observability — tracing for the FastAPI app and the pipeline.
+    # When tracing is disabled (the default), the langsmith package is inert:
+    # wrap_openai passes through, @traceable runs the function unchanged, and
+    # TracingMiddleware adds no overhead. No data leaves the process.
+    langsmith_api_key: SecretStr = SecretStr("")
+    langsmith_project: str = "cantastorie"
+    langsmith_tracing: bool = False
+
     @property
     def pending_bucket(self) -> str:
         return self.r2_pending_bucket or self.r2_bucket
