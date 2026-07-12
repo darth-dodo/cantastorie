@@ -185,11 +185,25 @@ button.presses:active {
   align-items: center;
   justify-content: center;
   transition: transform var(--settle);
+  overflow: hidden;
+  position: relative;
+}
+
+.cover-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 
 .cover span {
   font: 10px ui-monospace, Menlo, monospace;
   color: rgba(74, 59, 46, 0.45);
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
 }
 
 [data-theme="dusk"] .cover span {
@@ -312,6 +326,24 @@ button.presses:active {
 [data-theme="dusk"] .language-sticker .flag {
   background: linear-gradient(180deg, #98a583 33%, #f3e9da 33%, #f3e9da 66%, #d98b66 66%);
   opacity: 0.9;
+}
+
+.language-sticker .lang-label {
+  font-size: 12px;
+}
+
+.language-sticker.clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.language-sticker.clickable:hover {
+  transform: rotate(-2deg) scale(1.05);
+  box-shadow: 0 10px 24px rgba(74, 59, 46, 0.2), 0 0 0 6px rgba(224, 166, 63, 0.3);
+}
+
+.language-sticker.clickable:active {
+  transform: rotate(-2deg) scale(0.95);
 }
 
 .parent-corner {
