@@ -20,16 +20,23 @@ import {
 
 const PAGE_SECONDS = 3.8;
 
+const LANGS = [
+  { code: "it", label: "Italiano" },
+  { code: "es", label: "Español" },
+  { code: "en", label: "English" },
+];
+
+const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!" };
+const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?" };
+
 function pickTheme(params, hour) {
   const forced = params.get("theme");
   if (forced === "light" || forced === "dusk") return forced;
   return hour >= 19 || hour < 7 ? "dusk" : "light";
 }
 
-// First-run language is Italian (product.md); ?lang=xx opens another
-// published shelf without a parent gate, which is all the demo needs.
-function pickLang(params) {
-  const lang = params.get("lang") ?? "";
+function pickLang(params, saved) {
+  const lang = params.get("lang") ?? saved ?? "";
   return /^[a-z]{2}$/.test(lang) ? lang : "it";
 }
 
@@ -39,10 +46,23 @@ async function fetchManifest(assetBase, fetchFn, lang) {
     if (!res.ok) throw new Error(`manifest fetch failed (${res.status})`);
     return await res.json();
   } catch (err) {
-    // The offline clouds screen is slice 2 (AI-367); until then the
-    // built-in covers keep development working without a server.
     console.warn("manifest unavailable, using built-in shelf", err);
     return null;
+  }
+}
+
+function loadLang(storage = globalThis.localStorage) {
+  try {
+    return storage?.getItem("cantastorie-lang") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLang(lang, storage = globalThis.localStorage) {
+  try {
+    storage?.setItem("cantastorie-lang", lang);
+  } catch {
   }
 }
 
@@ -59,30 +79,26 @@ export async function init(
 
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
-  const lang = pickLang(params);
-  const manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
-  const stories = manifest?.stories ?? fallbackShelf;
+  let lang = pickLang(params, loadLang());
+  let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
+  let stories = manifest?.stories ?? fallbackShelf;
 
   const store = createStore(load());
   engine ??= createAudioEngine();
-  const prefetcher = createPrefetcher({ engine, fetchFn });
-  const playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
-  const greeting = theme === "dusk" ? "Buonasera!" : "Ciao!";
+  let prefetcher = createPrefetcher({ engine, fetchFn });
+  let playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
 
-  // The open cover's loaded story.json, if it has one; covers without a
-  // published story keep the mock captions and the page timer.
   let activeStory = null;
   const storyCache = new Map();
 
   async function openCover(entry) {
     if (entry?.story && fetchFn) {
       try {
-        // Cache the promise, not the result: a double-tap shares one fetch.
         let pending = storyCache.get(entry.story);
         if (!pending) {
           pending = loadStory(entry.story, fetchFn);
           storyCache.set(entry.story, pending);
-          pending.catch(() => storyCache.delete(entry.story)); // retry next tap
+          pending.catch(() => storyCache.delete(entry.story));
         }
         const loaded = await pending;
         activeStory = loaded;
@@ -97,8 +113,22 @@ export async function init(
     store.openStory({ pageCount: PAGE_COUNT, choicePage: CHOICE_PAGE });
   }
 
-  // The first tap anywhere wakes the sound; if it isn't already the cover
-  // tap, the shelf greets aloud. Browsers allow no audio before a gesture.
+  async function switchLanguage(newLang) {
+    if (newLang === lang) return;
+    lang = newLang;
+    saveLang(lang);
+    storyCache.clear();
+    activeStory = null;
+    playback.clearStory();
+    manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
+    stories = manifest?.stories ?? fallbackShelf;
+    prefetcher = createPrefetcher({ engine, fetchFn });
+    playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
+    store.toShelf();
+    shown = { screen: null, choiceOpen: false, resumeOpen: false };
+    render(store.state);
+  }
+
   root.addEventListener(
     "pointerdown",
     (event) => {
@@ -106,7 +136,7 @@ export async function init(
         .unlock()
         .then(() => {
           const url = manifest?.prompts?.greeting;
-          if (url && !event.target.closest(".cover")) {
+          if (url && !event.target.closest(".cover") && !event.target.closest(".language-sticker")) {
             return engine.playPrompt(url);
           }
           return undefined;
@@ -134,9 +164,18 @@ export async function init(
       if (state.screen === "shelf") {
         playerScreen = null;
         app.appendChild(
-          buildShelf(store, greeting, stories, (entry) => {
-            openCover(entry).catch((err) => console.warn("cover tap failed", err));
-          }),
+          buildShelf(
+            store,
+            GREETINGS[lang] ?? "Ciao!",
+            SUBS[lang] ?? "Quale storia oggi?",
+            stories,
+            LANGS,
+            lang,
+            (newLang) => switchLanguage(newLang),
+            (entry) => {
+              openCover(entry).catch((err) => console.warn("cover tap failed", err));
+            },
+          ),
         );
       } else if (state.screen === "player") {
         playerScreen = buildPlayer(store, view);
@@ -156,8 +195,6 @@ export async function init(
   store.subscribe(render);
   render(store.state);
 
-  // The page timer stands in for narration only while no real story is
-  // loaded — a published story turns its own pages on audio end.
   const seconds = Number(params.get("speed")) || PAGE_SECONDS;
   const timer = setInterval(() => {
     if (!playback.hasStory()) store.advance();
@@ -169,6 +206,8 @@ export async function init(
     playback,
     prefetcher,
     manifestLoaded: manifest !== null,
+    lang,
+    switchLanguage,
     stop: () => clearInterval(timer),
   };
   if (root.defaultView) root.defaultView.__shell = shell;

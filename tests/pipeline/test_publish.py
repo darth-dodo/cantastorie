@@ -162,7 +162,7 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
     assert entry["title"] == "La barchetta"
     assert entry["story"] == f"{PUBLIC_BASE}/stories/{story_id}/story.json"
     assert entry["wash"] == "wash-barchetta"
-    assert set(entry) == {"id", "title", "wash", "story"}
+    assert set(entry) == {"id", "title", "wash", "story", "cover"}
     assert manifest["prompts"] == {
         "greeting": f"{PUBLIC_BASE}/prompts/it/shelf_greeting.0123456789abcdef.mp3",
         "story_start": f"{PUBLIC_BASE}/prompts/it/story_start.0123456789abcdef.mp3",
