@@ -13,6 +13,8 @@
 
 The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived carefully: one warm narrator voice, soft watercolor pages, and a child's finger choosing the path — with a parent as the piazza's gatekeeper, seeing and hearing every word, picture, and sound before any child meets it.
 
+![A cantastorie storyteller in a moonlit piazza](docs/assets/cantastorie-hero.png)
+
 ---
 
 ## The Problem
@@ -45,6 +47,10 @@ Soft watercolor, warm palette, rounded characters, nothing frightening — bedti
 
 Everything grown-up sits behind a small, low-contrast corner of the shelf. The gate is a three-second hold followed by a two-integer addition on a keypad — no PIN, freshly random each time. Five failures lock it for five minutes, and the lockout survives reloads. Behind it: language settings, reading mode, and export/import (with the dashboard and review queue arriving in Phase 2).
 
+### The Workshop
+
+Behind a separate operator secret, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. Runs execute in-process and survive restarts — the pipeline's filesystem checkpoints double as the resume mechanism, so a mid-run reboot re-buys zero API calls. The design is settled in [ADR-004](docs/adr/ADR-004-workshop-area.md).
+
 ### Reading Mode, Optional
 
 For reading-along parents and emerging readers, an optional text panel shows the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading.
@@ -61,7 +67,7 @@ No accounts, no tracking, no analytics. Progress lives in the browser (IndexedDB
 
 ## For Developers
 
-Cantastorie is one FastAPI app (a vanilla-JS child player plus a server-rendered parent area) alongside a plain-Python authoring pipeline in the same repository. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area, and an operator workshop (`/workshop`) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
 
 ### Tech Stack
 
@@ -79,18 +85,19 @@ Cantastorie is one FastAPI app (a vanilla-JS child player plus a server-rendered
 
 ### System Overview
 
-One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and IndexedDB. The authoring pipeline is a separate plain-Python package in the same repo, run as a CLI. The app and the pipeline share only `src/config.py` and the `story.json` contract.
+One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and IndexedDB. The authoring pipeline runs either as a CLI or in-process via the workshop, sharing the same step functions. The app and the pipeline share only `src/config.py` and the `story.json` contract.
 
 ```mermaid
 graph LR
     B["Browser (child)<br/>ES modules + Web Audio + IndexedDB"]
     R2["Cloudflare R2<br/>audio · images · manifests"]
-    F["FastAPI on Render<br/>player page · parent area"]
-    P["Pipeline CLI<br/>plain Python + Pydantic AI"]
+    F["FastAPI on Render<br/>player · parent area · workshop"]
+    P["Pipeline<br/>plain Python + Pydantic AI"]
     OR["OpenRouter<br/>story · safety · glosses · images · narration"]
 
     B -- "bucket-direct fetch" --> R2
     B -- "page load, parent HTMX" --> F
+    F -- "workshop runs" --> P
     P -- "publish" --> R2
     P --> OR
 ```
@@ -102,15 +109,17 @@ For the code as built — module map, player and audio state machines, and the s
 ```
 src/
 ├── config.py            Settings shared by app and pipeline (R2, keys, per-step models)
-├── api/                 FastAPI app factory, player route, parent area
+├── api/                 FastAPI app factory, player route, parent area, workshop
 ├── pipeline/            Authoring pipeline: typed steps, cache, providers, models
 │   └── steps/           write · safety · revise · gloss · narrate · illustrate · assemble
-├── templates/           Jinja2 (parent area + player shell)
+├── workshop/            In-app authoring: run manager, run records, resume-on-boot
+├── templates/           Jinja2 (parent area + player shell + workshop)
 └── static/
     ├── js/              Vanilla ES modules: fsm, audio engine, playback, screens, storage
     └── css/             Player watercolor CSS; parent Tailwind
 
 content/                 Pipeline working folders (gitignored)
+staging/                 Staged stories for operator review
 tests/                   pytest + Vitest + Playwright
 docs/                    product.md, architecture.md, system-overview.md, setup.md, adr/
 ```
@@ -135,7 +144,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Status
 
-In design and early build. The product is fully specified and the architecture is settled; the first vertical slice — one Italian story, told aloud with watercolor pages — is next.
+The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Voxtral), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and IndexedDB state. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — all behind a single env-var secret, with resume-on-boot for interrupted runs ([ADR-004](docs/adr/ADR-004-workshop-area.md)). Published stories are live on R2 with bucket-direct playback.
+
+What's next: parent-face pack requests and the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-005](docs/adr/ADR-005-family-voice-narration.md), Proposed).
 
 ---
 
@@ -145,7 +156,13 @@ In design and early build. The product is fully specified and the architecture i
 - [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, the authoring pipeline, and narration
 - [System Overview](docs/system-overview.md) — the code as built: module map, state machines, and seams
 - [Setup & Deploy](docs/setup.md) — R2 bucket, CORS, and the Render blueprint
-- [Architecture Decision Records](docs/adr/) — settled decisions, including the [technology stack](docs/adr/ADR-001-technology-stack.md) and [narration provider](docs/adr/ADR-004-narration-deepgram-voxtral.md)
+- [Architecture Decision Records](docs/adr/) — settled decisions:
+  - [ADR-001: Technology Stack](docs/adr/ADR-001-technology-stack.md) — FastAPI, vanilla JS, plain-Python pipeline, OpenRouter, R2, Render
+  - [ADR-002: Narration Provider](docs/adr/ADR-002-narration-provider.md) — Voxtral via OpenRouter (superseded by ADR-004)
+  - [ADR-003: Parent Authentication via Clerk](docs/adr/ADR-003-parent-authentication-clerk.md) — proposed
+  - [ADR-004: Narration — Voxtral + Deepgram, ElevenLabs Retired](docs/adr/ADR-004-narration-deepgram-voxtral.md)
+  - [ADR-004: Workshop Area](docs/adr/ADR-004-workshop-area.md) — in-app authoring with in-process pipeline runs
+  - [ADR-005: Nonna Narrates](docs/adr/ADR-005-family-voice-narration.md) — family voice cloning, proposed
 
 ---
 
