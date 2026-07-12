@@ -16,7 +16,8 @@
 
 - Server-rendered HTML + HTMX only; no SPA components, no new JS deps, no Tailwind classes in workshop templates (plain CSS in `src/static/css/workshop.css`, tokens from `tokens.css` where they fit).
 - Two typefaces only: Baloo 2 for everything the app says; Literata for story text on the review page. Load via the same Google Fonts link `index.html` uses.
-- Two modes: light (warm cream) and dusk from 19:00 local, `?theme=light|dusk` overrides for development. Decide dusk client-side with a tiny inline head script that sets `data-theme="dusk"` on `<html>`; tokens live as CSS vars scoped `:root` / `[data-theme="dusk"]`.
+- **Palettes (user decision, 2026-07-12):** the app moves off the Anthropic-adjacent warm-cream/terracotta as its only look. Four palettes — `warm` (today's), `indigo` ("Moonlit indigo"), `seaglass` ("Sea glass & slate"), `plum` ("Plum & lantern") — selectable via a theme switcher, **default `indigo`**, persisted in `localStorage["cantastorie-palette"]`, `?palette=` override wins and persists. Applies to the whole app: workshop AND child shelf/player.
+- Two modes stay orthogonal to palette: light and dusk from 19:00 local, `?theme=light|dusk` overrides. Both decided client-side by a tiny inline head script setting `data-theme` / `data-palette` on `<html>` before first paint; tokens live as CSS vars scoped by those attributes.
 - The progress fragment outerHTML-swaps every 2s while live — **steady states only, no looping CSS animations** (they would restart every swap). The current bead gets a static halo.
 - Beads, never numbers: six beads labeled `write revise safety narrate illustrate assemble`; settled = sage, current = honey + halo (24px vs 16px), future = faint. Monotone fill: a bead is done if its checkpoint dir exists OR any later step's does (revise may legitimately never run); with record state `staged/approved/rejected` all beads are done. `failed` shows a terracotta ring on the first not-done bead.
 - Run-state chip labels: `queued`, `running`, `staged — review`, `approved`, `rejected`, and `failed` renders as **`rested`** (terra tint). Internal state names in code/tests stay unchanged.
@@ -45,7 +46,41 @@
 - [ ] Step 2: implement until green. `uv run pytest tests/workshop` passes; ruff + mypy clean.
 - [ ] Step 3: commit.
 
-### Task 2: The five screens — templates, CSS, JS
+### Task 2: Palette system — four themes, whole app, switchable
+
+**Files:**
+- Rewrite: `src/static/css/tokens.css` (semantic vars × 4 palettes × light/dusk, legacy aliases)
+- Create: `src/static/js/palette.js` (tiny: read `?palette=`/localStorage, set `data-palette` + `data-theme`; shared by player and workshop)
+- Modify: `src/templates/index.html` (load palette.js in head, before CSS paint matters — keep it inline-small or `<script>` sync in head)
+- Test: run existing suites (`npx vitest run`, `uv run pytest`) — no visual regressions in behavior-level tests; a small vitest for the palette resolution function if it's importable.
+
+**The semantic variable set** (every palette × mode defines all of these):
+`--surface, --page-glow, --card, --field, --ink, --ink-soft, --ink-faint, --mono-ink, --mono-faint, --ghost, --line-10, --line-12, --card-shadow, --btn-shadow, --primary, --primary-text, --primary-16, --primary-ring, --primary-outline, --confirm, --confirm-text, --confirm-22, --accent, --accent-text, --accent-22, --info, --info-20, --info-text, --info-ring, --rest, --rest-text, --rest-16`
+
+Derivation rules (apply uniformly): `--primary-16` = primary at alpha .16 (dusk .18); `--primary-ring` .45 (dusk .5); `--primary-outline` .5 (dusk .55); `--confirm-22`/`--accent-22` at .22; `--info-20` at .2 (dusk .22); `--info-ring` .4 (dusk .45); `--rest-16` .16 (dusk .18); `--ghost` = ink at .06 (dusk .08); `--line-10` ink .1 (dusk .12); `--line-12` ink .12 (dusk .16); `--mono-faint` ink .4; light `--card-shadow: 0 2px 10px <ink .08>` / dusk `0 4px 14px rgba(0,0,0,.35)`; light `--btn-shadow: 0 2px 8px <ink .12>` / dusk `0 2px 8px rgba(0,0,0,.4)`; `--page-glow` = the palette's glow hue as `radial-gradient(90% 30% at 50% -8%, <glow>, transparent 70%)` at .4 light / .12–.14 dusk.
+
+**Base hues per palette** (light mode, then dusk):
+
+| palette | surface | card | field | ink | ink-soft | ink-faint | mono-ink | primary /-text | confirm /-text | accent /-text | info /-text | rest /-text | glow hue |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| warm (today's, verbatim from the prototype LIGHT string) | #FAF3E7 | #FFFDF7 | #FAF3E7 | #4A3B2E | #9A8977 | #B8A78F | #8A7460 | #C9714F / #B05A3A | #8FA37E / #5E7350 | #E8B44C / #A87A28 | #7FA6A8 / #4E7A7C | = primary | rgba(242,217,160,…) |
+| warm dusk (prototype DUSK string, verbatim) | #2A2119 | #3B3022 | #322A1D | #F3E9DA | #9E8D77 | #8A7A66 | #B3A188 | #D98B66 / #E09A76 | #98A583 / #A9B892 | #E8B75A / #E0B36A | #7FA6A8 / #9FC0C1 | = primary | rgba(245,223,174,…) |
+| indigo | #F2F4F8 | #FFFFFF | #EEF1F6 | #2F3646 | #7C8598 | #A3ABBC | #6B7488 | #5566A8 / #46549C | #5E8A72 / #4C7560 | #D9A441 / #9A7326 | #6C93B8 / #4A6E93 | #A85E68 / #96525C | rgba(213,222,240,…) |
+| indigo dusk | #1C2130 | #2A3044 | #232940 | #E8EBF2 | #97A0B5 | #7C86A0 | #AAB3C8 | #8B9AD6 / #A8B4E4 | #7FA98D / #9FC4AC | #E4B75E / #E5C078 | #7FA0C4 / #A9C4DE | #C08087 / #D0959C | rgba(228,183,94,…) |
+| seaglass | #EFF4F3 | #FDFFFE | #EAF1F0 | #2E3B3C | #7B8C8C | #A2B1B0 | #647877 | #47858A / #3D7377 | #6D9B6F / #59825B | #E0B15C / #9C752B | #66889E / #4C6B80 | #B06A55 / #9E5B47 | rgba(196,224,220,…) |
+| seaglass dusk | #172426 | #24363A | #1E2E31 | #E2EDEB | #8FA6A3 | #74908C | #A8BFBB | #7FB5BA / #98CBD0 | #8FB591 / #ABCBAD | #E6C077 / #E7CA8C | #83A3B8 / #ABC4D4 | #C68872 / #D49C88 | rgba(230,192,119,…) |
+| plum | #F5F1F6 | #FFFEFF | #F0EAF2 | #3A3142 | #857B91 | #ACA3B7 | #6F6480 | #7B5A8E / #6B4C7D | #6F9078 / #5C7B64 | #E2A93F / #9C7223 | #8A7FB8 / #6A5F98 | #A85E68 / #96525C | rgba(224,206,232,…) |
+| plum dusk | #241D2E | #352C44 | #2C2438 | #EFE9F4 | #9C90AB | #837791 | #B4A8C4 | #A98BC0 / #BEA3D4 | #8FAE97 / #ACC8B3 | #E8BC5F / #EAC77A | #A79BD0 / #C0B6E0 | #C08087 / #D0959C | rgba(232,188,95,…) |
+
+**Legacy aliases** (defined once, so `player.css` and the shelf need no rewrite): `--terracotta: var(--primary); --sage: var(--confirm); --honey: var(--accent); --sea: var(--info); --sticker: var(--card); --moonlight: var(--accent-text); --greeting-sub: var(--ink-soft); --karaoke:` accent at .45; `--prompt: var(--accent-text)` (dusk). Keep `--font-app/--font-story/--app-max`/motion/shape vars untouched. The `.night` block (player always at dusk) re-points to the active palette's **dusk** values — scope it per palette (`[data-palette="indigo"] .night { … }` etc.).
+
+**Selection contract:** `<html data-palette="…" data-theme="…">`. `palette.js` (a few lines, no framework): palette = `?palette=` param if valid (persist it) else `localStorage["cantastorie-palette"]` else `"indigo"`; theme = `?theme=` if `light|dusk` else dusk when local hour ≥ 19. Sets both attributes synchronously at parse time (script tag in `<head>`, not deferred, to avoid a flash). `:root` fallback values (no-JS) = indigo light. Wire into `index.html` now; the workshop base template adopts it in the next task. Expose `window.cantastoriePalette.set(name)` for the switcher UI.
+
+- [ ] Step 1: rewrite tokens.css + palette.js + index.html wiring.
+- [ ] Step 2: verify — `npx vitest run` and `uv run pytest` green; `npx playwright test` (e2e) still green; eyeball the shelf at `?palette=indigo|warm|seaglass|plum` and `?theme=dusk` via `make dev` — beads/buttons/text re-color, washes unchanged, no unreadable text. Note anything in player.css that stays hardcoded-warm as acceptable drift in the commit message.
+- [ ] Step 3: commit.
+
+### Task 3: The five screens — templates, CSS, JS
 
 **Files:**
 - Modify: all of `src/templates/workshop/` (`base.html`, `login.html`, `dashboard.html`, `run.html`, `_progress.html`, `story.html`)
@@ -56,12 +91,9 @@
 
 **Binding design values** (from the prototype; consult `template-body.html` for anything not repeated here):
 
-CSS custom properties, verbatim:
+Colors come from Task 2's semantic tokens — **never hardcode palette hexes in workshop.css**. Wherever this spec or the prototype markup says `--terra`, `--sage`, `--honey`, `--sea-*`, read `--primary`, `--confirm`, `--accent`, `--info-*` — except rested/reject/armed-delete contexts, which use `--rest` (`--rest-text`, `--rest-16`). Fixed white-on-pill text `#FFFDF7` may stay literal. The workshop base template loads `palette.js` (Task 2) the same way `index.html` does, plus the Baloo 2 + Literata Google Fonts link.
 
-```
-LIGHT  --surface:#FAF3E7;--page-glow:radial-gradient(90% 30% at 50% -8%,rgba(242,217,160,.4),rgba(242,217,160,0) 70%);--card:#FFFDF7;--field:#FAF3E7;--ink:#4A3B2E;--ink-soft:#9A8977;--ink-faint:#B8A78F;--mono-ink:#8A7460;--mono-faint:rgba(74,59,46,.4);--ghost:rgba(74,59,46,.06);--line-10:rgba(74,59,46,.1);--line-12:rgba(74,59,46,.12);--card-shadow:0 2px 10px rgba(74,59,46,.08);--btn-shadow:0 2px 8px rgba(74,59,46,.12);--terra:#C9714F;--terra-text:#B05A3A;--terra-16:rgba(201,113,79,.16);--terra-ring:rgba(201,113,79,.45);--terra-outline:rgba(201,113,79,.5);--sage:#8FA37E;--sage-text:#5E7350;--sage-22:rgba(143,163,126,.22);--honey:#E8B44C;--honey-text:#A87A28;--honey-22:rgba(232,180,76,.22);--sea-20:rgba(127,166,168,.2);--sea-text:#4E7A7C;--sea-ring:rgba(127,166,168,.4)
-DUSK   --surface:#2A2119;--page-glow:radial-gradient(90% 30% at 50% -8%,rgba(245,223,174,.14),rgba(245,223,174,0) 70%);--card:#3B3022;--field:#322A1D;--ink:#F3E9DA;--ink-soft:#9E8D77;--ink-faint:#8A7A66;--mono-ink:#B3A188;--mono-faint:rgba(243,233,218,.4);--ghost:rgba(243,233,218,.08);--line-10:rgba(243,233,218,.12);--line-12:rgba(243,233,218,.16);--card-shadow:0 4px 14px rgba(0,0,0,.35);--btn-shadow:0 2px 8px rgba(0,0,0,.4);--terra:#D98B66;--terra-text:#E09A76;--terra-16:rgba(217,139,102,.18);--terra-ring:rgba(217,139,102,.5);--terra-outline:rgba(217,139,102,.55);--sage:#98A583;--sage-text:#A9B892;--sage-22:rgba(152,165,131,.22);--honey:#E8B75A;--honey-text:#E0B36A;--honey-22:rgba(232,183,90,.22);--sea-20:rgba(127,166,168,.22);--sea-text:#9FC0C1;--sea-ring:rgba(127,166,168,.45)
-```
+Additional bench element: a quiet **palette switcher** row at the bottom of the bench — four 28px dots (each palette's `--primary`, current one ring-highlighted, ≥44px tap targets) calling `window.cantastoriePalette.set(name)`; label "palette" in the mono footnote style.
 
 Layout: one centered mobile column, `max-width: 540px` (`--app-max`), background `var(--page-glow), var(--surface)`, body font `'Baloo 2', sans-serif`, color `var(--ink)`. Cards `background: var(--card); border-radius: 18–22px; box-shadow: var(--card-shadow)`; fields `height 44–48px; border-radius 14px; background: var(--field); box-shadow: inset 0 0 0 1.5px var(--line-12)`. Primary buttons: 50px pill, `var(--terra)`, white `#FFFDF7` text, `box-shadow: 0 6px 16px rgba(201,113,79,.35)`; press feedback `transform: scale(.97)` via `:active`.
 
@@ -79,13 +111,13 @@ Context/route work (template-only concerns, no lifecycle changes): a `staged_sto
 - [ ] Step 2: implement templates/CSS/JS until green; `uv run pytest` + `npx vitest run` pass; ruff/mypy clean.
 - [ ] Step 3: eyeball every screen once via the local harness (see Task 3's harness — it exists in scratchpad after Task 0) before calling it done; commit.
 
-### Task 3: After screenshots + docs
+### Task 4: After screenshots + docs
 
 **Files:**
-- Modify: `docs/design/design-system.md` (the workshop section: retire "deliberately plain", describe the shipped design, keep the journey table)
-- Replace: `docs/design/journey/08-workshop-login.png`, `09-workshop-dashboard.png`, `10-workshop-run.png`, `11-workshop-review.png` (and add `12-workshop-rested.png`)
+- Modify: `docs/design/design-system.md` (the workshop section: retire "deliberately plain", describe the shipped design; NEW top-level "Palettes" section documenting the four palettes, the switcher, default indigo, and the selection contract)
+- Replace: `docs/design/journey/01-shelf-light.png`, `02-shelf-dusk.png` (shelf in the new default indigo), `08-workshop-login.png`, `09-workshop-dashboard.png`, `10-workshop-run.png`, `11-workshop-review.png`; add `12-workshop-rested.png`
 
-Use the scratchpad harness from Task 0 to serve the app with seeded states and capture 402×874 shots (login, bench with all chips, run running, run staged, rested, review) into the scratchpad `after/` dir; copy the four/five journey shots into docs. Update the design-system doc's workshop paragraphs to match reality (beads, chips incl. rested, delete arming, review pills). Commit.
+Use the scratchpad harness from Task 0 to serve the app with seeded states and capture 402×874 shots (login, bench with all chips, run running, run staged, rested, review — plus the shelf light/dusk) into the scratchpad `after/` dir; copy the journey shots into docs. Also capture one bench shot per palette (warm/indigo/seaglass/plum) for the before/after comparison. Update the design-system doc's palette + workshop paragraphs to match reality (beads, chips incl. rested, delete arming, review pills, switcher). Commit.
 
 - [ ] Step 1: after screenshots captured.
 - [ ] Step 2: docs updated, committed.
