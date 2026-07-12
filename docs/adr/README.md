@@ -33,6 +33,7 @@ Small, local, easily-reversed choices do not need an ADR. When in doubt, prefer 
 | [ADR-004](ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram, ElevenLabs Retired | Accepted | 2026-07-11 |
 | [ADR-005](ADR-005-family-voice-narration.md) | Nonna Narrates (family voice narration) | Proposed | 2026-07-11 |
 | [ADR-004](ADR-004-workshop-area.md) | The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs | Accepted | 2026-07-11 |
+| [ADR-006](ADR-006-langsmith-observability.md) | LangSmith App-Wide Observability | Accepted | 2026-07-12 |
 
 ## Related Documentation
 

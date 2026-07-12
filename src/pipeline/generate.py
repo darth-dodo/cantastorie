@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.observability import typed_traceable
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.publish import stage_story
 from src.pipeline.steps.assemble import assemble_story
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from src.pipeline.providers import NarrationClient
 
 
+@typed_traceable(name="pipeline.generate_story")
 def generate_story(
     theme: Theme,
     language: Language,

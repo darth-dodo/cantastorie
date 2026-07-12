@@ -9,6 +9,7 @@ from typing import cast, get_args
 import typer
 
 from src.config import get_settings
+from src.observability import init_observability
 from src.pipeline.generate import generate_story
 from src.pipeline.models import Language, Theme
 from src.pipeline.publish import publish_story
@@ -44,10 +45,12 @@ def generate(
         typer.echo(f"Unknown shape {shape!r}; linear or branching")
         raise typer.Exit(1)
 
+    settings = get_settings()
+    init_observability(settings)
     staged = generate_story(
         cast("Theme", theme),
         cast("Language", language),
-        get_settings(),
+        settings,
         premise=premise or None,
     )
     typer.echo(f"Staged {staged.name} for review at {staged}")

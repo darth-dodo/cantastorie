@@ -22,6 +22,7 @@ import httpx
 from pydantic import BaseModel
 
 from src.config import Settings
+from src.observability import typed_traceable
 from src.pipeline.cache import ArtifactCache, cache_key, run_step
 from src.pipeline.models import Story
 
@@ -74,6 +75,7 @@ class ImageClient:
     def close(self) -> None:
         self._client.close()
 
+    @typed_traceable(name="illustrate.generate")
     def generate(self, prompt: str, reference_png: bytes | None = None) -> bytes:
         """Generate one image; the optional reference image rides along as input."""
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
