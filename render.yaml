@@ -36,5 +36,7 @@ services:
         sync: false
       - key: CONTENT_DIR
         value: /tmp/cantastorie-content
+      - key: STAGING_DIR
+        value: /tmp/cantastorie-staging
       - key: PYTHON_VERSION
         value: "3.12"
