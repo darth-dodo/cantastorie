@@ -14,7 +14,16 @@
   {% if record.story_ids %}
     <ul class="workshop-staged">
       {% for story_id in record.story_ids %}
-        <li><a href="/workshop/staged/{{ story_id }}">{{ story_id }}</a></li>
+        <li>
+          <a href="/workshop/staged/{{ story_id }}">{{ story_id }}</a>
+          {% if record.state not in live and record.state != "approved" %}
+            <button hx-post="/workshop/staged/{{ story_id }}/delete"
+                    hx-confirm="Delete this staged story?"
+                    hx-target="closest li"
+                    hx-swap="outerHTML"
+                    class="delete-btn">Delete</button>
+          {% endif %}
+        </li>
       {% endfor %}
     </ul>
   {% endif %}

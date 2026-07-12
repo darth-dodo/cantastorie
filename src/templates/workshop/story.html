@@ -2,6 +2,13 @@
 {% block title %}{{ story.title }}{% endblock %}
 {% block content %}
   <section class="workshop-card">
+    {% if record and record.state not in live and record.state != "approved" %}
+      <button hx-post="/workshop/staged/{{ story.id }}/delete"
+              hx-confirm="Delete this staged story?"
+              hx-target="closest .workshop-card"
+              hx-swap="outerHTML"
+              class="delete-btn">Delete this story</button>
+    {% endif %}
     <h2>{{ story.title }}</h2>
     <p class="workshop-meta">{{ story.id }} · {{ story.language }} · {{ story.shape }}</p>
     {% for page in story.pages %}

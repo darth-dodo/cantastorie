@@ -97,6 +97,13 @@ def _record_or_404(manager: RunManager, run_id: str) -> RunRecord:
     return record
 
 
+def _story_record_or_404(manager: RunManager, story_id: str) -> RunRecord:
+    for record in manager.store.list_runs():
+        if story_id in record.story_ids:
+            return record
+    raise HTTPException(status_code=404)
+
+
 def _checkpointed_steps(record: RunRecord, settings: Settings) -> list[str]:
     """Step names with artifacts on disk — progress derived from the working
     folder's checkpoint dirs, never a parallel store. Best-effort: the story
@@ -230,15 +237,46 @@ async def delete_run(
     return _to_login()
 
 
+@router.post("/staged/{story_id}/delete")
+async def delete_staged_story(
+    request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
+) -> Response:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _story_record_or_404(manager, story_id)
+    if record.state in LIVE_STATES or record.state == "approved":
+        raise HTTPException(status_code=400)
+    if record.state not in {"staged", "failed"}:
+        raise HTTPException(status_code=400)
+    shutil.rmtree(settings.staging_dir / story_id, ignore_errors=True)
+    shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
+    updated = record.model_copy(
+        update={"story_ids": [s for s in record.story_ids if s != story_id]}
+    )
+    manager.store.save(updated)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return _to_login()
+
+
 @router.get("/staged/{story_id}", response_class=HTMLResponse)
-async def staged_story(request: Request, settings: WorkshopSettings, story_id: str) -> HTMLResponse:
+async def staged_story(
+    request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
+) -> HTMLResponse:
     if not _authed(request, settings):
         return templates.TemplateResponse(request, "workshop/login.html", {})
     story_file = settings.staging_dir / story_id / "story.json"
     if not story_file.is_file():
         raise HTTPException(status_code=404)
     story = Story.model_validate_json(story_file.read_text())
-    return templates.TemplateResponse(request, "workshop/story.html", {"story": story})
+    record = None
+    for candidate in manager.store.list_runs():
+        if story_id in candidate.story_ids:
+            record = candidate
+            break
+    return templates.TemplateResponse(
+        request, "workshop/story.html", {"story": story, "record": record, "live": LIVE_STATES}
+    )
 
 
 @router.get("/staged/{story_id}/assets/{name}")
