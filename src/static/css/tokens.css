@@ -1,64 +1,511 @@
-/* Cantastorie design tokens — the sticker-book system, v1.
-   Source of truth: Claude Design "Cantastorie Foundations" (locked from
-   explorations 3a + 3b). Two modes: light (warm cream) and dusk (lamplit
-   charcoal). Sage = confirm; terracotta = primary action; never alarm-red. */
+/* Cantastorie design tokens — four palettes × light/dusk modes.
+   Source of truth: Task 2 brief (warm/indigo/seaglass/plum).
+   Selection: <html data-palette="…" data-theme="…">.
+   No-JS fallback: :root = indigo light.
 
+   Variable set per block:
+     surface, page-glow, card, field, ink, ink-soft, ink-faint,
+     mono-ink, mono-faint, ghost, line-10, line-12,
+     card-shadow, btn-shadow,
+     primary, primary-text, primary-16, primary-ring, primary-outline,
+     confirm, confirm-text, confirm-22,
+     accent, accent-text, accent-22,
+     info, info-20, info-text, info-ring,
+     rest, rest-text, rest-16
+
+   Legacy aliases (player.css compat — defined once at the bottom):
+     --terracotta, --sage, --honey, --sea, --sticker, --moonlight,
+     --greeting-sub, --karaoke, --prompt
+
+   Unchanged shared vars: --font-app, --font-story, --app-max,
+     --fade, --fade-quick, --settle, --sticker-ring, motion, shape.
+*/
+
+/* ─── Shared / layout / motion / shape ───────────────────────────── */
 :root {
-  /* Light — warm cream */
-  --surface: #faf3e7;
-  --sticker: #fffdf7;
-  --ink: #4a3b2e;
-  --ink-soft: #9a8977;
-  --terracotta: #c9714f;
-  --honey: #e8b44c;
-  --sage: #8fa37e;
-  --sea: #7fa6a8;
-  --greeting-sub: #b3906b;
-
-  /* Shared */
   --font-app: "Baloo 2", sans-serif;
   --font-story: "Literata", serif;
-  --karaoke: rgba(229, 183, 94, 0.45);
-
-  /* Layout: the app is a mobile-first, hold-in-hand experience. On larger
-     viewports the whole player is framed as a centered phone-width column
-     rather than magnified full-screen. Phones fill the frame edge to edge. */
   --app-max: 540px;
 
-  /* Motion: slow crossfades only — nothing snaps, flashes, or bounces */
   --fade: 900ms ease;
   --fade-quick: 600ms ease;
   --settle: 250ms ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INDIGO — light  (also the :root no-JS fallback)
+   =================================================================== */
+:root,
+[data-palette="indigo"],
+[data-palette="indigo"] [data-theme="light"] {
+  --surface:  #F2F4F8;
+  --card:     #FFFFFF;
+  --field:    #EEF1F6;
+  --ink:      #2F3646;
+  --ink-soft: #7C8598;
+  --ink-faint:#A3ABBC;
+  --mono-ink: #6B7488;
+  --mono-faint: rgba(47,54,70,.40);
+
+  --ghost:    rgba(47,54,70,.06);
+  --line-10:  rgba(47,54,70,.10);
+  --line-12:  rgba(47,54,70,.12);
+
+  --card-shadow: 0 2px 10px rgba(47,54,70,.08);
+  --btn-shadow:  0 2px 8px rgba(47,54,70,.12);
+
+  --primary:         #5566A8;
+  --primary-text:    #46549C;
+  --primary-16:      rgba(85,102,168,.16);
+  --primary-ring:    rgba(85,102,168,.45);
+  --primary-outline: rgba(85,102,168,.50);
+
+  --confirm:      #5E8A72;
+  --confirm-text: #4C7560;
+  --confirm-22:   rgba(94,138,114,.22);
+
+  --accent:      #D9A441;
+  --accent-text: #9A7326;
+  --accent-22:   rgba(217,164,65,.22);
+
+  --info:      #6C93B8;
+  --info-20:   rgba(108,147,184,.20);
+  --info-text: #4A6E93;
+  --info-ring: rgba(108,147,184,.40);
+
+  --rest:      #A85E68;
+  --rest-text: #96525C;
+  --rest-16:   rgba(168,94,104,.16);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(213,222,240,.40), transparent 70%);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   WARM — light
+   =================================================================== */
+[data-palette="warm"],
+[data-palette="warm"] [data-theme="light"] {
+  --surface:  #FAF3E7;
+  --card:     #FFFDF7;
+  --field:    #FAF3E7;
+  --ink:      #4A3B2E;
+  --ink-soft: #9A8977;
+  --ink-faint:#B8A78F;
+  --mono-ink: #8A7460;
+  --mono-faint: rgba(74,59,46,.40);
+
+  --ghost:    rgba(74,59,46,.06);
+  --line-10:  rgba(74,59,46,.10);
+  --line-12:  rgba(74,59,46,.12);
+
+  --card-shadow: 0 2px 10px rgba(74,59,46,.08);
+  --btn-shadow:  0 2px 8px rgba(74,59,46,.12);
+
+  --primary:         #C9714F;
+  --primary-text:    #B05A3A;
+  --primary-16:      rgba(201,113,79,.16);
+  --primary-ring:    rgba(201,113,79,.45);
+  --primary-outline: rgba(201,113,79,.50);
+
+  --confirm:      #8FA37E;
+  --confirm-text: #5E7350;
+  --confirm-22:   rgba(143,163,126,.22);
+
+  --accent:      #E8B44C;
+  --accent-text: #A87A28;
+  --accent-22:   rgba(232,180,76,.22);
+
+  --info:      #7FA6A8;
+  --info-20:   rgba(127,166,168,.20);
+  --info-text: #4E7A7C;
+  --info-ring: rgba(127,166,168,.40);
+
+  --rest:      #C9714F;
+  --rest-text: #B05A3A;
+  --rest-16:   rgba(201,113,79,.16);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(242,217,160,.40), transparent 70%);
+}
+
+/* WARM — dusk */
+[data-palette="warm"][data-theme="dusk"],
+[data-palette="warm"] [data-theme="dusk"] {
+  --surface:  #2A2119;
+  --card:     #3B3022;
+  --field:    #322A1D;
+  --ink:      #F3E9DA;
+  --ink-soft: #9E8D77;
+  --ink-faint:#8A7A66;
+  --mono-ink: #B3A188;
+  --mono-faint: rgba(243,233,218,.40);
+
+  --ghost:    rgba(243,233,218,.08);
+  --line-10:  rgba(243,233,218,.12);
+  --line-12:  rgba(243,233,218,.16);
+
+  --card-shadow: 0 4px 14px rgba(0,0,0,.35);
+  --btn-shadow:  0 2px 8px rgba(0,0,0,.40);
+
+  --primary:         #D98B66;
+  --primary-text:    #E09A76;
+  --primary-16:      rgba(217,139,102,.18);
+  --primary-ring:    rgba(217,139,102,.50);
+  --primary-outline: rgba(217,139,102,.55);
+
+  --confirm:      #98A583;
+  --confirm-text: #A9B892;
+  --confirm-22:   rgba(152,165,131,.22);
+
+  --accent:      #E8B75A;
+  --accent-text: #E0B36A;
+  --accent-22:   rgba(232,183,90,.22);
+
+  --info:      #7FA6A8;
+  --info-20:   rgba(127,166,168,.22);
+  --info-text: #9FC0C1;
+  --info-ring: rgba(127,166,168,.45);
+
+  --rest:      #D98B66;
+  --rest-text: #E09A76;
+  --rest-16:   rgba(217,139,102,.18);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(245,223,174,.13), transparent 70%);
+}
+
+/* INDIGO — dusk */
+[data-palette="indigo"][data-theme="dusk"],
+[data-palette="indigo"] [data-theme="dusk"] {
+  --surface:  #1C2130;
+  --card:     #2A3044;
+  --field:    #232940;
+  --ink:      #E8EBF2;
+  --ink-soft: #97A0B5;
+  --ink-faint:#7C86A0;
+  --mono-ink: #AAB3C8;
+  --mono-faint: rgba(232,235,242,.40);
+
+  --ghost:    rgba(232,235,242,.08);
+  --line-10:  rgba(232,235,242,.12);
+  --line-12:  rgba(232,235,242,.16);
+
+  --card-shadow: 0 4px 14px rgba(0,0,0,.35);
+  --btn-shadow:  0 2px 8px rgba(0,0,0,.40);
+
+  --primary:         #8B9AD6;
+  --primary-text:    #A8B4E4;
+  --primary-16:      rgba(139,154,214,.18);
+  --primary-ring:    rgba(139,154,214,.50);
+  --primary-outline: rgba(139,154,214,.55);
+
+  --confirm:      #7FA98D;
+  --confirm-text: #9FC4AC;
+  --confirm-22:   rgba(127,169,141,.22);
+
+  --accent:      #E4B75E;
+  --accent-text: #E5C078;
+  --accent-22:   rgba(228,183,94,.22);
+
+  --info:      #7FA0C4;
+  --info-20:   rgba(127,160,196,.22);
+  --info-text: #A9C4DE;
+  --info-ring: rgba(127,160,196,.45);
+
+  --rest:      #C08087;
+  --rest-text: #D0959C;
+  --rest-16:   rgba(192,128,135,.18);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(228,183,94,.12), transparent 70%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SEAGLASS — light
+   =================================================================== */
+[data-palette="seaglass"],
+[data-palette="seaglass"] [data-theme="light"] {
+  --surface:  #EFF4F3;
+  --card:     #FDFFFE;
+  --field:    #EAF1F0;
+  --ink:      #2E3B3C;
+  --ink-soft: #7B8C8C;
+  --ink-faint:#A2B1B0;
+  --mono-ink: #647877;
+  --mono-faint: rgba(46,59,60,.40);
+
+  --ghost:    rgba(46,59,60,.06);
+  --line-10:  rgba(46,59,60,.10);
+  --line-12:  rgba(46,59,60,.12);
+
+  --card-shadow: 0 2px 10px rgba(46,59,60,.08);
+  --btn-shadow:  0 2px 8px rgba(46,59,60,.12);
+
+  --primary:         #47858A;
+  --primary-text:    #3D7377;
+  --primary-16:      rgba(71,133,138,.16);
+  --primary-ring:    rgba(71,133,138,.45);
+  --primary-outline: rgba(71,133,138,.50);
+
+  --confirm:      #6D9B6F;
+  --confirm-text: #59825B;
+  --confirm-22:   rgba(109,155,111,.22);
+
+  --accent:      #E0B15C;
+  --accent-text: #9C752B;
+  --accent-22:   rgba(224,177,92,.22);
+
+  --info:      #66889E;
+  --info-20:   rgba(102,136,158,.20);
+  --info-text: #4C6B80;
+  --info-ring: rgba(102,136,158,.40);
+
+  --rest:      #B06A55;
+  --rest-text: #9E5B47;
+  --rest-16:   rgba(176,106,85,.16);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(196,224,220,.40), transparent 70%);
+}
+
+/* SEAGLASS — dusk */
+[data-palette="seaglass"][data-theme="dusk"],
+[data-palette="seaglass"] [data-theme="dusk"] {
+  --surface:  #172426;
+  --card:     #24363A;
+  --field:    #1E2E31;
+  --ink:      #E2EDEB;
+  --ink-soft: #8FA6A3;
+  --ink-faint:#74908C;
+  --mono-ink: #A8BFBB;
+  --mono-faint: rgba(226,237,235,.40);
+
+  --ghost:    rgba(226,237,235,.08);
+  --line-10:  rgba(226,237,235,.12);
+  --line-12:  rgba(226,237,235,.16);
+
+  --card-shadow: 0 4px 14px rgba(0,0,0,.35);
+  --btn-shadow:  0 2px 8px rgba(0,0,0,.40);
+
+  --primary:         #7FB5BA;
+  --primary-text:    #98CBD0;
+  --primary-16:      rgba(127,181,186,.18);
+  --primary-ring:    rgba(127,181,186,.50);
+  --primary-outline: rgba(127,181,186,.55);
+
+  --confirm:      #8FB591;
+  --confirm-text: #ABCBAD;
+  --confirm-22:   rgba(143,181,145,.22);
+
+  --accent:      #E6C077;
+  --accent-text: #E7CA8C;
+  --accent-22:   rgba(230,192,119,.22);
+
+  --info:      #83A3B8;
+  --info-20:   rgba(131,163,184,.22);
+  --info-text: #ABC4D4;
+  --info-ring: rgba(131,163,184,.45);
+
+  --rest:      #C68872;
+  --rest-text: #D49C88;
+  --rest-16:   rgba(198,136,114,.18);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(230,192,119,.12), transparent 70%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PLUM — light
+   =================================================================== */
+[data-palette="plum"],
+[data-palette="plum"] [data-theme="light"] {
+  --surface:  #F5F1F6;
+  --card:     #FFFEFF;
+  --field:    #F0EAF2;
+  --ink:      #3A3142;
+  --ink-soft: #857B91;
+  --ink-faint:#ACA3B7;
+  --mono-ink: #6F6480;
+  --mono-faint: rgba(58,49,66,.40);
+
+  --ghost:    rgba(58,49,66,.06);
+  --line-10:  rgba(58,49,66,.10);
+  --line-12:  rgba(58,49,66,.12);
+
+  --card-shadow: 0 2px 10px rgba(58,49,66,.08);
+  --btn-shadow:  0 2px 8px rgba(58,49,66,.12);
+
+  --primary:         #7B5A8E;
+  --primary-text:    #6B4C7D;
+  --primary-16:      rgba(123,90,142,.16);
+  --primary-ring:    rgba(123,90,142,.45);
+  --primary-outline: rgba(123,90,142,.50);
+
+  --confirm:      #6F9078;
+  --confirm-text: #5C7B64;
+  --confirm-22:   rgba(111,144,120,.22);
+
+  --accent:      #E2A93F;
+  --accent-text: #9C7223;
+  --accent-22:   rgba(226,169,63,.22);
+
+  --info:      #8A7FB8;
+  --info-20:   rgba(138,127,184,.20);
+  --info-text: #6A5F98;
+  --info-ring: rgba(138,127,184,.40);
+
+  --rest:      #A85E68;
+  --rest-text: #96525C;
+  --rest-16:   rgba(168,94,104,.16);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(224,206,232,.40), transparent 70%);
+}
+
+/* PLUM — dusk */
+[data-palette="plum"][data-theme="dusk"],
+[data-palette="plum"] [data-theme="dusk"] {
+  --surface:  #241D2E;
+  --card:     #352C44;
+  --field:    #2C2438;
+  --ink:      #EFE9F4;
+  --ink-soft: #9C90AB;
+  --ink-faint:#837791;
+  --mono-ink: #B4A8C4;
+  --mono-faint: rgba(239,233,244,.40);
+
+  --ghost:    rgba(239,233,244,.08);
+  --line-10:  rgba(239,233,244,.12);
+  --line-12:  rgba(239,233,244,.16);
+
+  --card-shadow: 0 4px 14px rgba(0,0,0,.35);
+  --btn-shadow:  0 2px 8px rgba(0,0,0,.40);
+
+  --primary:         #A98BC0;
+  --primary-text:    #BEA3D4;
+  --primary-16:      rgba(169,139,192,.18);
+  --primary-ring:    rgba(169,139,192,.50);
+  --primary-outline: rgba(169,139,192,.55);
+
+  --confirm:      #8FAE97;
+  --confirm-text: #ACC8B3;
+  --confirm-22:   rgba(143,174,151,.22);
+
+  --accent:      #E8BC5F;
+  --accent-text: #EAC77A;
+  --accent-22:   rgba(232,188,95,.22);
+
+  --info:      #A79BD0;
+  --info-20:   rgba(167,155,208,.22);
+  --info-text: #C0B6E0;
+  --info-ring: rgba(167,155,208,.45);
+
+  --rest:      #C08087;
+  --rest-text: #D0959C;
+  --rest-16:   rgba(192,128,135,.18);
+
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(232,188,95,.12), transparent 70%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   .night — the player always lives at dusk, per palette.
+   Scoped per palette so each uses its own dusk values.
+   =================================================================== */
+
+[data-palette="warm"] .night {
+  --card:     #3B3022;
+  --ink:      #F3E9DA;
+  --ink-soft: #9E8D77;
+  --primary:  #D98B66;
+  --confirm:  #98A583;
+  --accent:   #E8B75A;
+  --accent-text: #E0B36A;
+  --info:     #7FA6A8;
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(245,223,174,.13), transparent 70%);
+}
+
+[data-palette="indigo"] .night {
+  --card:     #2A3044;
+  --ink:      #E8EBF2;
+  --ink-soft: #97A0B5;
+  --primary:  #8B9AD6;
+  --confirm:  #7FA98D;
+  --accent:   #E4B75E;
+  --accent-text: #E5C078;
+  --info:     #7FA0C4;
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(228,183,94,.12), transparent 70%);
+}
+
+[data-palette="seaglass"] .night {
+  --card:     #24363A;
+  --ink:      #E2EDEB;
+  --ink-soft: #8FA6A3;
+  --primary:  #7FB5BA;
+  --confirm:  #8FB591;
+  --accent:   #E6C077;
+  --accent-text: #E7CA8C;
+  --info:     #83A3B8;
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(230,192,119,.12), transparent 70%);
+}
+
+[data-palette="plum"] .night {
+  --card:     #352C44;
+  --ink:      #EFE9F4;
+  --ink-soft: #9C90AB;
+  --primary:  #A98BC0;
+  --confirm:  #8FAE97;
+  --accent:   #E8BC5F;
+  --accent-text: #EAC77A;
+  --info:     #A79BD0;
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(232,188,95,.12), transparent 70%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Legacy aliases — keep player.css working without any edits.
+   Defined once here; cascade picks up the active palette's values.
+   =================================================================== */
+:root,
+[data-palette="warm"],
+[data-palette="indigo"],
+[data-palette="seaglass"],
+[data-palette="plum"] {
+  /* Colour aliases */
+  --terracotta:   var(--primary);
+  --sage:         var(--confirm);
+  --honey:        var(--accent);
+  --sea:          var(--info);
+  --sticker:      var(--card);
+  --moonlight:    var(--accent-text);
+  --greeting-sub: var(--ink-soft);
+
+  /* Karaoke highlight: accent at .45 opacity.
+     CSS can't do dynamic-alpha on a var(), so we keep a named stop per palette.
+     In light mode the warm/indigo/seaglass/plum accent at 45% opacity; in dusk
+     also uses the dusk accent value.  The pattern-matched rgba below is
+     palette-specific but the alias name stays stable. */
+  --karaoke: rgba(232,180,76,.45);   /* warm light default; overridden below */
+
+  /* --prompt used in .night / player overlays */
+  --prompt: var(--accent-text);
 
   /* Shape */
   --sticker-ring: 0 0 0 7px var(--sticker);
-  --card-shadow: 0 10px 24px rgba(74, 59, 46, 0.16);
 }
 
-[data-theme="dusk"] {
-  /* Dusk — lamplit charcoal. Glow-by-halo replaces glow-by-lightness. */
-  --surface: #2a2119;
-  --card: #3b3022;
-  --ink: #f3e9da;
-  --ink-soft: #9e8d77;
-  --terracotta: #d98b66;
-  --moonlight: #f2d8a7;
-  --sage: #98a583;
-  --honey: #e8b75a;
-  --greeting-sub: #9e8d77;
+/* Per-palette karaoke (accent at .45 / dusk .45) */
+[data-palette="warm"]     { --karaoke: rgba(232,180,76,.45); }
+[data-palette="warm"][data-theme="dusk"],
+[data-palette="warm"] .night { --karaoke: rgba(232,183,90,.45); }
 
-  --sticker-ring: 0 0 0 7px rgba(243, 233, 218, 0.14);
-  --card-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
-}
+[data-palette="indigo"]   { --karaoke: rgba(217,164,65,.45); }
+[data-palette="indigo"][data-theme="dusk"],
+[data-palette="indigo"] .night { --karaoke: rgba(228,183,94,.45); }
 
-/* The player itself always lives at dusk — stories are bedtime. */
+[data-palette="seaglass"] { --karaoke: rgba(224,177,92,.45); }
+[data-palette="seaglass"][data-theme="dusk"],
+[data-palette="seaglass"] .night { --karaoke: rgba(230,192,119,.45); }
+
+[data-palette="plum"]     { --karaoke: rgba(226,169,63,.45); }
+[data-palette="plum"][data-theme="dusk"],
+[data-palette="plum"] .night { --karaoke: rgba(232,188,95,.45); }
+
+/* dusk sticker-ring (translucent) — mirrors the original tokens.css behaviour */
+[data-theme="dusk"],
 .night {
-  --card: #3b3022;
-  --ink: #f3e9da;
-  --ink-soft: #9e8d77;
-  --terracotta: #d98b66;
-  --moonlight: #f2d8a7;
-  --sage: #98a583;
-  --honey: #e8b75a;
-  --prompt: #f5dfae;
+  --sticker-ring: 0 0 0 7px rgba(243,233,218,.14);
 }
