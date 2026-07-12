@@ -36,7 +36,9 @@ STYLE_PROMPT = (
     "soft edges — bedtime, not Saturday cartoons. Nothing frightening: "
     "no darkness, no sharp teeth, no menacing shapes or shadows. "
     "The image must contain no text: no letters, no words, no numbers, "
-    "no signs, no writing of any kind."
+    "no signs, no writing of any kind. "
+    "Portrait orientation — the image is tall, viewed on a phone held in hand. "
+    "Characters should be diverse in appearance — vary hair, features, and body shapes across the cast."
 )
 
 STEP_NAME = "illustrate"
