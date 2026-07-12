@@ -32,15 +32,9 @@ services:
     healthCheckPath: /health
 
     envVars:
-      # Where the player fetches published stories. Point this at the R2
-      # public bucket URL, including the /published prefix, e.g.
-      # https://pub-<hash>.r2.dev/published — set in the Render dashboard.
-      # Left unset, the player falls back to the app's /static/content mount.
       - key: ASSET_BASE
         sync: false
-
-      # The web app serves static shells only; no API keys required.
-      # OPENROUTER_API_KEY / ELEVENLABS_API_KEY belong to the local pipeline
-      # environment and are added here only when Phase 2 factory routes land.
+      - key: CONTENT_DIR
+        value: /tmp/cantastorie-content
       - key: PYTHON_VERSION
         value: "3.12"
