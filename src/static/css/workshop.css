@@ -140,7 +140,9 @@
 }
 
 .workshop-page img {
+  width: 100%;
   max-width: 20rem;
+  height: auto;
   border-radius: 8px;
   display: block;
 }

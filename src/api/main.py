@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.api.routes.player import router as player_router
+from src.api.routes.published import router as published_router
 from src.api.routes.workshop import router as workshop_router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -16,6 +17,7 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(player_router)
+    app.include_router(published_router)
     app.include_router(workshop_router)
 
     @app.get("/health")
