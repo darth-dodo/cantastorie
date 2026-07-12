@@ -187,7 +187,9 @@ def publish_story(
     bucket = settings.r2_bucket
     pending_bucket = settings.pending_bucket
     if not settings.r2_public_base:
-        raise ValueError("R2_PUBLIC_BASE must be set before publishing — manifest URLs would be relative")
+        raise ValueError(
+            "R2_PUBLIC_BASE must be set before publishing — manifest URLs would be relative"
+        )
     public_base = settings.r2_public_base.rstrip("/")
     staged_prefix = f"{STAGED_PREFIX}/{story_id}"
 
