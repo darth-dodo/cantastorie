@@ -61,7 +61,7 @@ Italian and Spanish are the flagships — deepest content, first through every q
 
 ### Truly Private, Parent-Approved
 
-No accounts, no tracking, no analytics. Progress lives in the browser (IndexedDB) and exports to a file; nothing about the child ever leaves the device. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (IndexedDB) and exports to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only to request and review stories — no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
 
 ---
 
@@ -159,7 +159,7 @@ What's next: parent-face pack requests and the review queue (Phase 2), branching
 - [Architecture Decision Records](docs/adr/) — settled decisions:
   - [ADR-001: Technology Stack](docs/adr/ADR-001-technology-stack.md) — FastAPI, vanilla JS, plain-Python pipeline, OpenRouter, R2, Render
   - [ADR-002: Narration Provider](docs/adr/ADR-002-narration-provider.md) — Voxtral via OpenRouter (superseded by ADR-004)
-  - [ADR-003: Parent Authentication via Clerk](docs/adr/ADR-003-parent-authentication-clerk.md) — proposed
+  - [ADR-003: Parent Authentication via Clerk](docs/adr/ADR-003-parent-authentication-clerk.md) — accepted
   - [ADR-004: Narration — Voxtral + Deepgram, ElevenLabs Retired](docs/adr/ADR-004-narration-deepgram-voxtral.md)
   - [ADR-004: Workshop Area](docs/adr/ADR-004-workshop-area.md) — in-app authoring with in-process pipeline runs
   - [ADR-005: Nonna Narrates](docs/adr/ADR-005-family-voice-narration.md) — family voice cloning, proposed

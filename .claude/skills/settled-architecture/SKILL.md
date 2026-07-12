@@ -23,6 +23,7 @@ Cantastorie's stack is **settled and documented in `docs/architecture.md`**, wit
 | LLM/image access | OpenRouter (per-step model choice) | Direct provider SDKs |
 | Narration | **Voxtral Mini TTS via OpenRouter** (`mistralai/voxtral-mini-tts-2603`); **Deepgram** for word timings (STT pass) and the fallback voice (Aura) — see **[ADR-004](../../../docs/adr/ADR-004-narration-deepgram-voxtral.md)** | Browser TTS; ElevenLabs (retired — ADR-004); any vendor key beyond the flagged pipeline-only Deepgram exception |
 | Hosting | Render via Docker (`render.yaml`) | GitHub Pages, Netlify, Vercel |
+| Parent authentication | Clerk (parent area only — [ADR-003](../../../docs/adr/ADR-003-parent-authentication-clerk.md), Accepted); JWT verified via JWKS (PyJWT, no vendor SDK); one parent account = one family; token in Clerk `public_metadata` | Clerk script or cookie logic on any child path; self-hosted auth; Supabase (platform coupling) |
 
 **Why Web Audio is non-negotiable:** iOS makes media-element volume read-only, which kills the mandated gentle crossfades. Any library built on media elements (Howler's default html5 mode included) inherits that. Gain nodes work everywhere. This decision is unchanged.
 
@@ -35,5 +36,6 @@ Cantastorie's stack is **settled and documented in `docs/architecture.md`**, wit
 - "A bundler/framework would make this easier" — no-bundler is a settled decision, not an oversight.
 - "Let's just use ElevenLabs for narration" — ElevenLabs is retired by decision, not oversight (ADR-004); the narrator is Voxtral via OpenRouter, the fallback voice is Deepgram Aura, and re-adding ElevenLabs requires a superseding ADR.
 - Recommending `npm install <framework>` or a new provider SDK/key without citing `docs/architecture.md` or the relevant ADR.
+- "Let's add Clerk script or cookie logic to the player page" — Clerk is parent-area-only (ADR-003); the child player loads no Clerk script, sets no cookies, and carries no credentials on story-time R2 fetches. An automated guard test enforces this.
 
 Changing a settled decision is possible — but it happens by editing `docs/architecture.md` (and adding or superseding an ADR in `docs/adr/`) with the human's agreement first, never by installing around it.
