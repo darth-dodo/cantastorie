@@ -54,8 +54,11 @@ def test_r2_credentials_never_appear_in_repr_or_str() -> None:
     """
     settings = Settings(
         _env_file=None,
+        r2_endpoint_url="https://example.r2.cloudflarestorage.com",
         r2_access_key_id=SecretStr("r2-access-secret"),
         r2_secret_access_key=SecretStr("r2-signing-secret"),
+        r2_bucket="published",
+        r2_public_base="https://pub.example/published",
     )
     for rendered in (repr(settings), str(settings)):
         assert "r2-access-secret" not in rendered
@@ -75,6 +78,23 @@ def test_r2_settings_default_to_empty_so_the_pipeline_loads_without_a_bucket() -
     assert settings.r2_access_key_id.get_secret_value() == ""
     assert settings.r2_secret_access_key.get_secret_value() == ""
     assert settings.staging_dir.name == "staging"
+
+
+def test_partial_r2_settings_are_refused_outright() -> None:
+    """Given an R2 endpoint but missing the rest of the publish configuration,
+    When Settings load,
+    Then validation fails with the startup-time message that forces all publish
+    fields to be present together.
+    """
+    with pytest.raises(
+        ValidationError,
+        match="R2 config is partial — set all of r2_endpoint_url, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_base, or none",
+    ):
+        Settings(
+            _env_file=None,
+            r2_endpoint_url="https://r2.example.test",
+            r2_bucket="published",
+        )
 
 
 def test_safety_judge_defaults_to_a_different_model_family_than_the_writer() -> None:

@@ -14,13 +14,14 @@ remains the only writer to ``published/``.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
 import boto3
 from botocore.exceptions import ClientError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, ValidationError
 
 from src.pipeline.models import Language, Theme
 
@@ -52,6 +53,10 @@ class InvalidTransition(Exception):
     """The lifecycle does not allow this state change."""
 
 
+class ConcurrentModificationError(Exception):
+    """A stale run record cannot overwrite a newer persisted version."""
+
+
 class PackRequest(BaseModel):
     """What a parent (or the operator) asked for: theme + language + count."""
 
@@ -74,6 +79,7 @@ class RunRecord(BaseModel):
     error: str | None = None
     created_at: datetime
     updated_at: datetime
+    _etag: str | None = PrivateAttr(default=None)
 
     def advance(
         self,
@@ -131,12 +137,28 @@ class RunStore:
         self._bucket = settings.pending_bucket
 
     def save(self, record: RunRecord) -> None:
-        self._client.put_object(
-            Bucket=self._bucket,
-            Key=_record_key(record.family_token, record.id),
-            Body=record.model_dump_json(indent=2).encode("utf-8"),
-            ContentType="application/json",
-        )
+        body = record.model_dump_json(indent=2).encode("utf-8")
+        if record._etag is None:
+            response = self._client.put_object(
+                Bucket=self._bucket,
+                Key=_record_key(record.family_token, record.id),
+                Body=body,
+                ContentType="application/json",
+            )
+        else:
+            try:
+                response = self._client.put_object(
+                    Bucket=self._bucket,
+                    Key=_record_key(record.family_token, record.id),
+                    Body=body,
+                    ContentType="application/json",
+                    IfMatch=record._etag,
+                )
+            except ClientError as error:
+                if str(error.response.get("Error", {}).get("Code")) == "PreconditionFailed":
+                    raise ConcurrentModificationError from error
+                raise
+        record._etag = response.get("ETag")
 
     def load(self, family_token: str, run_id: str) -> RunRecord | None:
         try:
@@ -147,7 +169,9 @@ class RunStore:
             if str(error.response.get("Error", {}).get("Code")) in _MISSING_CODES:
                 return None
             raise
-        return RunRecord.model_validate(json.loads(obj["Body"].read()))
+        record = RunRecord.model_validate(json.loads(obj["Body"].read()))
+        record._etag = obj.get("ETag")
+        return record
 
     def delete(self, family_token: str, run_id: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=_record_key(family_token, run_id))
@@ -166,8 +190,16 @@ class RunStore:
                 key = obj["Key"]
                 if "/runs/" not in key or not key.endswith(".json"):
                     continue  # staged artifacts share pending/; only records are runs/*.json
-                body = self._client.get_object(Bucket=self._bucket, Key=key)["Body"].read()
-                record = RunRecord.model_validate(json.loads(body))
+                try:
+                    response = self._client.get_object(Bucket=self._bucket, Key=key)
+                    body = response["Body"].read()
+                    record = RunRecord.model_validate(json.loads(body))
+                    record._etag = response.get("ETag")
+                except (json.JSONDecodeError, ValidationError) as error:
+                    logging.getLogger(__name__).warning(
+                        f"Skipping malformed run record at {key}: {error}"
+                    )
+                    continue
                 if state is None or record.state == state:
                     records.append(record)
         return records

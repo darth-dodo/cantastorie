@@ -43,6 +43,9 @@ def _settings(tmp_path: Path) -> Settings:
     return Settings(
         _env_file=None,
         staging_dir=tmp_path / "staging",
+        r2_endpoint_url="https://r2.example.test",
+        r2_access_key_id="test-access-key",
+        r2_secret_access_key="test-secret-key",
         r2_bucket=BUCKET,
         r2_public_base=PUBLIC_BASE,
     )
@@ -130,6 +133,18 @@ def test_stage_uploads_story_json_and_every_asset_to_r2(tmp_path: Path, s3: S3Cl
     assert len(assembled.assets) == 20
 
 
+def test_restaging_a_story_removes_stale_objects(tmp_path: Path, s3: S3Client) -> None:
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    prefix = stage_story(assembled, settings, client=s3)
+    stale_key = f"{prefix}/obsolete.0123456789abcdef.mp3"
+    s3.put_object(Bucket=BUCKET, Key=stale_key, Body=b"obsolete", ContentType="audio/mpeg")
+
+    stage_story(assembled, settings, client=s3)
+
+    assert stale_key not in _keys(s3, prefix=f"{prefix}/")
+
+
 def test_staging_writes_only_to_pending_not_published(tmp_path: Path, s3: S3Client) -> None:
     settings = _settings(tmp_path)
     stage_story(_assembled(tmp_path), settings, client=s3)
@@ -168,6 +183,76 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
         "story_start": f"{PUBLIC_BASE}/prompts/it/story_start.0123456789abcdef.mp3",
         "end": f"{PUBLIC_BASE}/prompts/it/end_prompt.0123456789abcdef.mp3",
     }
+
+
+def test_publish_rejects_a_staged_story_with_a_different_id(tmp_path: Path, s3: S3Client) -> None:
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path, story_id="actual-story")
+    stage_story(assembled, settings, client=s3)
+    staged_story = s3.get_object(Bucket=BUCKET, Key=f"{STAGED_PREFIX}/actual-story/story.json")[
+        "Body"
+    ].read()
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=f"{STAGED_PREFIX}/requested-story/story.json",
+        Body=staged_story,
+        ContentType="application/json",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Staged story id 'actual-story' does not match requested id 'requested-story'",
+    ):
+        publish_story("requested-story", settings, client=s3)
+
+
+def test_publish_sets_cache_control_for_manifests_and_immutable_assets(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    stage_story(assembled, settings, client=s3)
+
+    publish_story(assembled.story.id, settings, client=s3)
+
+    manifest = s3.get_object(Bucket=BUCKET, Key="published/it/manifest.json")
+    story = s3.get_object(Bucket=BUCKET, Key=f"published/stories/{assembled.story.id}/story.json")
+    assert manifest["CacheControl"] == "public, max-age=60"
+    assert story["CacheControl"] == "public, max-age=31536000, immutable"
+
+
+def test_publish_retries_a_manifest_conflict_without_losing_the_other_story(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    first = _assembled(tmp_path, story_id="first-story")
+    second = _assembled(tmp_path, story_id="second-story")
+    stage_story(first, settings, client=s3)
+    stage_story(second, settings, client=s3)
+    publish_story(first.story.id, settings, client=s3)
+    put_object = s3.put_object
+    manifest_key = "published/it/manifest.json"
+    raced = False
+
+    def publish_competing_manifest(**kwargs: Any) -> dict[str, Any]:
+        nonlocal raced
+        if kwargs["Key"] == manifest_key and not raced:
+            raced = True
+            manifest = _manifest(s3)
+            manifest["stories"].append({"id": "concurrent-story"})
+            put_object(
+                Bucket=BUCKET,
+                Key=manifest_key,
+                Body=json.dumps(manifest).encode(),
+                ContentType="application/json",
+            )
+        return put_object(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", publish_competing_manifest)
+
+    result = publish_story(second.story.id, settings, client=s3)
+
+    assert sorted(result.manifest_story_ids) == ["concurrent-story", "first-story", "second-story"]
 
 
 def test_published_manifest_wash_is_theme_mapped_not_story_id(tmp_path: Path, s3: S3Client) -> None:

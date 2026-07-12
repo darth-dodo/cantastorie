@@ -83,10 +83,27 @@ class Settings(BaseSettings):
     langsmith_api_key: SecretStr = SecretStr("")
     langsmith_project: str = "cantastorie"
     langsmith_tracing: bool = False
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
 
     @property
     def pending_bucket(self) -> str:
         return self.r2_pending_bucket or self.r2_bucket
+
+    @model_validator(mode="after")
+    def r2_config_is_complete_if_endpoint_is_set(self) -> Self:
+        if not self.r2_endpoint_url:
+            return self
+        r2_fields = (
+            self.r2_access_key_id.get_secret_value(),
+            self.r2_secret_access_key.get_secret_value(),
+            self.r2_bucket,
+            self.r2_public_base,
+        )
+        if not all(r2_fields):
+            raise ValueError(
+                "R2 config is partial — set all of r2_endpoint_url, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_base, or none"
+            )
+        return self
 
     @model_validator(mode="after")
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
