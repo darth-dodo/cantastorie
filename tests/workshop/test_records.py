@@ -131,6 +131,16 @@ def test_store_load_of_an_unknown_run_returns_none(s3: S3Client) -> None:
     assert store.load("family-abc", "no-such-run") is None
 
 
+def test_store_delete_removes_a_record_from_the_pending_bucket(s3: S3Client) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = new_run("family-abc", REQUEST)
+    store.save(record)
+
+    store.delete(record.family_token, record.id)
+
+    assert store.load(record.family_token, record.id) is None
+
+
 def test_store_lists_runs_filtered_by_state_across_families(s3: S3Client) -> None:
     store = RunStore(_settings(), client=s3)
     queued = new_run("family-abc", REQUEST)

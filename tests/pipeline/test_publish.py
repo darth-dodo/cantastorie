@@ -19,7 +19,7 @@ from mypy_boto3_s3 import S3Client
 from src.config import Settings
 from src.pipeline.content_rules import check_story
 from src.pipeline.models import Page, PageAudio, Story, Theme, WordTiming
-from src.pipeline.publish import publish_story, stage_story
+from src.pipeline.publish import publish_story, stage_story, unpublish_story
 from src.pipeline.steps.assemble import AssembledStory, assemble_story
 from src.pipeline.steps.illustrate import IllustrationSet
 
@@ -235,6 +235,85 @@ def test_republishing_an_unchanged_story_uploads_nothing(tmp_path: Path, s3: S3C
     assert first.uploaded  # the first publish did real work
     assert second.uploaded == []  # the second uploaded nothing at all
     assert set(second.skipped) == set(first.uploaded)
+
+
+def test_unpublishing_a_story_removes_its_assets_and_manifest_entry(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    settings = _settings(tmp_path)
+    first_id = "story-one"
+    second_id = "story-two"
+    manifest = {
+        "language": "it",
+        "prompts": {"greeting": "https://cdn.example.test/published/prompts/it/greeting.mp3"},
+        "stories": [{"id": first_id}, {"id": second_id}],
+    }
+    s3.put_object(
+        Bucket=BUCKET,
+        Key="published/it/manifest.json",
+        Body=json.dumps(manifest).encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(Bucket=BUCKET, Key=f"published/stories/{first_id}/story.json", Body=b"story")
+    s3.put_object(Bucket=BUCKET, Key=f"published/stories/{first_id}/p1.mp3", Body=b"audio")
+    s3.put_object(Bucket=BUCKET, Key="published/prompts/it/greeting.mp3", Body=b"prompt")
+
+    unpublish_story(first_id, settings, client=s3)
+    unpublish_story(first_id, settings, client=s3)
+
+    assert _keys(s3, prefix=f"published/stories/{first_id}/") == []
+    assert [entry["id"] for entry in _manifest(s3)["stories"]] == [second_id]
+    assert _keys(s3, prefix="published/prompts/it/")
+
+
+def test_unpublish_handles_a_manifest_without_a_stories_array(tmp_path: Path, s3: S3Client) -> None:
+    settings = _settings(tmp_path)
+    story_id = "story-one"
+    s3.put_object(
+        Bucket=BUCKET,
+        Key="published/it/manifest.json",
+        Body=json.dumps({"language": "it"}).encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(Bucket=BUCKET, Key=f"published/stories/{story_id}/story.json", Body=b"story")
+
+    unpublish_story(story_id, settings, client=s3)
+
+    assert _keys(s3, prefix=f"published/stories/{story_id}/") == []
+
+
+def test_unpublish_updates_manifest_before_deleting_assets(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    story_id = "story-one"
+    manifest = {"language": "it", "stories": [{"id": story_id}]}
+    s3.put_object(
+        Bucket=BUCKET,
+        Key="published/it/manifest.json",
+        Body=json.dumps(manifest).encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(Bucket=BUCKET, Key=f"published/stories/{story_id}/story.json", Body=b"story")
+    events: list[str] = []
+    put_object = s3.put_object
+    delete_objects = s3.delete_objects
+
+    def record_put_object(**kwargs: Any) -> dict[str, Any]:
+        if kwargs["Key"] == "published/it/manifest.json":
+            events.append("manifest")
+        return put_object(**kwargs)
+
+    def record_delete_objects(**kwargs: Any) -> dict[str, Any]:
+        events.append("assets")
+        return delete_objects(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", record_put_object)
+    monkeypatch.setattr(s3, "delete_objects", record_delete_objects)
+
+    unpublish_story(story_id, settings, client=s3)
+
+    assert events == ["manifest", "assets"]
 
 
 def test_publishing_a_second_story_appends_to_the_manifest(tmp_path: Path, s3: S3Client) -> None:

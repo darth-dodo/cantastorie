@@ -34,6 +34,7 @@ from src.pipeline.models import Story, Theme
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
+    from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
     from src.config import Settings
     from src.pipeline.steps.assemble import AssembledStory
@@ -229,3 +230,47 @@ def publish_story(
         skipped=skipped,
         manifest_story_ids=[entry["id"] for entry in manifest["stories"]],
     )
+
+
+def unpublish_story(
+    story_id: str,
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+) -> None:
+    client = client or _build_client(settings)
+    bucket = settings.r2_bucket
+    language: str | None = None
+    manifest: dict[str, Any] | None = None
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
+    ):
+        for item in page.get("Contents", []):
+            key = item["Key"]
+            if not key.endswith("/manifest.json"):
+                continue
+            candidate = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
+            loaded = _load_manifest(client, bucket, candidate)
+            if any(entry.get("id") == story_id for entry in loaded.get("stories", [])):
+                language = candidate
+                manifest = loaded
+                break
+        if manifest is not None:
+            break
+    if language is not None and manifest is not None:
+        manifest["stories"] = [
+            entry for entry in manifest.get("stories", []) if entry.get("id") != story_id
+        ]
+        client.put_object(
+            Bucket=bucket,
+            Key=f"{PUBLISHED_PREFIX}/{language}/manifest.json",
+            Body=json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode(),
+            ContentType="application/json",
+        )
+    keys: list[ObjectIdentifierTypeDef] = []
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/{story_id}/"
+    ):
+        keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
+    for start in range(0, len(keys), 1000):
+        client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})
