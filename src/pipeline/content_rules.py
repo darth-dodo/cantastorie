@@ -1,7 +1,7 @@
 """Content limits as code, not prompt hope.
 
-docs/product.md "Content Rules" (**Linear stories**): 8 pages, 30-70 words
-per page, 250-600 total, a 12-word sentence cap. Choice labels count as
+docs/product.md "Content Rules" (**Linear stories**): 10 pages, 30-70 words
+per page, 250-600 total, a 20-word sentence cap. Choice labels count as
 story text for every limit (**Branching stories**). The writer's prompt
 carries the same rules, but only these pure functions decide.
 """
@@ -13,12 +13,12 @@ from pydantic import BaseModel
 
 from src.pipeline.models import Page, Story
 
-PAGE_COUNT = 8
+PAGE_COUNT = 10
 PAGE_WORDS_MIN = 30
 PAGE_WORDS_MAX = 70
 STORY_WORDS_MIN = 250
 STORY_WORDS_MAX = 600
-SENTENCE_WORDS_MAX = 12
+SENTENCE_WORDS_MAX = 20
 
 ContentRule = Literal["page_count", "page_words", "story_words", "sentence_cap"]
 
