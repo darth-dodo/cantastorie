@@ -143,7 +143,15 @@ async def login(settings: WorkshopSettings, secret: Annotated[str, Form()]) -> R
     if not secrets.compare_digest(secret, settings.workshop_secret.get_secret_value()):
         raise HTTPException(status_code=401, detail="wrong secret")
     response = _to_login()
-    response.set_cookie(SESSION_COOKIE, _session_token(settings), httponly=True, samesite="strict")
+    response.set_cookie(
+        SESSION_COOKIE,
+        _session_token(settings),
+        httponly=True,
+        samesite="strict",
+        secure=True,
+        max_age=86400,
+        path="/workshop",
+    )
     return response
 
 
@@ -205,6 +213,11 @@ async def approve_run(
     if not _authed(request, settings):
         return _to_login()
     record = _record_or_404(manager, run_id)
+    if record.state != "staged":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run is in {record.state} state, must be staged to approve",
+        )
     for story_id in record.story_ids:
         publisher(story_id)
     manager.store.save(record.advance("approved"))
