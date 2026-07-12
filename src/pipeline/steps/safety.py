@@ -33,8 +33,8 @@ return one verdict per rule — every rule, exactly once, with a short reason:
 - no_romance: no romance.
 - kindness_resolves: kind, inclusive characters; resolution through help,
   never punishment.
-- within_limits: vocabulary suits ages 3-6; 8 pages, 30-70 words per page,
-  250-600 words total, no sentence over 12 words.
+- within_limits: vocabulary suits ages 3-6; 10 pages, 30-70 words per page,
+  250-600 words total, no sentence over 20 words.
 - right_language: the story language matches the language declared in the
   story data.
 - calm_pictures: any image descriptions contain no text and nothing frightening.

@@ -7,9 +7,6 @@ from typing import Self
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Matilda — the fallback narrator when no voice is configured.
-DEFAULT_ELEVENLABS_VOICE_ID = "XrExE9yKIg1WjnnlVkGX"
-
 
 class Settings(BaseSettings):
     """Pipeline settings; the player needs no keys at story time."""
@@ -20,9 +17,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # The only two keys in the whole system; SecretStr keeps them out of logs.
+    # The only key in the whole system; SecretStr keeps it out of logs.
     openrouter_api_key: SecretStr = SecretStr("")
-    elevenlabs_api_key: SecretStr = SecretStr("")
 
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
@@ -33,12 +29,19 @@ class Settings(BaseSettings):
     gloss_model: str = "google/gemini-2.5-flash-lite"
     image_model: str = "google/gemini-3.1-flash-lite-image"
 
-    elevenlabs_base_url: str = "https://api.elevenlabs.io"
-    # Matilda — a warm, friendly ElevenLabs pre-made voice suited to bedtime
-    # story narration. A non-empty ELEVENLABS_VOICE_ID in the env overrides it;
-    # an empty one falls back to this default (see the validator below).
-    elevenlabs_voice_id: str = DEFAULT_ELEVENLABS_VOICE_ID
-    elevenlabs_tts_model: str = "eleven_multilingual_v2"
+    # Narration — Voxtral Mini TTS via OpenRouter (ADR-004). Per-language voice
+    # IDs from OpenRouter's supported_voices list; Italian has no native voice
+    # so it uses the English warm voice until AI-366 validates alternatives.
+    # NARRATION_VOICES is a JSON dict mapping language codes to voice IDs.
+    narration_model: str = "mistralai/voxtral-mini-tts-2603"
+    narration_voices: dict[str, str] = {
+        "it": "en_paul_happy",
+        "es": "en_paul_happy",
+        "en": "en_paul_happy",
+        "el": "en_paul_happy",
+        "de": "gb_oliver_cheerful",
+    }
+    narration_response_format: str = "mp3"
 
     content_dir: Path = Path("content")
 
@@ -67,24 +70,15 @@ class Settings(BaseSettings):
     r2_bucket: str = ""
     r2_public_base: str = ""
 
-    # Where workshop run records and staged pack artifacts live (ADR-004).
     # The published bucket is public by design, so pending content gets its
-    # own private bucket in production (setup.md). Empty falls back to
-    # r2_bucket for local/dev use; the audit (AI-390) flags pending/ objects
-    # found in the public bucket.
+    # own private bucket — the workshop writes run records there before they
+    # are reviewed and published. Defaults to r2_bucket for local/dev use;
+    # the audit (AI-390) flags pending/ objects that were never published.
     r2_pending_bucket: str = ""
 
     @property
     def pending_bucket(self) -> str:
         return self.r2_pending_bucket or self.r2_bucket
-
-    @model_validator(mode="after")
-    def blank_voice_id_falls_back_to_the_default(self) -> Self:
-        # An empty ELEVENLABS_VOICE_ID in .env would otherwise shadow the field
-        # default and produce a request to /text-to-speech//with-timestamps.
-        if not self.elevenlabs_voice_id:
-            self.elevenlabs_voice_id = DEFAULT_ELEVENLABS_VOICE_ID
-        return self
 
     @model_validator(mode="after")
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:

@@ -337,7 +337,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | **Export file schema** | Pinned in slice 7, not before |
 | **Narration warmth & voice consistency** (Voxtral / Aura) | Unproven for both candidates; validated at AI-366 (first Italian story) via a Voxtral-vs-Deepgram-Aura bake-off before the library is built — see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) |
 | **Deferred narration timestamps** | Voxtral returns no timings, so `story.json` page timings stay empty until reading mode (slice 6) reconstructs them via the Deepgram STT transcription pass (well under a dollar for the launch library). Slice 1 does not use timings, so nothing is blocked now; reading mode downgrades missing/poor timings to sentence-level highlighting |
-| **Deepgram carriage on OpenRouter** | Unverified — the first implementation checkpoint of [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md). If OpenRouter does not carry the Deepgram models, the timing pass uses a pipeline-only `DEEPGRAM_API_KEY` (a bounded, flagged exception to one-key) |
+| **Deepgram carriage on OpenRouter** | Verified at implementation (AI-391): OpenRouter does not carry Deepgram STT or Aura TTS models. The timing pass uses a pipeline-only `DEEPGRAM_API_KEY` (a bounded, flagged exception to one-key, used only at authoring time by the slice 6 timing step) |
 | **Greek narration support** (Voxtral / Deepgram) | Unverified — Voxtral lists 9 languages but does not publish the list, and Deepgram's Greek STT support is likewise unconfirmed; confirm narration *and* timing support before any Greek content, else defer the language |
 
 ---

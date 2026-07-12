@@ -1,55 +1,27 @@
 """Behavior specs for pipeline configuration.
 
-Settings back the **Plain Python pipeline** (docs/architecture.md): two API
-keys total, living only in the pipeline environment — never logged.
+Settings back the **Plain Python pipeline** (docs/architecture.md): one API
+key total, living only in the pipeline environment — never logged.
 """
 
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from src.config import DEFAULT_ELEVENLABS_VOICE_ID, Settings, get_settings
-
-
-def test_narration_voice_defaults_to_the_fallback_narrator() -> None:
-    """Given no voice configured,
-    When Settings load,
-    Then the narrator falls back to the documented default voice id — the
-    pipeline can narrate without operator setup.
-    """
-    settings = Settings(_env_file=None)
-    assert settings.elevenlabs_voice_id == DEFAULT_ELEVENLABS_VOICE_ID
-    assert settings.elevenlabs_voice_id != ""
-
-
-def test_a_blank_voice_id_falls_back_to_the_default() -> None:
-    """Given an env that sets ELEVENLABS_VOICE_ID to an empty string,
-    When Settings load,
-    Then the blank is coerced to the default — a blank env value can never
-    produce a request to /text-to-speech//with-timestamps.
-    """
-    settings = Settings(_env_file=None, elevenlabs_voice_id="")
-    assert settings.elevenlabs_voice_id == DEFAULT_ELEVENLABS_VOICE_ID
-
-
-def test_an_explicit_voice_id_overrides_the_default() -> None:
-    """Given an env that names a specific voice,
-    When Settings load,
-    Then that voice wins — per-deployment overrides still apply.
-    """
-    settings = Settings(_env_file=None, elevenlabs_voice_id="my-custom-voice")
-    assert settings.elevenlabs_voice_id == "my-custom-voice"
+from src.config import Settings, get_settings
 
 
 def test_settings_provide_safe_defaults_without_any_environment() -> None:
     """Given no .env file and no environment variables,
     When Settings load,
-    Then keys default to empty secrets and endpoints/content dir get their documented defaults.
+    Then the key defaults to an empty secret, the OpenRouter base URL gets its
+    documented default, and narration defaults to Voxtral via OpenRouter.
     """
     settings = Settings(_env_file=None)
     assert settings.openrouter_api_key.get_secret_value() == ""
-    assert settings.elevenlabs_api_key.get_secret_value() == ""
     assert settings.openrouter_base_url == "https://openrouter.ai/api/v1"
-    assert settings.elevenlabs_base_url == "https://api.elevenlabs.io"
+    assert settings.narration_model == "mistralai/voxtral-mini-tts-2603"
+    assert settings.narration_response_format == "mp3"
+    assert settings.narration_voices["it"] == "en_paul_happy"
     assert settings.content_dir.name == "content"
 
 
@@ -64,23 +36,21 @@ def test_settings_load_once_and_are_shared() -> None:
 def test_api_keys_never_appear_in_repr_or_str() -> None:
     """Given settings holding real key material,
     When settings are rendered via repr or str (as a log line would),
-    Then neither key's secret value appears — keys live only in env, never in logs.
+    Then the key's secret value does not appear — keys live only in env, never in logs.
     """
     settings = Settings(
         _env_file=None,
         openrouter_api_key=SecretStr("sk-or-secret"),
-        elevenlabs_api_key=SecretStr("el-secret"),
     )
     for rendered in (repr(settings), str(settings)):
         assert "sk-or-secret" not in rendered
-        assert "el-secret" not in rendered
 
 
 def test_r2_credentials_never_appear_in_repr_or_str() -> None:
     """Given settings holding real R2 access-key material,
     When settings are rendered via repr or str (as a log line would),
     Then neither R2 secret appears — the publish keys live only in env, never
-    in logs, exactly like the OpenRouter and ElevenLabs keys.
+    in logs, exactly like the OpenRouter key.
     """
     settings = Settings(
         _env_file=None,
