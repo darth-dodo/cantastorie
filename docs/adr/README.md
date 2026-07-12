@@ -30,10 +30,13 @@ Small, local, easily-reversed choices do not need an ADR. When in doubt, prefer 
 | [ADR-001](ADR-001-technology-stack.md) | Foundational Technology Stack | Accepted | 2026-07-07 |
 | [ADR-002](ADR-002-narration-provider.md) | Narration Provider — Voxtral via OpenRouter to Start | Superseded by ADR-004 | 2026-07-07 |
 | [ADR-003](ADR-003-parent-authentication-clerk.md) | Parent Authentication via Clerk | Accepted | 2026-07-11 |
-| [ADR-004](ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram, ElevenLabs Retired | Accepted | 2026-07-11 |
-| [ADR-005](ADR-005-family-voice-narration.md) | Nonna Narrates (family voice narration) | Proposed | 2026-07-11 |
-| [ADR-004](ADR-004-workshop-area.md) | The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs | Accepted | 2026-07-11 |
-| [ADR-006](ADR-006-langsmith-observability.md) | LangSmith App-Wide Observability | Accepted | 2026-07-12 |
+| [ADR-004](ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram, ElevenLabs Retired | Accepted, amended by ADR-008 | 2026-07-11 |
+| [ADR-005](ADR-005-workshop-area.md) | The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs | Accepted | 2026-07-11 |
+| [ADR-006](ADR-006-family-voice-narration.md) | Nonna Narrates (family voice narration) | Proposed | 2026-07-11 |
+| [ADR-007](ADR-007-langsmith-observability.md) | LangSmith App-Wide Observability | Accepted | 2026-07-12 |
+| [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md) | Default Voices on Gemini TTS, Cloning Scoped to Mistral | Accepted | 2026-07-11 |
+
+> **Renumbering note (2026-07-12)**: two ADRs were originally filed as ADR-004. The workshop-area ADR is now ADR-005, which shifted Nonna Narrates to ADR-006 and LangSmith observability to ADR-007. File history is preserved via `git mv`.
 
 ## Related Documentation
 

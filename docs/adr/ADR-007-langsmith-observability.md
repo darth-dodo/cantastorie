@@ -1,4 +1,4 @@
-# ADR-006: LangSmith App-Wide Observability
+# ADR-007: LangSmith App-Wide Observability
 
 **Date**: 2026-07-12
 **Status**: Accepted
@@ -181,7 +181,7 @@ Three new settings in `src/config.py`:
 ## Related Decisions
 
 - [ADR-001](ADR-001-technology-stack.md) — foundational stack; LangSmith is an observability layer, not a stack change.
-- [ADR-004](ADR-004-workshop-area.md) — workshop runs pipeline in-process; LangSmith traces those runs via `TracingMiddleware`.
+- [ADR-005](ADR-005-workshop-area.md) — workshop runs pipeline in-process; LangSmith traces those runs via `TracingMiddleware`.
 
 ---
 

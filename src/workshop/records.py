@@ -1,11 +1,11 @@
-"""Workshop run records (AI-387, ADR-004): the durable trace of a pack request.
+"""Workshop run records (AI-387, ADR-005): the durable trace of a pack request.
 
 A run record follows queued → running → staged → approved | rejected, with a
 retryable failed off running. Records persist to R2 under
 ``pending/{family-token}/runs/{run-id}.json`` — Render's disk is ephemeral, so
 the bucket, not the container, is the source of durability. The record is
 deliberately thin: step-level progress lives in the working folder's
-checkpoint files (docs/adr/ADR-004), never duplicated here.
+checkpoint files (docs/adr/ADR-005), never duplicated here.
 
 Nothing under ``pending/`` is ever listed in a manifest; the publish step
 remains the only writer to ``published/``.

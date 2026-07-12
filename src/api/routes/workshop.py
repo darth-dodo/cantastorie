@@ -1,4 +1,4 @@
-"""The operator face at /workshop (AI-388, ADR-004): start, watch, review, publish.
+"""The operator face at /workshop (AI-388, ADR-005): start, watch, review, publish.
 
 Server-rendered Jinja2 + HTMX, the settled non-child pattern. Access is one
 env-var secret: with none configured every route here answers 404 (the

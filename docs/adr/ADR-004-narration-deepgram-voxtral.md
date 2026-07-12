@@ -1,7 +1,7 @@
 # ADR-004: Narration — Voxtral TTS plus Deepgram, ElevenLabs Retired
 
 **Date**: 2026-07-11
-**Status**: Accepted
+**Status**: Accepted — amended by [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md) (default narration moves to Gemini TTS; Voxtral is scoped to voice cloning via the Mistral API; Deepgram's roles are unchanged)
 **Context**: Removing ElevenLabs from the narration picture entirely; assigning its remaining roles to Deepgram alongside Voxtral via OpenRouter
 **Decider(s)**: Project Owner
 
@@ -329,7 +329,7 @@ The code change is tracked separately; this plan records the intended sequence.
 
 - Reading mode (slice 6) — word timings now come from the Deepgram STT transcription pass
 - The AI-366 bake-off — re-scoped from ElevenLabs-vs-Voxtral to Voxtral-vs-Aura
-- [ADR-005](ADR-005-family-voice-narration.md) — family voice narration ("Nonna Narrates", Proposed) builds on exactly the two capabilities this ADR settles: the narrator's zero-shot voice cloning (Voxtral, carried forward from ADR-002) and a transcription pass (Deepgram STT), which doubles as that feature's machine-verified consent check
+- [ADR-006](ADR-006-family-voice-narration.md) — family voice narration ("Nonna Narrates", Proposed) builds on exactly the two capabilities this ADR settles: the narrator's zero-shot voice cloning (Voxtral, carried forward from ADR-002; rescoped to the Mistral API by ADR-008) and a transcription pass (Deepgram STT), which doubles as that feature's machine-verified consent check
 - The `settled-architecture` project skill — the narration row now reads "Voxtral Mini TTS via OpenRouter; Deepgram for word timings and fallback voice; ElevenLabs retired"
 
 ---
@@ -356,7 +356,7 @@ The code change is tracked separately; this plan records the intended sequence.
 
 **ADR Number**: 004
 **Created**: 2026-07-11
-**Last Updated**: 2026-07-11
+**Last Updated**: 2026-07-12 (marked amended by ADR-008)
 **Version**: 1.0
 
 **Authors**: Claude (AI Assistant)

@@ -1,4 +1,4 @@
-"""Behavior specs for the operator face at /workshop (AI-388, ADR-004).
+"""Behavior specs for the operator face at /workshop (AI-388, ADR-005).
 
 The operator retires the terminal: start a run, watch progress, inspect the
 staged story, publish — all in the browser. Access is a single env-var secret
