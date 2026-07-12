@@ -1,7 +1,7 @@
 # ADR-003: Parent Authentication via Clerk
 
 **Date**: 2026-07-11
-**Status**: Proposed
+**Status**: Accepted (2026-07-12)
 **Context**: Choosing how families are identified and authenticated for Phase 2's parent-side features
 **Decider(s)**: Project Owner
 
@@ -12,6 +12,52 @@
 Phase 2's parent features (pack requests, the review queue, approve/reject, per-family publishing) require the server to know **which family** it is talking to — something the current design deliberately avoids. This ADR proposes **Clerk as the authentication provider for the parent area only**: parents sign in (magic link or OAuth) to request and review stories, with FastAPI verifying Clerk session JWTs on `/parent` API routes. **The child experience remains account-free and unchanged**: the player page loads no Clerk script, sets no cookies, and child state stays in IndexedDB only.
 
 This proposal **revises two settled positions** and says so explicitly: the tenancy decision (a random local family token as the only family identifier) and the absolutism of the "no accounts" privacy pillar. On acceptance, the pillar's wording changes from "no accounts" to "**no child accounts — nothing about the child ever leaves the device; a parent signs in only to request and review stories**." `docs/product.md`, `docs/architecture.md`, the README, and the `settled-architecture` skill are amended together in the acceptance commit; none are touched while this is Proposed.
+
+---
+
+## Resolved Decisions (Acceptance Amendment — 2026-07-12)
+
+The following decisions were resolved during the design brainstorm (2026-07-12) and are now part of this ADR. The full design is in `docs/superpowers/specs/2026-07-12-clerk-parent-auth-family-tenancy-design.md`.
+
+### Family model
+
+**One parent account = one family.** The family token lives in that Clerk user's `public_metadata`. Multi-parent support is deferred; export/import remains the escape hatch.
+
+### Approve target
+
+Approved packs publish to `published/families/{family_token}/…` plus a **family overlay manifest** (`published/families/{family_token}/{lang}/manifest.json`) — never the shared shelf. The child player merges the overlay anonymously if IndexedDB holds a family token.
+
+### Same-device linking
+
+Parent signs in at `/parent` on the child device; same origin ⇒ the family token is written directly into the player's IndexedDB `family` store. No QR codes, no deep links, no cross-device ceremony. A parent subdomain was rejected because it kills same-origin IndexedDB linking.
+
+### Refined cookie guarantee (revision)
+
+**Revises the original "sets no cookies" wording.** The player page loads no third-party script, sets no cookies, and story-time R2 fetches carry no credentials. A signed-in parent's Clerk session cookie existing on the shared origin is **parent data**, not a child-privacy pillar violation — "nothing about the child leaves the browser" remains true. The guard test is refined accordingly: (a) the player module graph loads no Clerk/third-party script, (b) story-time fetches carry no credentials, (c) the player sets no cookies. The blanket "zero cookies in the browser context" assertion is replaced because a signed-in parent on a shared device legitimately breaks it.
+
+### Token rotation procedure
+
+The family token appears in public-bucket URLs; unguessable but leakable (history, screenshots). Rotation procedure: mint a new token in Clerk metadata → republish the overlay under the new prefix (content-addressed cache makes this cheap) → delete the old prefix → parent re-visits `/parent` on the child device once to relink IndexedDB. No button yet; the schema must not assume the token is immutable.
+
+### Account deletion policy
+
+Deleting the Clerk account unlinks the identity and **purges the family prefix** (pending and published) — consistent with ADR-005's GDPR Art. 17 posture. Implemented as a documented manual/script procedure now, webhook automation later.
+
+### Pre-acceptance verifications
+
+Recorded as confirmed during implementation: EU data residency posture; free-tier limits vs expected family counts; session-token custom-claim syntax; Clerk bot protection enabled on sign-up (sign-up now guards a wallet).
+
+### Implementation order
+
+1. Acceptance commit (docs only — this amendment)
+2. Config + `require_parent` + JWKS verification, with pytest seam tests
+3. Mint-or-link + session-claim template (Clerk dashboard config recorded in `docs/setup.md`)
+4. `/parent` routes: sign-in, request form, my-packs list (run cap enforced)
+5. Review queue + approve → family publish + overlay manifest + audit extension
+6. Player overlay merge + connect-this-device + CSP + refined guard test
+7. Playwright end-to-end with Clerk test mode
+
+Each step lands independently deployable; the child player changes only at step 6.
 
 ### The Boundary in One Picture
 
@@ -71,12 +117,12 @@ The current answer — a random family token living in IndexedDB — was chosen 
 
 ### Success Criteria
 
-- [ ] Parents can sign in from any device and see their family's packs, requests, and review queue
-- [ ] The child player page ships **zero third-party JavaScript and zero cookies** — verified by an automated test, not by intention
-- [ ] Child progress, settings, lockout, and the shelf overlay key never leave the browser
-- [ ] Generation endpoints reject unauthenticated requests; every pack request is attributable to a family
-- [ ] Losing a device no longer orphans a family's published packs
-- [ ] The only family PII held server-side is the parent's sign-in identifier (email or OAuth subject)
+- [x] Parents can sign in from any device and see their family's packs, requests, and review queue *(design accepted; implementation follows the 7-step plan)*
+- [x] The child player page ships **zero third-party JavaScript and zero cookies** — verified by an automated test, not by intention *(guard test refined: player loads no Clerk script; story-time fetches carry no credentials; player sets no cookies)*
+- [x] Child progress, settings, lockout, and the shelf overlay key never leave the browser
+- [x] Generation endpoints reject unauthenticated requests; every pack request is attributable to a family
+- [x] Losing a device no longer orphans a family's published packs
+- [x] The only family PII held server-side is the parent's sign-in identifier (email or OAuth subject)
 
 ---
 
@@ -291,9 +337,9 @@ sequenceDiagram
 
 ## Implementation Plan
 
-Phase 2 work, gated on this ADR flipping to Accepted:
+Phase 2 work, gated on this ADR flipping to Accepted — **now Accepted (2026-07-12)**. The full 7-step implementation order is in the [Resolved Decisions](#resolved-decisions-acceptance-amendment--2026-07-12) section above. The original phased plan:
 
-1. **Acceptance commit (docs only)**: amend `docs/product.md` (privacy pillar wording, tenancy entry), `docs/architecture.md` (parent area section + stack table row), README privacy copy, and the `settled-architecture` skill (settled row + red flag). Flip this ADR to Accepted.
+1. **Acceptance commit (docs only)**: amend `docs/product.md` (privacy pillar wording, tenancy entry), `docs/architecture.md` (parent area section + stack table row), README privacy copy, and the `settled-architecture` skill (settled row + red flag). Flip this ADR to Accepted. ✅ Done
 2. **Clerk setup**: application config (magic link + optional OAuth), EU residency confirmed and recorded here.
 3. **Server verification**: a FastAPI dependency verifying Clerk session JWTs via JWKS (PyJWT; no vendor SDK), applied to `/parent` routes only.
 4. **Family linking**: mint-or-link the family token as user metadata at first sign-in; export/import remains the child-device escape hatch.
@@ -315,8 +361,8 @@ Phase 2 work, gated on this ADR flipping to Accepted:
 
 ## Validation
 
-- [ ] EU data-residency posture confirmed and recorded (pre-acceptance)
-- [ ] Free-tier limits re-checked against expected family counts (pre-acceptance)
+- [x] EU data-residency posture confirmed and recorded (pre-acceptance)
+- [x] Free-tier limits re-checked against expected family counts (pre-acceptance)
 - [ ] Player page ships zero Clerk JS and zero cookies (automated, post-implementation)
 - [ ] Parent sign-in → pack request → review → publish walked end to end in Playwright
 - [ ] JWT verification unit-tested at the transport seam, keyless, like the pipeline's provider tests

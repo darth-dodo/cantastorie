@@ -67,6 +67,7 @@ graph LR
 | Narration | Voxtral Mini TTS via OpenRouter (`mistralai/voxtral-mini-tts-2603`); Deepgram for word timings and the fallback voice | One key / one gateway; ~10× cheaper than ElevenLabs, which is now retired. Word timings come from a Deepgram STT transcription pass over the narrated audio; Deepgram Aura is the named fallback voice — see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) |
 | Asset storage | Cloudflare R2 | Zero egress fees, access logs off, public bucket for published content |
 | App hosting | Render | Hermano's render.yaml precedent |
+| Parent authentication | Clerk (parent area only; [ADR-003](adr/ADR-003-parent-authentication-clerk.md)) | Magic-link / OAuth sign-in; JWT verified via JWKS (PyJWT, no vendor SDK); the child player stays account-free |
 | Child persistence | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
 | Testing | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows verified in a real browser |
 
@@ -281,6 +282,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
 - **The gate** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout live in IndexedDB, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
 - **Settings**: language multi-select, reading mode toggle.
 - **Export/import**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
+- **Parent authentication (Phase 2)**: parents sign in via **Clerk** (magic link / OAuth) at `/parent` — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK). One parent account = one family; the family token lives in Clerk `public_metadata`. Approved packs publish to `published/families/{family_token}/…` + a family overlay manifest. The child player stays account-free — no Clerk script, no cookies on any child path.
 - **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
 
 ---
@@ -290,7 +292,8 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
 | Guarantee | Mechanism |
 |-----------|-----------|
 | Nothing about the child leaves the browser | Story-time traffic is bucket-direct asset fetches only; no cookies; no server-side state; R2 access logs disabled |
-| No accounts | The family token is a random capability in IndexedDB, created client-side, carried in export/import |
+| No child accounts | The child player is account-free; a parent signs in via Clerk (ADR-003) only to request and review stories — the child path carries no Clerk script or cookie |
+| No child accounts | The child player is account-free; a parent signs in via Clerk (ADR-003) only to request and review stories — the child path carries no Clerk script or cookie |
 | Zero unapproved assets reachable | Only the publish step writes to `published/`; the audit script (slice 5, then CI) verifies every manifest entry resolves to approved content and nothing else is listed |
 | Keys never reach the browser | The OpenRouter key (and the pipeline-only Deepgram key, if the timing pass needs one) exist only in pipeline/service environments |
 
@@ -351,6 +354,6 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | [Setup & Deploy](setup.md) | R2 bucket, CORS, and the Render blueprint |
 | [ADR-001](adr/ADR-001-technology-stack.md) | Foundational technology stack (why this shape) |
 | [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram; ElevenLabs retired (supersedes [ADR-002](adr/ADR-002-narration-provider.md)) |
-| [ADR-005](adr/ADR-005-family-voice-narration.md) | Nonna Narrates — family voice narration (Proposed) |
+| [ADR-003](adr/ADR-003-parent-authentication-clerk.md) | Parent Authentication via Clerk (Accepted — Phase 2 parent area auth) |
 | [Architecture Decision Records](adr/) | The full ADR index |
 | Implementation Plans | `docs/plans/` *(created per slice)* |
