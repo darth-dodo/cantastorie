@@ -39,6 +39,11 @@ services:
       - key: ASSET_BASE
         sync: false
 
+      # Pipeline checkpoint cache — must be writable. /tmp is writable on
+      # Render's Docker containers; /app is read-only.
+      - key: CONTENT_DIR
+        value: /tmp/cantastorie-content
+
       # The web app serves static shells only; no API keys required.
       # OPENROUTER_API_KEY / ELEVENLABS_API_KEY belong to the local pipeline
       # environment and are added here only when Phase 2 factory routes land.
