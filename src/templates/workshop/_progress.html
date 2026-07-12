@@ -23,4 +23,11 @@
       <button type="submit">Approve &amp; publish</button>
     </form>
   {% endif %}
+  {% if record.state not in live %}
+    <button hx-post="/workshop/runs/{{ record.id }}/delete"
+            hx-confirm="Delete this run and all its artifacts?"
+            hx-target="closest #run-progress"
+            hx-swap="outerHTML"
+            class="delete-btn">Delete</button>
+  {% endif %}
 </div>

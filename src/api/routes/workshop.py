@@ -17,17 +17,18 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Protocol, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
-from src.pipeline.publish import publish_story
+from src.pipeline.publish import publish_story, unpublish_story
 from src.workshop.manager import RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore
 
@@ -120,7 +121,12 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
     return templates.TemplateResponse(
         request,
         "workshop/dashboard.html",
-        {"runs": runs, "themes": get_args(Theme), "languages": get_args(Language)},
+        {
+            "runs": runs,
+            "themes": get_args(Theme),
+            "languages": get_args(Language),
+            "live": LIVE_STATES,
+        },
     )
 
 
@@ -194,6 +200,33 @@ async def approve_run(
     for story_id in record.story_ids:
         publisher(story_id)
     manager.store.save(record.advance("approved"))
+    return _to_login()
+
+
+@router.post("/runs/{run_id}/delete")
+async def delete_run(
+    request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
+) -> Response:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _record_or_404(manager, run_id)
+    if record.state in LIVE_STATES:
+        raise HTTPException(status_code=400)
+    runs = manager.store.list_runs()
+    for story_id in record.story_ids:
+        other_records = [
+            other for other in runs if other.id != record.id and story_id in other.story_ids
+        ]
+        if not other_records:
+            shutil.rmtree(settings.staging_dir / story_id, ignore_errors=True)
+            shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
+        if record.state == "approved" and not any(
+            other.state == "approved" for other in other_records
+        ):
+            unpublish_story(story_id, settings)
+    manager.store.delete(OPERATOR_TOKEN, run_id)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
     return _to_login()
 
 

@@ -241,3 +241,201 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
     assert reloaded.state == "approved"
+
+
+def test_deleting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    harness.store.save(record)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/delete", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    assert harness.store.load("operator", record.id) is not None
+
+
+def test_deleting_an_unknown_run_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post("/workshop/runs/no-such-run/delete", follow_redirects=False)
+
+    assert response.status_code == 404
+
+
+def test_deleting_a_live_run_is_rejected(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
+        "running"
+    )
+    harness.store.save(record)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/delete", follow_redirects=False)
+
+    assert response.status_code == 400
+    assert harness.store.load("operator", record.id) == record
+
+
+def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings)
+    content_dir = harness.settings.content_dir / story_id
+    content_dir.mkdir(parents=True)
+    (content_dir / "checkpoint.json").write_text("checkpoint")
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+    unpublished: list[str] = []
+    monkeypatch.setattr(
+        "src.api.routes.workshop.unpublish_story",
+        lambda story_id, settings: unpublished.append(story_id),
+    )
+
+    response = harness.client.post(
+        f"/workshop/runs/{record.id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert unpublished == [story_id]
+    assert not (harness.settings.staging_dir / story_id).exists()
+    assert not content_dir.exists()
+    assert harness.store.load("operator", record.id) is None
+
+
+def test_deleting_a_run_does_not_remove_shared_story_artifacts(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings)
+    content_dir = harness.settings.content_dir / story_id
+    content_dir.mkdir(parents=True)
+    (content_dir / "checkpoint.json").write_text("checkpoint")
+    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    deleted = (
+        new_run("operator", request)
+        .advance("running")
+        .advance("staged", story_ids=[story_id])
+        .advance("approved")
+    )
+    shared = (
+        new_run("operator", request)
+        .advance("running")
+        .advance("staged", story_ids=[story_id])
+        .advance("approved")
+    )
+    harness.store.save(deleted)
+    harness.store.save(shared)
+    unpublished: list[str] = []
+    monkeypatch.setattr(
+        "src.api.routes.workshop.unpublish_story",
+        lambda story_id, settings: unpublished.append(story_id),
+    )
+
+    response = harness.client.post(
+        f"/workshop/runs/{deleted.id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert unpublished == []
+    assert (harness.settings.staging_dir / story_id).is_dir()
+    assert content_dir.is_dir()
+    assert harness.store.load("operator", deleted.id) is None
+    assert harness.store.load("operator", shared.id) == shared
+
+
+def test_settled_runs_show_confirmed_delete_controls_on_dashboard_and_progress(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    settled = record.advance("running").advance("staged")
+    harness.store.save(settled)
+
+    dashboard = harness.client.get("/workshop")
+    progress = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    action = f'hx-post="/workshop/runs/{record.id}/delete"'
+    confirmation = 'hx-confirm="Delete this run and all its artifacts?"'
+    assert action in dashboard.text
+    assert confirmation in dashboard.text
+    assert 'hx-target="closest tr"' in dashboard.text
+    assert 'hx-swap="outerHTML"' in dashboard.text
+    assert action in progress.text
+    assert confirmation in progress.text
+    assert 'hx-target="closest #run-progress"' in progress.text
+    assert 'hx-swap="outerHTML"' in progress.text
+
+
+def test_live_runs_hide_the_delete_control_from_progress(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
+        "running"
+    )
+    harness.store.save(record)
+
+    progress = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    assert f'hx-post="/workshop/runs/{record.id}/delete"' not in progress.text
+
+
+def test_live_runs_hide_the_delete_control_on_dashboard(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
+        "running"
+    )
+    harness.store.save(record)
+
+    dashboard = harness.client.get("/workshop")
+
+    assert f'hx-post="/workshop/runs/{record.id}/delete"' not in dashboard.text
+
+
+def test_delete_route_returns_empty_for_htmx_requests(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = (
+        new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+        .advance("running")
+        .advance("staged")
+    )
+    harness.store.save(record)
+
+    response = harness.client.post(
+        f"/workshop/runs/{record.id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+
+
+def test_delete_route_redirects_for_non_htmx_requests(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = (
+        new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+        .advance("running")
+        .advance("staged")
+    )
+    harness.store.save(record)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/delete", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
