@@ -22,7 +22,6 @@ from src.pipeline.generate import generate_story
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from src.config import Settings
     from src.workshop.records import PackRequest, RunRecord, RunStore
@@ -30,17 +29,18 @@ if TYPE_CHECKING:
 from src.workshop.records import new_run
 
 
-def _generate_pack(request: PackRequest, settings: Settings) -> list[Path]:
+def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
     """Default generation seam: one generate_story pass per requested story.
 
     Identical inputs share a story id via the content-addressed cache, so a
     count above one dedupes to one story until premise variation arrives with
     the review queue (AI-389 regenerate-with-cap).
     """
-    staged: dict[str, Path] = {}
+    staged: dict[str, str] = {}
     for _ in range(request.count):
-        path = generate_story(request.theme, request.language, settings, premise=request.premise)
-        staged[path.name] = path
+        prefix = generate_story(request.theme, request.language, settings, premise=request.premise)
+        story_id = prefix.rsplit("/", 1)[-1]
+        staged[story_id] = prefix
     return list(staged.values())
 
 
@@ -52,44 +52,37 @@ class RunManager:
         store: RunStore,
         settings: Settings,
         *,
-        generate_pack: Callable[[PackRequest, Settings], list[Path]] | None = None,
+        generate_pack: Callable[[PackRequest, Settings], list[str]] | None = None,
     ) -> None:
         self._store = store
         self._settings = settings
         self._generate_pack = generate_pack or _generate_pack
-        self._lock = asyncio.Lock()  # single-run concurrency, by design
+        self._lock = asyncio.Lock()
 
     @property
     def store(self) -> RunStore:
-        """The record store — routes read runs through the manager they hold."""
         return self._store
 
     async def submit(self, family_token: str, request: PackRequest) -> RunRecord:
-        """Persist a queued run. Execution is a separate call, so callers
-        decide whether to await it or schedule it as a background task."""
         record = new_run(family_token, request)
         self._store.save(record)
         return record
 
     async def execute(self, record: RunRecord) -> RunRecord:
-        """Drive one run to staged or failed, one at a time process-wide."""
         async with self._lock:
             if record.state == "queued":
                 record = record.advance("running")
-                self._store.save(record)  # durable before the first step runs
+                self._store.save(record)
             try:
                 staged = await asyncio.to_thread(
                     self._generate_pack, record.request, self._settings
                 )
-                record = record.advance("staged", story_ids=[path.name for path in staged])
-            except Exception as error:  # any step failure: the record carries the reason
+                record = record.advance("staged", story_ids=[p.rsplit("/", 1)[-1] for p in staged])
+            except Exception as error:
                 record = record.advance("failed", error=str(error))
             self._store.save(record)
             return record
 
     async def resume_on_boot(self) -> list[RunRecord]:
-        """Re-enter every run a restart interrupted (running) or never started
-        (queued). Settled runs — staged, approved, rejected, failed — are not
-        touched; failed is a human retry decision, not a boot loop."""
         pending = self._store.list_runs(state="queued") + self._store.list_runs(state="running")
         return [await self.execute(record) for record in pending]

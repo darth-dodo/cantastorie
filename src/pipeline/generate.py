@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.pipeline.cache import ArtifactCache
-from src.pipeline.publish import stage_story
+from src.pipeline.publish import _build_client, stage_story
 from src.pipeline.steps.assemble import assemble_story
 from src.pipeline.steps.illustrate import illustrate_story
 from src.pipeline.steps.narrate import narrate_pages, synthesize_utterances
@@ -28,8 +28,6 @@ from src.pipeline.steps.revise import author_story
 from src.pipeline.steps.write import derive_story_id
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     import httpx
     from pydantic_ai.models import Model
 
@@ -49,11 +47,11 @@ def generate_story(
     narration_client: NarrationClient | None = None,
     image_transport: httpx.BaseTransport | None = None,
     premise: str | None = None,
-) -> Path:
+) -> str:
     """Author, narrate, illustrate, assemble, and stage one story.
 
-    Returns the staging folder the operator opens — story.json beside its
-    hashed audio and images. Publishing is a separate, operator-gated step.
+    Returns the R2 key prefix for the staged story. Publishing is a separate,
+    operator-gated step.
     """
     story_id = derive_story_id(theme, language, settings, premise)
     cache = ArtifactCache(settings.content_dir / story_id)
@@ -73,6 +71,7 @@ def generate_story(
     illustrations = illustrate_story(story, settings, cache, transport=image_transport)
     assembled = assemble_story(story, illustrations)
 
+    s3 = _build_client(settings)
     if language == "it":
         synthesize_utterances(
             settings,
@@ -80,6 +79,7 @@ def generate_story(
             out_dir=settings.staging_dir,
             language=language,
             client=narration_client,
+            s3_client=s3,
         )
 
-    return stage_story(assembled, settings)
+    return stage_story(assembled, settings, client=s3)

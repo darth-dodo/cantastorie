@@ -1,17 +1,18 @@
-"""stage and publish (AI-361): the assembled story onto disk, then into R2.
+"""stage and publish (AI-361): the assembled story into R2, then into published/.
 
 Two moves sit between assembly and a child hearing the story:
 
-**stage** copies an assembled story — story.json, audio, and images together —
-into a local review folder (``staging/{story-id}/``) the operator can open. It
-touches nothing but the local disk; the S3 bucket is never reachable from here.
+**stage** uploads an assembled story — story.json, audio, and images together —
+into the pending bucket under ``pending/staged/{story-id}/`` for operator review
+from anywhere. It touches only R2; local disk is not needed.
 
 **publish** is the only writer to ``published/`` (docs/architecture.md "Privacy
-Architecture": only the publish step writes there). It uploads the staged story
-under ``published/stories/{story-id}/`` with the content-hashed immutable names
-assembly minted, uploads the language's spoken prompts under
-``published/prompts/{lang}/``, and rewrites ``published/{lang}/manifest.json`` —
-the one volatile file (short TTL). R2 is S3-compatible, reached with boto3.
+Architecture": only the publish step writes there). It reads the staged story
+from the pending bucket, uploads it under ``published/stories/{story-id}/`` with
+the content-hashed immutable names assembly minted, uploads the language's
+spoken prompts under ``published/prompts/{lang}/``, and rewrites
+``published/{lang}/manifest.json`` — the one volatile file (short TTL). R2 is
+S3-compatible, reached with boto3.
 
 Publish is idempotent by construction. Asset names embed a content hash, so an
 unchanged asset keeps its key; every upload is a HEAD-then-PUT that skips when
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from src.pipeline.steps.assemble import AssembledStory
 
 PUBLISHED_PREFIX = "published"
+STAGED_PREFIX = "pending/staged"
 STORY_FILE = "story.json"
 
 CONTENT_TYPES = {".mp3": "audio/mpeg", ".webp": "image/webp", ".json": "application/json"}
@@ -59,23 +61,16 @@ THEME_WASH: dict[Theme, str] = {
     "first_snow": "wash-guanto",
 }
 
-# Utterance file-name stems (narrate.py: shelf_greeting/story_start/end_prompt)
-# → the manifest's prompt keys the player reads (the dev fixture's
-# greeting/story_start/end). The player plays a published manifest unchanged.
 MANIFEST_PROMPT_KEYS = {
     "shelf_greeting": "greeting",
     "story_start": "story_start",
     "end_prompt": "end",
 }
 
-# Missing-object error codes across S3 dialects (head returns bare "404").
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 
 
 class PublishResult(BaseModel):
-    """What one publish did: which object keys it wrote, which it left untouched,
-    and the story ids the manifest now lists — the evidence idempotency needs."""
-
     story_id: str
     uploaded: list[str]
     skipped: list[str]
@@ -84,20 +79,6 @@ class PublishResult(BaseModel):
 
 def _story_json_bytes(story: Story) -> bytes:
     return story.model_dump_json(indent=2).encode("utf-8")
-
-
-def stage_story(assembled: AssembledStory, settings: Settings) -> Path:
-    """Copy an assembled story into staging/{story-id}/ for operator review.
-
-    Writes story.json beside every hashed audio and image asset — text, audio,
-    and images together in one folder the operator can open. Local disk only.
-    """
-    story_dir = settings.staging_dir / assembled.story.id
-    story_dir.mkdir(parents=True, exist_ok=True)
-    (story_dir / STORY_FILE).write_bytes(_story_json_bytes(assembled.story))
-    for name, source in assembled.assets.items():
-        (story_dir / name).write_bytes(source.read_bytes())
-    return story_dir
 
 
 def _content_type(name: str) -> str:
@@ -119,11 +100,6 @@ def _missing(error: ClientError) -> bool:
 
 
 def _upload_if_new(client: S3Client, bucket: str, key: str, body: bytes, content_type: str) -> bool:
-    """PUT the object unless the bucket already holds these exact bytes.
-
-    The immutable content-hashed names make this the whole idempotency story:
-    identical content → identical key and identical MD5 → a pure skip.
-    """
     try:
         head = client.head_object(Bucket=bucket, Key=key)
     except ClientError as error:
@@ -149,8 +125,6 @@ def _load_manifest(client: S3Client, bucket: str, language: str) -> dict[str, An
 
 
 def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> None:
-    """Add or replace this story's manifest entry, keyed by id — a second story
-    appends, a re-publish of the same id replaces, neither clobbers the rest."""
     entry = {
         "id": story.id,
         "title": story.title,
@@ -165,6 +139,36 @@ def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> N
     stories.append(entry)
 
 
+def stage_story(
+    assembled: AssembledStory,
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+) -> str:
+    """Stage an assembled story to R2 under pending/staged/{story-id}/ for review.
+
+    Writes story.json beside every hashed audio and image asset to the pending
+    bucket so the workshop can review from anywhere. Returns the R2 key prefix.
+    """
+    client = client or _build_client(settings)
+    bucket = settings.pending_bucket
+    prefix = f"{STAGED_PREFIX}/{assembled.story.id}"
+    client.put_object(
+        Bucket=bucket,
+        Key=f"{prefix}/{STORY_FILE}",
+        Body=_story_json_bytes(assembled.story),
+        ContentType="application/json",
+    )
+    for name, source in assembled.assets.items():
+        client.put_object(
+            Bucket=bucket,
+            Key=f"{prefix}/{name}",
+            Body=source.read_bytes(),
+            ContentType=_content_type(name),
+        )
+    return prefix
+
+
 def publish_story(
     story_id: str,
     settings: Settings,
@@ -173,17 +177,20 @@ def publish_story(
 ) -> PublishResult:
     """Publish a staged story to R2 and update its language manifest.
 
-    Reads staging/{story-id}/ (never regenerates), uploads story.json, every
-    hashed asset, and the language's prompts, then rewrites the manifest last —
-    after all the content it points at is already in place. Every upload is a
+    Reads pending/staged/{story-id}/ from the pending bucket (never
+    regenerates), uploads story.json, every hashed asset, and the language's
+    prompts, then rewrites the manifest last. Every upload is a
     skip-if-unchanged, so a repeat publish is a no-op.
     """
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
+    pending_bucket = settings.pending_bucket
     public_base = settings.r2_public_base.rstrip("/")
+    staged_prefix = f"{STAGED_PREFIX}/{story_id}"
 
-    story_dir = settings.staging_dir / story_id
-    story_bytes = (story_dir / STORY_FILE).read_bytes()
+    story_bytes = client.get_object(Bucket=pending_bucket, Key=f"{staged_prefix}/{STORY_FILE}")[
+        "Body"
+    ].read()
     story = Story.model_validate_json(story_bytes)
     language = story.language
 
@@ -194,28 +201,36 @@ def publish_story(
         target = uploaded if _upload_if_new(client, bucket, key, body, content_type) else skipped
         target.append(key)
 
-    for asset in sorted(story_dir.iterdir()):
-        if asset.name == STORY_FILE:
-            continue
-        send(
-            f"{PUBLISHED_PREFIX}/stories/{story_id}/{asset.name}",
-            asset.read_bytes(),
-            _content_type(asset.name),
-        )
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=pending_bucket, Prefix=f"{staged_prefix}/"):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            name = key.removeprefix(f"{staged_prefix}/")
+            if name == STORY_FILE:
+                continue
+            body = client.get_object(Bucket=pending_bucket, Key=key)["Body"].read()
+            send(
+                f"{PUBLISHED_PREFIX}/stories/{story_id}/{name}",
+                body,
+                _content_type(name),
+            )
     send(f"{PUBLISHED_PREFIX}/stories/{story_id}/{STORY_FILE}", story_bytes, "application/json")
 
-    prompt_dir = settings.staging_dir / "prompts" / language
+    prompt_prefix = f"{STAGED_PREFIX}/prompts/{language}"
     prompt_urls: dict[str, str] = {}
-    if prompt_dir.is_dir():
-        for prompt in sorted(prompt_dir.iterdir()):
+    for page in paginator.paginate(Bucket=pending_bucket, Prefix=f"{prompt_prefix}/"):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            name = key.removeprefix(f"{prompt_prefix}/")
+            body = client.get_object(Bucket=pending_bucket, Key=key)["Body"].read()
             send(
-                f"{PUBLISHED_PREFIX}/prompts/{language}/{prompt.name}",
-                prompt.read_bytes(),
-                _content_type(prompt.name),
+                f"{PUBLISHED_PREFIX}/prompts/{language}/{name}",
+                body,
+                _content_type(name),
             )
-            manifest_key = MANIFEST_PROMPT_KEYS.get(prompt.name.split(".")[0])
+            manifest_key = MANIFEST_PROMPT_KEYS.get(name.split(".")[0])
             if manifest_key is not None:
-                prompt_urls[manifest_key] = f"{public_base}/prompts/{language}/{prompt.name}"
+                prompt_urls[manifest_key] = f"{public_base}/prompts/{language}/{name}"
 
     manifest = _load_manifest(client, bucket, language)
     if prompt_urls:
@@ -271,6 +286,23 @@ def unpublish_story(
     for page in client.get_paginator("list_objects_v2").paginate(
         Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/{story_id}/"
     ):
+        keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
+    for start in range(0, len(keys), 1000):
+        client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})
+
+
+def delete_staged_story(
+    story_id: str,
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+) -> None:
+    """Remove a staged story from the pending bucket. Idempotent."""
+    client = client or _build_client(settings)
+    bucket = settings.pending_bucket
+    prefix = f"{STAGED_PREFIX}/{story_id}"
+    keys: list[ObjectIdentifierTypeDef] = []
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
         keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
     for start in range(0, len(keys), 1000):
         client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})

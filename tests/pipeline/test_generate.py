@@ -4,15 +4,20 @@ generate braids the whole pipeline — write → safety → narrate → illustra
 assemble → stage (docs/architecture.md "The Authoring Pipeline"). Every
 provider seam is mocked, so the run touches no network: the writer and judge are
 pydantic-ai doubles, narration and OpenRouter images are httpx.MockTransport.
-The proof is a staged story.json in exactly the shape the player already plays.
+The proof is a staged story.json in R2 in exactly the shape the player plays.
 """
 
 import base64
 import hashlib
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
+import boto3
 import httpx
+import pytest
+from moto import mock_aws
+from mypy_boto3_s3 import S3Client
 from pydantic import SecretStr
 from pydantic_ai.models.test import TestModel
 
@@ -21,9 +26,9 @@ from src.pipeline.content_rules import check_story
 from src.pipeline.generate import generate_story
 from src.pipeline.models import Story
 from src.pipeline.providers import NarrationClient
+from src.pipeline.publish import STAGED_PREFIX, STORY_FILE
 from src.pipeline.steps.narrate import IT_UTTERANCES
 
-# Five words a sentence, eight sentences a page, ten pages: clears every limit.
 _PAGE = " ".join(["The water sings shh shh."] * 8)
 _GOOD_DRAFT = {"title": "La barchetta e la luna", "pages": [_PAGE] * 10}
 _PASSING_REPORT = {
@@ -43,6 +48,16 @@ _PASSING_REPORT = {
     ]
 }
 
+BUCKET = "cantastorie-published"
+
+
+@pytest.fixture
+def s3() -> Iterator[S3Client]:
+    with mock_aws():
+        client = boto3.client("s3", region_name="us-east-1")
+        client.create_bucket(Bucket=BUCKET)
+        yield client
+
 
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
@@ -50,13 +65,11 @@ def _settings(tmp_path: Path) -> Settings:
         openrouter_api_key=SecretStr("sk-or-test"),
         content_dir=tmp_path / "content",
         staging_dir=tmp_path / "staging",
+        r2_bucket=BUCKET,
     )
 
 
 def _fake_narration() -> NarrationClient:
-    """A NarrationClient over MockTransport: deterministic audio bytes for
-    whatever text arrives (Voxtral returns raw audio, no timestamps — ADR-004)."""
-
     def handler(request: httpx.Request) -> httpx.Response:
         text = json.loads(request.content)["input"]
         return httpx.Response(
@@ -68,8 +81,6 @@ def _fake_narration() -> NarrationClient:
 
 
 def _fake_images() -> httpx.MockTransport:
-    """OpenRouter image generation over MockTransport: deterministic PNG bytes."""
-
     def handler(request: httpx.Request) -> httpx.Response:
         prompt = json.loads(request.content)["messages"][0]["content"][0]["text"]
         png = b"png:" + hashlib.sha256(prompt.encode()).digest()
@@ -86,7 +97,7 @@ def _fake_images() -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
-def _generate(tmp_path: Path) -> tuple[Settings, Path]:
+def _generate(tmp_path: Path, s3: S3Client) -> tuple[Settings, str]:
     settings = _settings(tmp_path)
     staged = generate_story(
         "the_sleepy_sea",
@@ -101,15 +112,16 @@ def _generate(tmp_path: Path) -> tuple[Settings, Path]:
     return settings, staged
 
 
-def test_generate_stages_a_story_that_matches_the_player_fixture_shape(tmp_path: Path) -> None:
-    """Given a theme and language with every provider mocked,
-    When generate runs the whole pass,
-    Then it stages a story.json whose top-level and per-page shape matches the
-    dev fixture the player already plays — the player plays it unchanged.
-    """
-    _settings_used, staged = _generate(tmp_path)
+def _staged_json(s3: S3Client, prefix: str) -> bytes:
+    return s3.get_object(Bucket=BUCKET, Key=f"{prefix}/{STORY_FILE}")["Body"].read()
 
-    published = json.loads((staged / "story.json").read_bytes())
+
+def test_generate_stages_a_story_that_matches_the_player_fixture_shape(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    _settings_used, staged = _generate(tmp_path, s3)
+
+    published = json.loads(_staged_json(s3, staged))
     fixture = json.loads(
         Path("src/static/content/it/stories/la-barchetta-e-la-luna/story.json").read_bytes()
     )
@@ -119,58 +131,43 @@ def test_generate_stages_a_story_that_matches_the_player_fixture_shape(tmp_path:
 
 
 def test_the_staged_story_validates_typed_and_conforms_to_the_content_rules(
-    tmp_path: Path,
+    tmp_path: Path, s3: S3Client
 ) -> None:
-    """Given the staged story,
-    When it is parsed as a Story and checked,
-    Then it is a valid ten-page Story that breaks no content rule — validation
-    is enforced as code, not prompt hope (docs/architecture.md "Testing").
-    """
-    _settings_used, staged = _generate(tmp_path)
+    _settings_used, staged = _generate(tmp_path, s3)
 
-    story = Story.model_validate_json((staged / "story.json").read_bytes())
+    story = Story.model_validate_json(_staged_json(s3, staged))
     assert len(story.pages) == 10
     assert check_story(story) == []
     assert story.language == "it"
 
 
-def test_every_staged_page_has_its_hashed_audio_and_image_on_disk(tmp_path: Path) -> None:
-    """Given the staged folder,
-    When its assets are listed,
-    Then every page references an audio and an image whose content-hashed file
-    sits right beside story.json — text, audio, images together for review.
-    """
-    _settings_used, staged = _generate(tmp_path)
+def test_every_staged_page_has_its_hashed_audio_and_image_in_r2(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    _settings_used, staged = _generate(tmp_path, s3)
 
-    story = Story.model_validate_json((staged / "story.json").read_bytes())
+    story = Story.model_validate_json(_staged_json(s3, staged))
     for page in story.pages:
         assert page.audio is not None
-        assert (staged / page.audio.file).exists()
+        s3.head_object(Bucket=BUCKET, Key=f"{staged}/{page.audio.file}")
         assert page.image is not None
-        assert (staged / page.image).exists()
+        s3.head_object(Bucket=BUCKET, Key=f"{staged}/{page.image}")
 
 
-def test_generate_stages_the_italian_spoken_prompts(tmp_path: Path) -> None:
-    """Given the slice-1 Italian prompt set (docs/product.md **Spoken Prompts**),
-    When generate runs,
-    Then the shelf greeting, story start, and end prompt are staged under
-    staging/prompts/it/ as hashed mp3s — first-class assets, ready to publish.
-    """
-    settings, _staged = _generate(tmp_path)
+def test_generate_stages_the_italian_spoken_prompts(tmp_path: Path, s3: S3Client) -> None:
+    _settings, _staged = _generate(tmp_path, s3)
 
-    prompt_dir = settings.staging_dir / "prompts" / "it"
-    stems = {path.name.split(".")[0] for path in prompt_dir.glob("*.mp3")}
+    response = s3.list_objects_v2(Bucket=BUCKET, Prefix=f"{STAGED_PREFIX}/prompts/it/")
+    prompt_keys = [k.rsplit("/", 1)[-1] for k in [o["Key"] for o in response.get("Contents", [])]]
+    stems = {name.split(".")[0] for name in prompt_keys}
     assert stems == set(IT_UTTERANCES)
 
 
-def test_rerunning_generate_reproduces_an_identical_staged_story(tmp_path: Path) -> None:
-    """Given a story already generated,
-    When generate runs again unchanged (content-addressed caching),
-    Then the staged story.json is byte-for-byte identical — the cache makes a
-    re-run reproducible and free of provider calls.
-    """
-    settings, staged = _generate(tmp_path)
-    first = (staged / "story.json").read_bytes()
+def test_rerunning_generate_reproduces_an_identical_staged_story(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    settings, staged = _generate(tmp_path, s3)
+    first = _staged_json(s3, staged)
 
     staged_again = generate_story(
         "the_sleepy_sea",
@@ -182,16 +179,13 @@ def test_rerunning_generate_reproduces_an_identical_staged_story(tmp_path: Path)
         narration_client=_fake_narration(),
         image_transport=_fake_images(),
     )
-    assert (staged_again / "story.json").read_bytes() == first
+    assert _staged_json(s3, staged_again) == first
 
 
-def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path) -> None:
-    """Given the same theme and language,
-    When one run has a premise and one does not,
-    Then they stage to different working folders — no collision."""
+def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path, s3: S3Client) -> None:
     settings = _settings(tmp_path)
 
-    def run(premise: str | None) -> Path:
+    def run(premise: str | None) -> str:
         return generate_story(
             "the_sleepy_sea",
             "it",
@@ -206,4 +200,4 @@ def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path) -> None
 
     plain = run(None)
     premised = run("A birthday at sea.")
-    assert plain.name != premised.name
+    assert plain != premised

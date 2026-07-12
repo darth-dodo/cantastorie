@@ -50,7 +50,7 @@ def generate(
         get_settings(),
         premise=premise or None,
     )
-    typer.echo(f"Staged {staged.name} for review at {staged}")
+    typer.echo(f"Staged {staged} for review")
 
 
 @app.command()
