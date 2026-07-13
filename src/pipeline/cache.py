@@ -7,6 +7,7 @@ are a pure lookup and cost zero API calls.
 
 import hashlib
 import json
+import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -30,7 +31,7 @@ class ArtifactCache:
     def store(self, step: str, key: str, data: bytes, suffix: str = ".json") -> Path:
         path = self._path(step, key, suffix)
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp = path.with_suffix(f"{path.suffix}.tmp.{os.urandom(8).hex()}")
         tmp.write_bytes(data)
         tmp.replace(path)  # atomic: a crash never leaves a torn artifact
         return path

@@ -1,7 +1,8 @@
 """Typer CLI: generate, publish, audit.
 
 generate runs the whole authoring pass and stages a story for review; publish
-uploads a staged story to R2. audit is still a scaffold pointing at AI-378.
+uploads a staged story to R2. audit verifies every reachable asset in the
+published bucket is approved and listed — the provable-safety gate (AI-378).
 """
 
 from typing import cast, get_args
@@ -9,9 +10,10 @@ from typing import cast, get_args
 import typer
 
 from src.config import get_settings
+from src.observability import init_observability
 from src.pipeline.generate import generate_story
 from src.pipeline.models import Language, Theme
-from src.pipeline.publish import publish_story
+from src.pipeline.publish import audit_published_bucket, publish_story
 
 app = typer.Typer(help="Cantastorie authoring pipeline", no_args_is_help=True)
 
@@ -44,13 +46,15 @@ def generate(
         typer.echo(f"Unknown shape {shape!r}; linear or branching")
         raise typer.Exit(1)
 
+    settings = get_settings()
+    init_observability(settings)
     staged = generate_story(
         cast("Theme", theme),
         cast("Language", language),
-        get_settings(),
+        settings,
         premise=premise or None,
     )
-    typer.echo(f"Staged {staged.name} for review at {staged}")
+    typer.echo(f"Staged {staged} for review")
 
 
 @app.command()
@@ -66,4 +70,11 @@ def publish(story_id: str = typer.Option(..., help="Story working-folder id")) -
 @app.command()
 def audit() -> None:
     """Prove every reachable asset is approved; CI gate."""
-    _not_yet("AI-378")
+    result = audit_published_bucket(get_settings())
+    typer.echo(
+        f"Audit: {result.manifests_checked} manifests checked, {len(result.violations)} violations"
+    )
+    for v in result.violations:
+        typer.echo(f"  - {v}")
+    if result.violations:
+        raise typer.Exit(1)

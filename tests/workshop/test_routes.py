@@ -1,4 +1,4 @@
-"""Behavior specs for the operator face at /workshop (AI-388, ADR-004).
+"""Behavior specs for the operator face at /workshop (AI-388, ADR-005).
 
 The operator retires the terminal: start a run, watch progress, inspect the
 staged story, publish — all in the browser. Access is a single env-var secret
@@ -21,6 +21,7 @@ from src.api.main import create_app
 from src.api.routes.workshop import get_publisher, get_run_manager
 from src.config import Settings, get_settings
 from src.pipeline.models import Page, PageAudio, Story
+from src.pipeline.publish import STAGED_PREFIX
 from src.workshop.manager import RunManager
 from src.workshop.records import PackRequest, RunStore, new_run
 
@@ -44,17 +45,16 @@ def _settings(tmp_path: Path, secret: str = SECRET) -> Settings:
         _env_file=None,
         workshop_secret=secret,
         r2_bucket=BUCKET,
-        staging_dir=tmp_path / "staging",
         content_dir=tmp_path / "content",
     )
 
 
-def _stage_fake_story(settings: Settings, story_id: str = "the-sleepy-sea-it-fake0001") -> str:
-    """Lay a minimal staged story on disk the way stage_story would."""
-    story_dir = settings.staging_dir / story_id
-    story_dir.mkdir(parents=True)
-    (story_dir / "p1.mp3").write_bytes(b"mp3:p1")
-    (story_dir / "p1.webp").write_bytes(b"webp:p1")
+def _stage_fake_story(
+    settings: Settings,
+    s3: S3Client,
+    story_id: str = "the-sleepy-sea-it-fake0001",
+) -> str:
+    """Upload a minimal staged story to R2 the way stage_story would."""
     story = Story(
         id=story_id,
         language="it",
@@ -63,8 +63,21 @@ def _stage_fake_story(settings: Settings, story_id: str = "the-sleepy-sea-it-fak
         shape="linear",
         pages=[Page(id="p1", text=PAGE_TEXT, audio=PageAudio(file="p1.mp3"), image="p1.webp")],
     )
-    (story_dir / "story.json").write_text(story.model_dump_json())
+    prefix = f"{STAGED_PREFIX}/{story_id}"
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=f"{prefix}/story.json",
+        Body=story.model_dump_json().encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(Bucket=BUCKET, Key=f"{prefix}/p1.mp3", Body=b"mp3:p1", ContentType="audio/mpeg")
+    s3.put_object(Bucket=BUCKET, Key=f"{prefix}/p1.webp", Body=b"webp:p1", ContentType="image/webp")
     return story_id
+
+
+def _staged_keys(s3: S3Client, story_id: str) -> list[str]:
+    response = s3.list_objects_v2(Bucket=BUCKET, Prefix=f"{STAGED_PREFIX}/{story_id}/")
+    return [item["Key"] for item in response.get("Contents", [])]
 
 
 class _Harness:
@@ -73,19 +86,20 @@ class _Harness:
     def __init__(self, tmp_path: Path, s3: S3Client, secret: str = SECRET) -> None:
         self.settings = _settings(tmp_path, secret)
         self.store = RunStore(self.settings, client=s3)
+        self.s3 = s3
         self.published: list[str] = []
 
-        def fake_generate(request: PackRequest, settings: Settings) -> list[Path]:
-            staged = settings.staging_dir / f"{request.theme}-{request.language}-fake0001"
-            staged.mkdir(parents=True, exist_ok=True)
-            return [staged]
+        def fake_generate(request: PackRequest, settings: Settings) -> list[str]:
+            story_id = f"{request.theme}-{request.language}-fake0001"
+            _stage_fake_story(settings, s3, story_id)
+            return [f"pending/staged/{story_id}"]
 
         self.manager = RunManager(self.store, self.settings, generate_pack=fake_generate)
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager
         app.dependency_overrides[get_publisher] = lambda: self.published.append
-        self.client = TestClient(app)
+        self.client = TestClient(app, base_url="https://testserver")
 
     def login(self) -> None:
         response = self.client.post(
@@ -110,7 +124,7 @@ def test_unauthenticated_workshop_shows_the_login_form_and_no_runs(
 
     assert page.status_code == 200
     assert 'action="/workshop/login"' in page.text
-    assert "first_snow" not in page.text  # no workshop content before the gate
+    assert "first_snow" not in page.text
 
 
 def test_a_wrong_secret_is_rejected(tmp_path: Path, s3: S3Client) -> None:
@@ -128,7 +142,7 @@ def test_login_sets_a_session_and_shows_the_dashboard(tmp_path: Path, s3: S3Clie
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'action="/workshop/runs"' in page.text  # the start-a-run form
+    assert 'action="/workshop/runs"' in page.text
 
 
 def test_the_session_cookie_is_not_the_secret_itself(tmp_path: Path, s3: S3Client) -> None:
@@ -140,6 +154,19 @@ def test_the_session_cookie_is_not_the_secret_itself(tmp_path: Path, s3: S3Clien
     assert cookie
     assert SECRET not in cookie
     assert cookie == hashlib.sha256(SECRET.encode()).hexdigest()
+
+
+def test_login_sets_a_secure_expiring_workshop_scoped_cookie(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+
+    response = harness.client.post(
+        "/workshop/login", data={"secret": SECRET}, follow_redirects=False
+    )
+
+    cookie = response.headers["set-cookie"]
+    assert "Max-Age=86400" in cookie
+    assert "Path=/workshop" in cookie
+    assert "Secure" in cookie
 
 
 def test_starting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
@@ -170,7 +197,7 @@ def test_starting_a_run_executes_it_in_the_background_to_staged(
 
     assert response.status_code == 303
     [record] = harness.store.list_runs()
-    assert record.state == "staged"  # TestClient runs background tasks to completion
+    assert record.state == "staged"
     assert record.story_ids == ["the_sleepy_sea-it-fake0001"]
     assert response.headers["location"] == f"/workshop/runs/{record.id}"
 
@@ -191,20 +218,20 @@ def test_the_progress_fragment_reports_the_run_state(tmp_path: Path, s3: S3Clien
 def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
 
     fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
 
-    assert "hx-get" not in fragment.text  # staged is settled; no more polling
+    assert "hx-get" not in fragment.text
     assert f"/workshop/staged/{story_id}" in fragment.text
 
 
 def test_the_staged_story_page_shows_text_audio_and_images(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
 
     page = harness.client.get(f"/workshop/staged/{story_id}")
 
@@ -219,7 +246,7 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
 
@@ -234,8 +261,7 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
 def test_staged_assets_are_served_and_traversal_is_blocked(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
-    (harness.settings.staging_dir.parent / "secret.txt").write_text("keys")
+    story_id = _stage_fake_story(harness.settings, s3)
 
     assert harness.client.get(f"/workshop/staged/{story_id}/assets/p1.mp3").content == b"mp3:p1"
     escape = harness.client.get(f"/workshop/staged/{story_id}/assets/../../secret.txt")
@@ -247,7 +273,7 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
 
@@ -258,6 +284,24 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
     assert reloaded.state == "approved"
+
+
+def test_approving_a_non_staged_run_is_rejected_without_publishing(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    failed = record.advance("running").advance("failed", story_ids=[story_id])
+    harness.store.save(failed)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/approve", follow_redirects=False)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Run is in failed state, must be staged to approve"}
+    assert harness.published == []
+    assert harness.store.load("operator", record.id) == failed
 
 
 def test_deleting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
@@ -277,7 +321,7 @@ def test_deleting_a_staged_story_removes_its_artifacts_and_updates_its_run(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     content_dir = harness.settings.content_dir / story_id
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
@@ -293,7 +337,7 @@ def test_deleting_a_staged_story_removes_its_artifacts_and_updates_its_run(
 
     assert response.status_code == 200
     assert response.text == ""
-    assert not (harness.settings.staging_dir / story_id).exists()
+    assert _staged_keys(s3, story_id) == []
     assert not content_dir.exists()
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
@@ -305,7 +349,7 @@ def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     staged = record.advance("running").advance("staged", story_ids=[story_id])
     harness.store.save(staged)
@@ -324,7 +368,7 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     if state == "queued":
         protected = record.model_copy(update={"story_ids": [story_id]})
@@ -339,7 +383,7 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
     response = harness.client.post(f"/workshop/staged/{story_id}/delete", follow_redirects=False)
 
     assert response.status_code == 400
-    assert (harness.settings.staging_dir / story_id).is_dir()
+    assert _staged_keys(s3, story_id)
     assert harness.store.load("operator", record.id) == protected
 
 
@@ -357,7 +401,7 @@ def test_deleting_a_failed_story_redirects_for_non_htmx_requests(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     failed = record.advance("running").advance("failed", story_ids=[story_id])
     harness.store.save(failed)
@@ -399,7 +443,7 @@ def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     content_dir = harness.settings.content_dir / story_id
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
@@ -421,7 +465,7 @@ def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
     assert response.status_code == 200
     assert response.text == ""
     assert unpublished == [story_id]
-    assert not (harness.settings.staging_dir / story_id).exists()
+    assert _staged_keys(s3, story_id) == []
     assert not content_dir.exists()
     assert harness.store.load("operator", record.id) is None
 
@@ -431,7 +475,7 @@ def test_deleting_a_run_does_not_remove_shared_story_artifacts(
 ) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     content_dir = harness.settings.content_dir / story_id
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
@@ -465,7 +509,7 @@ def test_deleting_a_run_does_not_remove_shared_story_artifacts(
     assert response.status_code == 200
     assert response.text == ""
     assert unpublished == []
-    assert (harness.settings.staging_dir / story_id).is_dir()
+    assert _staged_keys(s3, story_id)
     assert content_dir.is_dir()
     assert harness.store.load("operator", deleted.id) is None
     assert harness.store.load("operator", shared.id) == shared
@@ -651,7 +695,7 @@ def test_run_again_creates_a_new_run_with_the_same_request_and_executes_it(
 def test_run_again_works_on_any_settled_state(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
     harness.store.save(approved)
@@ -711,7 +755,7 @@ def test_run_page_includes_staged_story_review_links_with_page_count(
     """The run page progress fragment shows 'Review N pages' for staged stories."""
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)  # has 1 page
+    story_id = _stage_fake_story(harness.settings, s3)  # has 1 page
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
 
@@ -731,7 +775,7 @@ def test_story_page_shows_approve_reject_only_when_run_is_staged(
     """Approve+reject forms only visible when run is staged (not approved/rejected)."""
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)
+    story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
 
@@ -770,7 +814,7 @@ def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3
     """Run page context must carry staged_stories with id, title, page_count."""
     harness = _Harness(tmp_path, s3)
     harness.login()
-    story_id = _stage_fake_story(harness.settings)  # title="La barchetta", 1 page
+    story_id = _stage_fake_story(harness.settings, s3)  # title="La barchetta", 1 page
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
 

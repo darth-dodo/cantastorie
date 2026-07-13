@@ -6,6 +6,7 @@ and re-running an unchanged story costs zero API calls.
 """
 
 from pathlib import Path
+from threading import Barrier, Thread
 
 import pytest
 
@@ -80,3 +81,40 @@ def test_an_artifact_is_persisted_the_moment_it_is_produced(tmp_path: Path) -> N
     key = cache_key({"x": 1})
     run_step(cache, "write", {"x": 1}, lambda: b"data")
     assert (tmp_path / "story-1" / "write" / f"{key}.json").read_bytes() == b"data"
+
+
+def test_store_uses_a_unique_temp_path_for_concurrent_writers(tmp_path: Path) -> None:
+    cache = ArtifactCache(tmp_path / "story-1")
+    path = cache._path("write", "abc", ".json")
+    barrier = Barrier(2)
+    temp_paths: list[Path] = []
+    errors: list[BaseException] = []
+
+    original_replace = Path.replace
+
+    def capture_replace(self: Path, target: Path) -> Path:
+        if target == path:
+            temp_paths.append(self)
+            barrier.wait(timeout=5)
+        return original_replace(self, target)
+
+    def worker(data: bytes) -> None:
+        try:
+            cache.store("write", "abc", data)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [Thread(target=worker, args=(b"one",)), Thread(target=worker, args=(b"two",))]
+
+    Path.replace = capture_replace
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        Path.replace = original_replace
+
+    assert not errors
+    assert len(temp_paths) == 2
+    assert temp_paths[0] != temp_paths[1]

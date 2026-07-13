@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 from src.pipeline import cli
 from src.pipeline.cli import app
-from src.pipeline.publish import PublishResult
+from src.pipeline.publish import AuditResult, PublishResult
 
 runner = CliRunner()
 
@@ -128,10 +128,43 @@ def test_publish_uploads_a_staged_story_and_reports_the_result(
     assert "1 unchanged" in result.output
 
 
-def test_audit_scaffold_still_names_its_delivering_issue() -> None:
-    """Given the audit scaffold,
-    When it is invoked,
-    Then it exits 2 naming AI-378, the issue that delivers it.
+def test_audit_reports_zero_violations_and_exits_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given a clean bucket with no violations,
+    When audit is invoked,
+    Then it exits 0 and reports the manifest count.
     """
+
+    def fake_audit(settings: object) -> AuditResult:
+        return AuditResult(violations=[], manifests_checked=2)
+
+    monkeypatch.setattr(cli, "audit_published_bucket", fake_audit)
+
     result = runner.invoke(app, ["audit"])
-    assert result.exit_code == 2 and "AI-378" in result.output
+    assert result.exit_code == 0
+    assert "2 manifests checked" in result.output
+    assert "0 violations" in result.output
+
+
+def test_audit_reports_violations_and_exits_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given violations in the bucket,
+    When audit is invoked,
+    Then it exits 1 and lists each violation.
+    """
+
+    def fake_audit(settings: object) -> AuditResult:
+        return AuditResult(
+            violations=["bad-story: story.json missing", "orphan: unlisted directory"],
+            manifests_checked=1,
+        )
+
+    monkeypatch.setattr(cli, "audit_published_bucket", fake_audit)
+
+    result = runner.invoke(app, ["audit"])
+    assert result.exit_code == 1
+    assert "2 violations" in result.output
+    assert "bad-story" in result.output
+    assert "orphan" in result.output

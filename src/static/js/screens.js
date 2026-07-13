@@ -56,13 +56,17 @@ function iconShelf() {
   return grid;
 }
 
-export function buildShelf(store, greeting, stories = shelf, onOpen = () => store.openStory()) {
+export function buildShelf(
+  store,
+  greeting,
+  subText,
+  stories = shelf,
+  langs = [],
+  currentLang = "it",
+  onLangChange = () => {},
+  onOpen = () => store.openStory(),
+) {
   const screen = el("div", "screen shelf");
-
-  // No stars on the shelf: its top-left is the greeting, so the cluster was
-  // right-anchored and its box-shadow companions fell off-screen, leaving one
-  // orphaned dot that reads as a dead pixel. Stars stay on the player/end
-  // night scenes, where they're left-anchored and render as a full cluster.
 
   const header = el("div", "greeting");
   const mascot = el("div", "mascot");
@@ -71,26 +75,61 @@ export function buildShelf(store, greeting, stories = shelf, onOpen = () => stor
   const hello = el("h1");
   hello.textContent = greeting;
   const sub = el("p");
-  sub.textContent = "Quale storia oggi?";
+  sub.textContent = subText;
   text.append(hello, sub);
   header.append(mascot, text);
 
   const covers = el("div", "covers");
-  stories.forEach((entry) => {
-    const name = entry.title ?? entry.label;
-    const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
-    const caption = el("span");
-    caption.textContent = name;
-    cover.appendChild(caption);
-    cover.addEventListener("click", () => onOpen(entry));
-    covers.appendChild(cover);
-  });
+
+  if (stories.length === 0) {
+    const meadow = el("div", "empty-shelf");
+    const bird = el("div", "meadow-bird");
+    meadow.appendChild(bird);
+    const note = el("p", "empty-shelf-text");
+    note.textContent = subText;
+    meadow.appendChild(note);
+    covers.appendChild(meadow);
+  } else {
+    stories.forEach((entry) => {
+      const name = entry.title ?? entry.label;
+      const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
+      if (entry.cover) {
+        const img = el("img", "cover-art");
+        img.src = entry.cover;
+        img.alt = "";
+        img.loading = "lazy";
+        cover.appendChild(img);
+      }
+      const caption = el("span");
+      caption.textContent = name;
+      cover.appendChild(caption);
+      cover.addEventListener("click", () => onOpen(entry));
+      covers.appendChild(cover);
+    });
+  }
 
   const language = el("div", "language-sticker");
-  language.appendChild(el("div", "flag"));
-  language.appendChild(document.createTextNode("Italiano"));
+  const flag = el("div", `flag flag-${currentLang}`);
+  language.appendChild(flag);
+  const langLabel = el("span", "lang-label");
+  const current = langs.find((l) => l.code === currentLang);
+  langLabel.textContent = current?.label ?? currentLang;
+  language.appendChild(langLabel);
 
-  const parent = el("div", "parent-corner");
+  if (langs.length > 1) {
+    language.classList.add("clickable");
+    language.setAttribute("role", "button");
+    language.setAttribute("tabindex", "0");
+    language.setAttribute("aria-label", "Change language");
+    language.addEventListener("click", () => {
+      const idx = langs.findIndex((l) => l.code === currentLang);
+      const next = langs[(idx + 1) % langs.length];
+      onLangChange(next.code);
+    });
+  }
+
+  const parent = el("a", "parent-corner");
+  parent.href = "/workshop";
   parent.textContent = "parent";
 
   screen.append(header, covers, language, parent);

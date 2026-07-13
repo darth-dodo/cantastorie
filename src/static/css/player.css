@@ -178,6 +178,32 @@ button.presses:active {
   padding: 6px 4px 0;
 }
 
+.empty-shelf {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.meadow-bird {
+  width: 72px;
+  height: 72px;
+  border-radius: 50% 42% 50% 40%;
+  background: var(--accent-warm, #e8c4a0);
+  opacity: 0.5;
+}
+
+.empty-shelf-text {
+  font-size: 1.1rem;
+  color: var(--text-soft, #8a82a0);
+  margin: 0;
+  line-height: 1.5;
+}
+
 .cover {
   aspect-ratio: 5 / 6;
   box-shadow: var(--sticker-ring), var(--card-shadow);
@@ -185,11 +211,25 @@ button.presses:active {
   align-items: center;
   justify-content: center;
   transition: transform var(--settle);
+  overflow: hidden;
+  position: relative;
+}
+
+.cover-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 
 .cover span {
   font: 10px ui-monospace, Menlo, monospace;
   color: rgba(74, 59, 46, 0.45);
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
 }
 
 [data-theme="dusk"] .cover span {
@@ -314,6 +354,24 @@ button.presses:active {
   opacity: 0.9;
 }
 
+.language-sticker .lang-label {
+  font-size: 12px;
+}
+
+.language-sticker.clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.language-sticker.clickable:hover {
+  transform: rotate(-2deg) scale(1.05);
+  box-shadow: 0 10px 24px rgba(74, 59, 46, 0.2), 0 0 0 6px rgba(224, 166, 63, 0.3);
+}
+
+.language-sticker.clickable:active {
+  transform: rotate(-2deg) scale(0.95);
+}
+
 .parent-corner {
   position: absolute;
   right: 20px;
@@ -366,8 +424,7 @@ button.presses:active {
 
 /* Full-bleed page art from the published story, layered over the wash;
    it rides the same slow opacity ramp — nothing snaps at bedtime.
-   Landscape images on a portrait screen would crop badly with cover,
-   so portrait uses contain to show the whole image. */
+   Images are generated in portrait orientation to match the phone screen. */
 .page-art {
   position: absolute;
   inset: 0;
@@ -375,12 +432,7 @@ button.presses:active {
   transition: opacity var(--fade);
   background-size: cover;
   background-position: center;
-}
-
-@media (orientation: portrait) {
-  .page-art {
-    background-size: contain;
-  }
+  background-repeat: no-repeat;
 }
 
 .page-art.current {

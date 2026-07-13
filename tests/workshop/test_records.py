@@ -1,4 +1,4 @@
-"""Behavior specs for workshop run records (AI-387, ADR-004).
+"""Behavior specs for workshop run records (AI-387, ADR-005).
 
 A run record is the durable trace of one pack request: queued → running →
 staged → approved | rejected, with a retryable failed. Records persist to R2
@@ -14,6 +14,7 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
+from src.workshop import records
 from src.workshop.records import (
     InvalidTransition,
     PackRequest,
@@ -36,7 +37,14 @@ def s3() -> Iterator[S3Client]:
 
 
 def _settings() -> Settings:
-    return Settings(_env_file=None, r2_bucket=BUCKET)
+    return Settings(
+        _env_file=None,
+        r2_endpoint_url="http://localhost",
+        r2_access_key_id="test",
+        r2_secret_access_key="test",
+        r2_bucket=BUCKET,
+        r2_public_base="http://localhost",
+    )
 
 
 def test_records_live_in_the_private_pending_bucket_when_configured(s3: S3Client) -> None:
@@ -44,7 +52,15 @@ def test_records_live_in_the_private_pending_bucket_when_configured(s3: S3Client
     must never share it in production. R2_PENDING_BUCKET points the store at
     a private bucket; the public one stays untouched."""
     s3.create_bucket(Bucket="cantastorie-pending")
-    settings = Settings(_env_file=None, r2_bucket=BUCKET, r2_pending_bucket="cantastorie-pending")
+    settings = Settings(
+        _env_file=None,
+        r2_endpoint_url="http://localhost",
+        r2_access_key_id="test",
+        r2_secret_access_key="test",
+        r2_bucket=BUCKET,
+        r2_public_base="http://localhost",
+        r2_pending_bucket="cantastorie-pending",
+    )
     store = RunStore(settings, client=s3)
     record = new_run("family-abc", REQUEST)
 
@@ -165,3 +181,37 @@ def test_saving_an_advanced_record_overwrites_in_place(s3: S3Client) -> None:
     assert loaded.state == "running"
     contents = s3.list_objects_v2(Bucket=BUCKET)["Contents"]
     assert len(contents) == 1  # same key, new bytes — not a second object
+
+
+def test_store_rejects_saving_a_stale_loaded_record(s3: S3Client) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = new_run("family-abc", REQUEST)
+    store.save(record)
+    first = store.load(record.family_token, record.id)
+    second = store.load(record.family_token, record.id)
+    assert first is not None
+    assert second is not None
+
+    store.save(first.advance("running"))
+
+    with pytest.raises(records.ConcurrentModificationError):
+        store.save(second.advance("running"))
+
+
+def test_store_list_skips_malformed_run_records(
+    s3: S3Client, caplog: pytest.LogCaptureFixture
+) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = new_run("family-abc", REQUEST)
+    store.save(record)
+    malformed_key = "pending/family-abc/runs/malformed.json"
+    s3.put_object(Bucket=BUCKET, Key=malformed_key, Body=b"not valid json")
+    caplog.set_level("WARNING")
+
+    records = store.list_runs()
+
+    assert records == [record]
+    assert any(
+        message.startswith(f"Skipping malformed run record at {malformed_key}")
+        for message in caplog.messages
+    )

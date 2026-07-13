@@ -22,6 +22,7 @@ import httpx
 from pydantic import BaseModel
 
 from src.config import Settings
+from src.observability import typed_traceable
 from src.pipeline.cache import ArtifactCache, cache_key, run_step
 from src.pipeline.models import Story
 
@@ -35,7 +36,9 @@ STYLE_PROMPT = (
     "soft edges — bedtime, not Saturday cartoons. Nothing frightening: "
     "no darkness, no sharp teeth, no menacing shapes or shadows. "
     "The image must contain no text: no letters, no words, no numbers, "
-    "no signs, no writing of any kind."
+    "no signs, no writing of any kind. "
+    "Portrait orientation — the image is tall, viewed on a phone held in hand. "
+    "Characters should be diverse in appearance — vary hair, features, and body shapes across the cast."
 )
 
 STEP_NAME = "illustrate"
@@ -74,6 +77,7 @@ class ImageClient:
     def close(self) -> None:
         self._client.close()
 
+    @typed_traceable(name="illustrate.generate")
     def generate(self, prompt: str, reference_png: bytes | None = None) -> bytes:
         """Generate one image; the optional reference image rides along as input."""
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
