@@ -187,7 +187,9 @@ def publish_story(
     bucket = settings.r2_bucket
     pending_bucket = settings.pending_bucket
     if not settings.r2_public_base:
-        raise ValueError("R2_PUBLIC_BASE must be set before publishing — manifest URLs would be relative")
+        raise ValueError(
+            "R2_PUBLIC_BASE must be set before publishing — manifest URLs would be relative"
+        )
     public_base = settings.r2_public_base.rstrip("/")
     staged_prefix = f"{STAGED_PREFIX}/{story_id}"
 
@@ -292,6 +294,121 @@ def unpublish_story(
         keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
     for start in range(0, len(keys), 1000):
         client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})
+
+
+class AuditResult(BaseModel):
+    violations: list[str]
+    manifests_checked: int
+
+
+def _check_manifest_url(sid: str, url: str) -> str | None:
+    if not url:
+        return f"{sid}: manifest entry has an empty URL"
+    if "pending/" in url:
+        return f"{sid}: manifest URL points into pending/ — {url}"
+    if f"/{PUBLISHED_PREFIX}/" not in url and not url.startswith(PUBLISHED_PREFIX):
+        return f"{sid}: manifest URL outside published/ — {url}"
+    return None
+
+
+def _check_story_assets(client: S3Client, bucket: str, sid: str) -> tuple[list[str], Story | None]:
+    violations: list[str] = []
+    story_key = f"{PUBLISHED_PREFIX}/stories/{sid}/{STORY_FILE}"
+    try:
+        body = client.get_object(Bucket=bucket, Key=story_key)["Body"].read()
+    except ClientError as error:
+        if _missing(error):
+            violations.append(f"{sid}: story.json missing at {story_key}")
+            return violations, None
+        raise
+    story = Story.model_validate_json(body)
+    for page_obj in story.pages:
+        if page_obj.audio:
+            akey = f"{PUBLISHED_PREFIX}/stories/{sid}/{page_obj.audio.file}"
+            if not _object_exists(client, bucket, akey):
+                violations.append(f"{sid}: missing audio {page_obj.audio.file}")
+        if page_obj.image:
+            ikey = f"{PUBLISHED_PREFIX}/stories/{sid}/{page_obj.image}"
+            if not _object_exists(client, bucket, ikey):
+                violations.append(f"{sid}: missing image {page_obj.image}")
+    return violations, story
+
+
+def _object_exists(client: S3Client, bucket: str, key: str) -> bool:
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as error:
+        if _missing(error):
+            return False
+        raise
+
+
+def _find_orphan_story_dirs(client: S3Client, bucket: str, listed_story_ids: set[str]) -> list[str]:
+    orphans: list[str] = []
+    story_dirs: list[str] = []
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
+    ):
+        for item in page.get("Contents", []):
+            parts = item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/stories/").split("/", 1)
+            if len(parts) == 2 and parts[0] not in story_dirs:
+                story_dirs.append(parts[0])
+    for sdir in story_dirs:
+        if sdir not in listed_story_ids:
+            orphans.append(f"{sdir}: story directory exists but no manifest lists it")
+    return orphans
+
+
+def audit_published_bucket(
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+) -> AuditResult:
+    """Verify every reachable asset is approved; zero child-reachable unapproved.
+
+    Checks that every manifest entry resolves to real objects under
+    ``published/``, that no manifest URL points into ``pending/`` or
+    outside ``published/``, that every story.json's referenced audio and
+    image files exist, and that no orphan story directory lurks unlisted.
+    """
+    client = client or _build_client(settings)
+    bucket = settings.r2_bucket
+
+    violations: list[str] = []
+    manifests_checked = 0
+    listed_story_ids: set[str] = set()
+
+    manifest_keys: list[str] = []
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
+    ):
+        for item in page.get("Contents", []):
+            if item["Key"].endswith("/manifest.json"):
+                manifest_keys.append(item["Key"])
+
+    for mkey in manifest_keys:
+        manifests_checked += 1
+        lang = mkey.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
+        manifest = _load_manifest(client, bucket, lang)
+        for entry in manifest.get("stories", []):
+            sid = entry.get("id", "?")
+            story_url = entry.get("story", "")
+            cover_url = entry.get("cover", "")
+
+            for url in (story_url, cover_url):
+                v = _check_manifest_url(sid, url)
+                if v:
+                    violations.append(v)
+
+            if story_url and f"{PUBLISHED_PREFIX}/" in story_url:
+                listed_story_ids.add(sid)
+                story_violations, _ = _check_story_assets(client, bucket, sid)
+                violations.extend(story_violations)
+
+    violations.extend(_find_orphan_story_dirs(client, bucket, listed_story_ids))
+
+    return AuditResult(violations=violations, manifests_checked=manifests_checked)
 
 
 def delete_staged_story(
