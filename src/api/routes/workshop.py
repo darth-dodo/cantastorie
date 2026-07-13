@@ -16,8 +16,10 @@ step, which remains the only writer to published/.
 from __future__ import annotations
 
 import hashlib
+import json as _json
 import secrets
 import shutil
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Protocol, get_args
@@ -38,7 +40,7 @@ from src.pipeline.publish import (
     unpublish_story,
 )
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunRecord, RunStore
+from src.workshop.records import InvalidTransition, PackRequest, RunRecord, RunStore
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 SESSION_COOKIE = "workshop_session"
@@ -121,16 +123,75 @@ def _checkpointed_steps(record: RunRecord, settings: Settings) -> list[str]:
     return steps
 
 
+def _staged_story_summaries(story_ids: list[str], settings: Settings) -> list[dict[str, object]]:
+    """Load id, title, page_count for each staged story from the pending bucket."""
+    summaries: list[dict[str, object]] = []
+    client = _build_client(settings)
+    bucket = settings.pending_bucket
+    for story_id in story_ids:
+        try:
+            obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}")
+            data = _json.loads(obj["Body"].read())
+            summaries.append(
+                {
+                    "id": story_id,
+                    "title": data.get("title", story_id),
+                    "page_count": len(data.get("pages", [])),
+                }
+            )
+        except Exception:
+            summaries.append({"id": story_id, "title": story_id, "page_count": 0})
+    return summaries
+
+
+def _rel_time(dt: datetime) -> str:
+    """Human-readable relative time."""
+    now = datetime.now(UTC)
+    aware_dt = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+    diff = now - aware_dt
+    secs = int(diff.total_seconds())
+    if secs < 90:
+        return "just now"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins} min ago"
+    hours = mins // 60
+    if hours < 24:
+        return f"{hours} h ago"
+    if hours < 48:
+        return "yesterday"
+    return dt.strftime("%b %-d")
+
+
 @router.get("", response_class=HTMLResponse)
 async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> HTMLResponse:
     if not _authed(request, settings):
         return templates.TemplateResponse(request, "workshop/login.html", {})
     runs = sorted(manager.store.list_runs(), key=lambda r: r.created_at, reverse=True)
+    step_order = ["write", "revise", "safety", "narrate", "illustrate", "assemble"]
+
+    def _fail_step(record: RunRecord) -> str | None:
+        if record.state != "failed":
+            return None
+        done = set(_checkpointed_steps(record, settings))
+        for s in step_order:
+            if s not in done:
+                return s
+        return None
+
+    run_extras = {
+        r.id: {
+            "fail_step": _fail_step(r),
+            "rel_time_str": _rel_time(r.created_at),
+        }
+        for r in runs
+    }
     return templates.TemplateResponse(
         request,
         "workshop/dashboard.html",
         {
             "runs": runs,
+            "run_extras": run_extras,
             "themes": get_args(Theme),
             "languages": get_args(Language),
             "live": LIVE_STATES,
@@ -138,11 +199,17 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
     )
 
 
-@router.post("/login")
-async def login(settings: WorkshopSettings, secret: Annotated[str, Form()]) -> RedirectResponse:
+@router.post("/login", response_class=HTMLResponse)
+async def login(
+    request: Request,
+    settings: WorkshopSettings,
+    secret: Annotated[str, Form()],
+) -> Response:
     if not secrets.compare_digest(secret, settings.workshop_secret.get_secret_value()):
-        raise HTTPException(status_code=401, detail="wrong secret")
-    response = _to_login()
+        return templates.TemplateResponse(
+            request, "workshop/login.html", {"error": "Incorrect secret."}, status_code=401
+        )
+    response: Response = RedirectResponse("/workshop", status_code=303)
     response.set_cookie(
         SESSION_COOKIE,
         _session_token(settings),
@@ -181,10 +248,17 @@ async def run_page(
     if not _authed(request, settings):
         return templates.TemplateResponse(request, "workshop/login.html", {})
     record = _record_or_404(manager, run_id)
+    staged_stories = _staged_story_summaries(record.story_ids, settings)
     return templates.TemplateResponse(
         request,
         "workshop/run.html",
-        {"record": record, "steps": _checkpointed_steps(record, settings), "live": LIVE_STATES},
+        {
+            "record": record,
+            "steps": _checkpointed_steps(record, settings),
+            "live": LIVE_STATES,
+            "staged_stories": staged_stories,
+            "rel_time": _rel_time,
+        },
     )
 
 
@@ -195,10 +269,16 @@ async def run_progress(
     if not _authed(request, settings):
         raise HTTPException(status_code=404)
     record = _record_or_404(manager, run_id)
+    staged_stories = _staged_story_summaries(record.story_ids, settings)
     return templates.TemplateResponse(
         request,
         "workshop/_progress.html",
-        {"record": record, "steps": _checkpointed_steps(record, settings), "live": LIVE_STATES},
+        {
+            "record": record,
+            "steps": _checkpointed_steps(record, settings),
+            "live": LIVE_STATES,
+            "staged_stories": staged_stories,
+        },
     )
 
 
@@ -222,6 +302,36 @@ async def approve_run(
         publisher(story_id)
     manager.store.save(record.advance("approved"))
     return _to_login()
+
+
+@router.post("/runs/{run_id}/reject")
+async def reject_run(
+    request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
+) -> RedirectResponse:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _record_or_404(manager, run_id)
+    try:
+        manager.store.save(record.advance("rejected"))
+    except InvalidTransition:
+        raise HTTPException(status_code=400) from None
+    return _to_login()
+
+
+@router.post("/runs/{run_id}/again")
+async def run_again(
+    request: Request,
+    settings: WorkshopSettings,
+    manager: Manager,
+    background: BackgroundTasks,
+    run_id: str,
+) -> RedirectResponse:
+    if not _authed(request, settings):
+        return _to_login()
+    record = _record_or_404(manager, run_id)
+    new_record = await manager.submit(OPERATOR_TOKEN, record.request)
+    background.add_task(manager.execute, new_record)
+    return RedirectResponse(f"/workshop/runs/{new_record.id}", status_code=303)
 
 
 @router.post("/runs/{run_id}/delete")
@@ -286,13 +396,20 @@ async def staged_story(
     except Exception:
         raise HTTPException(status_code=404) from None
     story = Story.model_validate_json(obj["Body"].read())
+    # Load run: prefer ?run= param, fall back to finding by story_id
     record = None
-    for candidate in manager.store.list_runs():
-        if story_id in candidate.story_ids:
-            record = candidate
-            break
+    run_id = request.query_params.get("run")
+    if run_id:
+        record = manager.store.load(OPERATOR_TOKEN, run_id)
+    if record is None:
+        for candidate in manager.store.list_runs():
+            if story_id in candidate.story_ids:
+                record = candidate
+                break
     return templates.TemplateResponse(
-        request, "workshop/story.html", {"story": story, "record": record, "live": LIVE_STATES}
+        request,
+        "workshop/story.html",
+        {"story": story, "record": record, "live": LIVE_STATES, "rel_time": _rel_time},
     )
 
 

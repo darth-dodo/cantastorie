@@ -211,8 +211,8 @@ def test_the_progress_fragment_reports_the_run_state(tmp_path: Path, s3: S3Clien
     fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
 
     assert fragment.status_code == 200
-    assert "running" in fragment.text
-    assert "hx-get" in fragment.text
+    assert 'data-state="running"' in fragment.text
+    assert "hx-get" in fragment.text  # still polling while the run is live
 
 
 def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S3Client) -> None:
@@ -252,7 +252,9 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
 
     page = harness.client.get(f"/workshop/staged/{story_id}")
 
-    assert 'hx-post="/workshop/staged/' in page.text
+    # The armed two-tap control posts a plain form (303 back after delete).
+    assert f'action="/workshop/staged/{story_id}/delete"' in page.text
+    assert "data-delete-btn" in page.text
     assert "Delete this story" in page.text
 
 
@@ -513,9 +515,12 @@ def test_deleting_a_run_does_not_remove_shared_story_artifacts(
     assert harness.store.load("operator", shared.id) == shared
 
 
-def test_settled_runs_show_confirmed_delete_controls_on_dashboard_and_progress(
+def test_settled_runs_show_armed_delete_controls_on_dashboard_and_progress(
     tmp_path: Path, s3: S3Client
 ) -> None:
+    """Deletion is a two-tap armed control (data-delete-btn, no browser
+    hx-confirm dialog): inline HTMX removal on the bench, a plain form
+    post (303 back to the bench) on the run page."""
     harness = _Harness(tmp_path, s3)
     harness.login()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
@@ -525,16 +530,15 @@ def test_settled_runs_show_confirmed_delete_controls_on_dashboard_and_progress(
     dashboard = harness.client.get("/workshop")
     progress = harness.client.get(f"/workshop/runs/{record.id}/progress")
 
-    action = f'hx-post="/workshop/runs/{record.id}/delete"'
-    confirmation = 'hx-confirm="Delete this run and all its artifacts?"'
-    assert action in dashboard.text
-    assert confirmation in dashboard.text
-    assert 'hx-target="closest tr"' in dashboard.text
+    assert f'hx-post="/workshop/runs/{record.id}/delete"' in dashboard.text
+    assert "data-delete-btn" in dashboard.text
+    assert 'hx-target="closest [data-run-card]"' in dashboard.text
     assert 'hx-swap="outerHTML"' in dashboard.text
-    assert action in progress.text
-    assert confirmation in progress.text
-    assert 'hx-target="closest #run-progress"' in progress.text
-    assert 'hx-swap="outerHTML"' in progress.text
+    assert "hx-confirm" not in dashboard.text
+
+    assert f'action="/workshop/runs/{record.id}/delete"' in progress.text
+    assert "data-delete-btn" in progress.text
+    assert "hx-confirm" not in progress.text
 
 
 def test_live_runs_hide_the_delete_control_from_progress(tmp_path: Path, s3: S3Client) -> None:
@@ -597,3 +601,224 @@ def test_delete_route_redirects_for_non_htmx_requests(tmp_path: Path, s3: S3Clie
 
     assert response.status_code == 303
     assert response.headers["location"] == "/workshop"
+
+
+# ---------------------------------------------------------------------------
+# reject route
+# ---------------------------------------------------------------------------
+
+
+def test_rejecting_a_staged_run_settles_it_to_rejected(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    staged = record.advance("running").advance("staged")
+    harness.store.save(staged)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/reject", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "rejected"
+
+
+def test_rejecting_a_non_staged_run_returns_400(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
+        "running"
+    )
+    harness.store.save(record)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/reject", follow_redirects=False)
+
+    assert response.status_code == 400
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "running"
+
+
+def test_reject_route_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    staged = record.advance("running").advance("staged")
+    harness.store.save(staged)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/reject", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "staged"  # unchanged
+
+
+def test_reject_route_returns_404_for_unknown_run(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post("/workshop/runs/no-such-run/reject", follow_redirects=False)
+
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# again route
+# ---------------------------------------------------------------------------
+
+
+def test_run_again_creates_a_new_run_with_the_same_request_and_executes_it(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    record = new_run("operator", request)
+    failed = record.advance("running").advance("failed")
+    harness.store.save(failed)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
+
+    assert response.status_code == 303
+    all_runs = harness.store.list_runs()
+    assert len(all_runs) == 2  # original + new
+    new_records = [r for r in all_runs if r.id != record.id]
+    assert len(new_records) == 1
+    new_record = new_records[0]
+    assert new_record.request == request
+    assert new_record.state == "staged"  # TestClient runs background tasks to completion
+    assert response.headers["location"] == f"/workshop/runs/{new_record.id}"
+
+
+def test_run_again_works_on_any_settled_state(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
+
+    assert response.status_code == 303
+    new_run_id = response.headers["location"].split("/")[-1]
+    new_record = harness.store.load("operator", new_run_id)
+    assert new_record is not None
+    assert new_record.state == "staged"
+
+
+def test_again_route_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    failed = record.advance("running").advance("failed")
+    harness.store.save(failed)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/workshop"
+    assert len(harness.store.list_runs()) == 1  # no new run created
+
+
+def test_again_route_returns_404_for_unknown_run(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post("/workshop/runs/no-such-run/again", follow_redirects=False)
+
+    assert response.status_code == 404
+
+
+def test_wrong_secret_renders_login_template_with_error_not_json(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """A wrong secret must re-render the login template with a 401 status, not return JSON."""
+    harness = _Harness(tmp_path, s3)
+
+    response = harness.client.post("/workshop/login", data={"secret": "wrong-guess"})
+
+    assert response.status_code == 401
+    assert 'action="/workshop/login"' in response.text  # login form rendered
+    assert (
+        "wrong" in response.text.lower()
+        or "incorrect" in response.text.lower()
+        or "secret" in response.text.lower()
+    )
+    assert response.headers.get("content-type", "").startswith("text/html")
+
+
+def test_run_page_includes_staged_story_review_links_with_page_count(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """The run page progress fragment shows 'Review N pages' for staged stories."""
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings, s3)  # has 1 page
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+
+    page = harness.client.get(f"/workshop/runs/{record.id}")
+    fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    # Both the full run page (which includes the fragment) and the polled
+    # fragment must show "Review N pages" linking the staged story.
+    for text in (page.text, fragment.text):
+        assert "Review 1 page" in text
+        assert f"/workshop/staged/{story_id}" in text
+
+
+def test_story_page_shows_approve_reject_only_when_run_is_staged(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Approve+reject forms only visible when run is staged (not approved/rejected)."""
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+
+    # Staged: footer forms should be present
+    page = harness.client.get(f"/workshop/staged/{story_id}?run={record.id}")
+    assert f'action="/workshop/runs/{record.id}/approve"' in page.text
+    assert f'action="/workshop/runs/{record.id}/reject"' in page.text
+
+    # After approval: footer gone
+    harness.client.post(f"/workshop/runs/{record.id}/approve", follow_redirects=False)
+    page_after = harness.client.get(f"/workshop/staged/{story_id}?run={record.id}")
+    assert f'action="/workshop/runs/{record.id}/approve"' not in page_after.text
+
+
+def test_dashboard_hides_delete_for_live_runs_via_data_testid(tmp_path: Path, s3: S3Client) -> None:
+    """Live (queued/running) runs must not have the delete button in the dashboard."""
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
+    running = record.advance("running")
+    harness.store.save(running)
+
+    page = harness.client.get("/workshop")
+
+    # The delete button hx-post must not appear for the live run
+    assert f'hx-post="/workshop/runs/{record.id}/delete"' not in page.text
+    # The run card itself should be visible
+    assert (
+        record.id[:8] in page.text
+        or "first_snow" in page.text.lower()
+        or "first snow" in page.text.lower()
+    )
+
+
+def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3Client) -> None:
+    """Run page context must carry staged_stories with id, title, page_count."""
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings, s3)  # title="La barchetta", 1 page
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+
+    page = harness.client.get(f"/workshop/runs/{record.id}")
+
+    assert "La barchetta" in page.text or "Review" in page.text  # title or review button shown
+    assert page.status_code == 200

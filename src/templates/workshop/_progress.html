@@ -1,42 +1,91 @@
-{# The polled fragment: run state + checkpoint-derived steps. While the run is
-   live it re-requests itself; once settled the hx-get is gone and polling
-   stops with it. #}
-<div id="run-progress"
+{# Polled progress fragment. While live it polls; once settled it stops.
+   Beads use monotone fill: a step is done when its checkpoint dir exists OR
+   any later step's does (revise only runs when safety demands a rewrite). #}
+{% set step_names = ["write", "revise", "safety", "narrate", "illustrate", "assemble"] %}
+{% set headlines = {
+     "write": "Writing the story…",
+     "revise": "Softening for bedtime…",
+     "safety": "Checking every page…",
+     "narrate": "Narrating the pages…",
+     "illustrate": "Painting the pictures…",
+     "assemble": "Binding the book…",
+   } %}
+{% set ns = namespace(last=-1) %}
+{% for step in step_names %}{% if step in steps %}{% set ns.last = loop.index0 %}{% endif %}{% endfor %}
+{% set current_idx = ns.last + 1 %}
+{% set current_step = step_names[current_idx] if current_idx < 6 else "assemble" %}
+<div id="run-progress" data-state="{{ record.state }}"
      {% if record.state in live %}hx-get="/workshop/runs/{{ record.id }}/progress"
      hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
-  <p><span class="state state-{{ record.state }}">{{ record.state }}</span></p>
-  {% if steps %}
-    <ol class="workshop-steps">
-      {% for step in steps %}<li>{{ step }} ✓</li>{% endfor %}
-    </ol>
-  {% endif %}
-  {% if record.error %}<p class="workshop-error">{{ record.error }}</p>{% endif %}
-  {% if record.story_ids %}
-    <ul class="workshop-staged">
-      {% for story_id in record.story_ids %}
-        <li>
-          <a href="/workshop/staged/{{ story_id }}">{{ story_id }}</a>
-          {% if record.state not in live and record.state != "approved" %}
-            <button hx-post="/workshop/staged/{{ story_id }}/delete"
-                    hx-confirm="Delete this staged story?"
-                    hx-target="closest li"
-                    hx-swap="outerHTML"
-                    class="delete-btn">Delete</button>
-          {% endif %}
-        </li>
+  <div class="ws-card ws-progress-card{% if record.state == 'staged' %} ws-progress-card--staged{% endif %}">
+    <div class="ws-beads">
+      {% for step in step_names %}
+        {% set idx = loop.index0 %}
+        {% if record.state in ["staged", "approved", "rejected"] %}
+          {% set bead = "done" %}
+        {% elif record.state == "failed" %}
+          {% set bead = "done" if idx < current_idx else ("rest" if idx == current_idx else "future") %}
+        {% elif record.state == "running" %}
+          {% set bead = "done" if idx < current_idx else ("current" if idx == current_idx else "future") %}
+        {% else %}
+          {% set bead = "future" %}
+        {% endif %}
+        <div class="ws-bead-col">
+          <div class="ws-bead ws-bead--{{ bead }}"></div>
+          <span class="ws-bead-label ws-bead-label--{{ bead }}">{{ step }}</span>
+        </div>
       {% endfor %}
-    </ul>
+    </div>
+
+    {% if record.state == "running" %}
+      <div class="ws-progress-headline">{{ headlines[current_step] }}</div>
+      <div class="ws-progress-sub">about two minutes so far · the page refreshes itself</div>
+    {% elif record.state == "queued" %}
+      <div class="ws-progress-headline">In the queue…</div>
+      <div class="ws-progress-sub">the run starts in a moment · the page refreshes itself</div>
+    {% elif record.state == "staged" %}
+      <div class="ws-progress-headline ws-progress-headline--staged">Staged — nothing reaches a child unseen</div>
+      <div class="ws-progress-sub">every page below is yours to hear and see first</div>
+    {% elif record.state == "approved" %}
+      <div class="ws-progress-headline ws-progress-headline--approved">On the shelf — published</div>
+      <div class="ws-progress-sub">children can meet it tonight</div>
+    {% elif record.state == "rejected" %}
+      <div class="ws-progress-headline ws-progress-headline--rested">Rejected — nothing was published</div>
+      <div class="ws-progress-sub">the run stays in the history</div>
+    {% elif record.state == "failed" %}
+      <div class="ws-progress-headline ws-progress-headline--rested">The run rested at {{ current_step }}</div>
+      <div class="ws-progress-sub">Nothing was published. The full note is below.</div>
+    {% endif %}
+
+    {% if record.state == "staged" and staged_stories %}
+      <div class="ws-review-pills">
+        {% for story in staged_stories %}
+          <a href="/workshop/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if record.state == "failed" and record.error %}
+      <pre class="ws-error-box">{{ record.error }}</pre>
+    {% endif %}
+
+    {% if record.state == "failed" %}
+      <form method="post" action="/workshop/runs/{{ record.id }}/again">
+        <button type="submit" class="ws-pill ws-pill-primary">Run it again</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if record.state in ["queued", "running"] %}
+    <div class="ws-ghost-card">
+      <div class="ws-ghost-title">Then: review before anyone hears it</div>
+      <div class="ws-ghost-sub">the Approve button appears here when the run stages</div>
+    </div>
   {% endif %}
-  {% if record.state == "staged" %}
-    <form method="post" action="/workshop/runs/{{ record.id }}/approve">
-      <button type="submit">Approve &amp; publish</button>
-    </form>
-  {% endif %}
+
   {% if record.state not in live %}
-    <button hx-post="/workshop/runs/{{ record.id }}/delete"
-            hx-confirm="Delete this run and all its artifacts?"
-            hx-target="closest #run-progress"
-            hx-swap="outerHTML"
-            class="delete-btn">Delete</button>
+    <form method="post" action="/workshop/runs/{{ record.id }}/delete" class="ws-progress-actions">
+      <button type="submit" class="ws-delete-btn ws-delete-btn--wide" data-delete-btn>× Delete run</button>
+    </form>
   {% endif %}
 </div>

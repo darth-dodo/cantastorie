@@ -1,59 +1,92 @@
 {% extends "workshop/base.html" %}
-{% block title %}Runs{% endblock %}
+{% block title %}Bench{% endblock %}
 {% block content %}
-  <section class="workshop-card">
-    <h2>Start a run</h2>
-    <form method="post" action="/workshop/runs" class="workshop-run-form">
-      <label>Theme
-        <select name="theme">
-          {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ") }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>Language
-        <select name="language">
-          {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>Stories
-        <select name="count">
-          <option>1</option><option>2</option><option>3</option>
-        </select>
-      </label>
-      <label>Premise (optional)
-        <input name="premise" type="text" placeholder="a small boat wants to see the moon" />
-      </label>
-      <button type="submit">Generate</button>
-    </form>
-  </section>
+<div class="ws-page">
+  <div class="ws-bench-header">
+    <div class="ws-wordmark">Workshop</div>
+    <div class="ws-tagline">the room behind the piazza</div>
+  </div>
 
-  <section class="workshop-card">
-    <h2>Runs</h2>
+  <div class="ws-card ws-start-card">
+    <div class="ws-card-title">Start a run</div>
+    <form method="post" action="/workshop/runs" class="ws-run-form">
+      <div class="ws-field-grid">
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Theme</span>
+          <div class="ws-field-select-wrap">
+            <select name="theme" class="ws-field ws-select">
+              {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Your theme</span>
+          <input name="premise" type="text" class="ws-field" placeholder="a small boat wants to see the moon" />
+        </div>
+        <div class="ws-field-block">
+          <span class="ws-field-label">Language</span>
+          <div class="ws-field-select-wrap">
+            <select name="language" class="ws-field ws-select">
+              {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="ws-field-block">
+          <span class="ws-field-label">Stories</span>
+          <div class="ws-stepper ws-field">
+            <button type="button" class="ws-stepper-btn" data-stepper-dec>−</button>
+            <span class="ws-stepper-val" data-stepper-val>1</span>
+            <button type="button" class="ws-stepper-btn" data-stepper-inc>+</button>
+            <input type="hidden" name="count" value="1" data-stepper-input />
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="ws-pill ws-pill-primary">Generate</button>
+    </form>
+  </div>
+
+  <div class="ws-section-head">Runs</div>
+
+  <div class="ws-runs-list">
     {% if runs %}
-      <table class="workshop-runs">
-        <thead><tr><th>Requested</th><th>Theme</th><th>Lang</th><th>State</th><th></th></tr></thead>
-        <tbody>
-          {% for run in runs %}
-            <tr>
-              <td>{{ run.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
-              <td>{{ run.request.theme.replace("_", " ") }}</td>
-              <td>{{ run.request.language }}</td>
-              <td><span class="state state-{{ run.state }}">{{ run.state }}</span></td>
-              <td>
-                <a href="/workshop/runs/{{ run.id }}">open</a>
-                {% if run.state not in live %}
-                  <button hx-post="/workshop/runs/{{ run.id }}/delete"
-                          hx-confirm="Delete this run and all its artifacts?"
-                          hx-target="closest tr"
-                          hx-swap="outerHTML"
-                          class="delete-btn">Delete</button>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% set chip_labels = {"failed": "rested", "staged": "staged — review"} %}
+      {% for run in runs %}
+        {% set extras = run_extras[run.id] %}
+        {% set title = run.request.premise if run.request.premise else run.request.theme.replace("_", " ") %}
+        {% if run.state == "staged" and run.story_ids | length == 1 %}
+          {% set href = "/workshop/staged/" ~ run.story_ids[0] ~ "?run=" ~ run.id %}
+        {% else %}
+          {% set href = "/workshop/runs/" ~ run.id %}
+        {% endif %}
+        <div class="ws-run-card{% if run.state == 'staged' %} ws-run-card--staged{% endif %}" data-run-card>
+          <a href="{{ href }}" class="ws-run-card-link">
+            <div class="ws-run-card-body">
+              <div class="ws-run-title">{{ title }}</div>
+              <div class="ws-run-meta">{{ run.request.language }} · {{ run.request.count }} stor{{ "y" if run.request.count == 1 else "ies" }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
+            </div>
+            <div class="ws-chip ws-state-{{ run.state }}">{{ chip_labels.get(run.state, run.state) }}</div>
+          </a>
+          {% if run.state not in live %}
+            <button class="ws-delete-btn"
+                    data-delete-btn
+                    hx-post="/workshop/runs/{{ run.id }}/delete"
+                    hx-target="closest [data-run-card]"
+                    hx-swap="outerHTML">×</button>
+          {% endif %}
+        </div>
+      {% endfor %}
     {% else %}
-      <p class="workshop-empty">No runs yet — the shelf is waiting for its first story.</p>
+      <div class="ws-card ws-empty-card">
+        <div class="ws-empty-title">No runs yet</div>
+        <div class="ws-empty-sub">the shelf is waiting for its first story</div>
+      </div>
     {% endif %}
-  </section>
+  </div>
+
+  <div class="ws-palette-bar">
+    {% for name in ["warm", "indigo", "seaglass", "plum"] %}
+      <button class="ws-palette-dot ws-palette-dot--{{ name }}" data-palette-name="{{ name }}" title="{{ name }}"></button>
+    {% endfor %}
+  </div>
+</div>
 {% endblock %}

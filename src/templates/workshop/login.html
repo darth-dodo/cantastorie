@@ -1,9 +1,23 @@
 {% extends "workshop/base.html" %}
 {% block title %}Sign in{% endblock %}
 {% block content %}
-  <form class="workshop-card workshop-login" method="post" action="/workshop/login">
-    <label for="secret">Operator secret</label>
-    <input id="secret" name="secret" type="password" autocomplete="current-password" autofocus />
-    <button type="submit">Enter the workshop</button>
-  </form>
+<div class="ws-login-wrap">
+  <div class="ws-wordmark-stack">
+    <div class="ws-wordmark">Workshop</div>
+    <div class="ws-tagline">the room behind the piazza</div>
+  </div>
+  <div class="ws-card ws-login-card">
+    <form method="post" action="/workshop/login" id="login-form">
+      <div class="ws-field-block">
+        <span class="ws-field-label">Secret</span>
+        <input id="secret" name="secret" type="password" class="ws-field" autocomplete="current-password" autofocus placeholder="••••••••" />
+      </div>
+      {% if error %}
+      <p class="ws-login-error" data-testid="login-error">{{ error }}</p>
+      {% endif %}
+      <button type="submit" class="ws-pill ws-pill-primary">Enter</button>
+    </form>
+  </div>
+  <p class="ws-mono-note">no accounts — with no secret configured,<br>the workshop answers 404 and does not exist</p>
+</div>
 {% endblock %}
