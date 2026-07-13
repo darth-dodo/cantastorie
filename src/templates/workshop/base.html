@@ -4,15 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Workshop{% endblock %} · Cantastorie</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&display=swap" rel="stylesheet" />
+    <script src="/static/js/palette.js"></script>
     <link rel="stylesheet" href="/static/css/tokens.css" />
     <link rel="stylesheet" href="/static/css/workshop.css" />
     <script src="/static/js/vendor/htmx.min.js" defer></script>
   </head>
-  <body class="workshop">
-    <header class="workshop-header">
-      <a href="/workshop"><h1>Workshop</h1></a>
-      <span class="workshop-tagline">the room behind the piazza</span>
-    </header>
-    <main>{% block content %}{% endblock %}</main>
+  <body>
+    {% block body %}
+    <div class="ws-shell">
+      {% block content %}{% endblock %}
+    </div>
+    {% endblock %}
+    <script src="/static/js/workshop.js" defer></script>
   </body>
 </html>

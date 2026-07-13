@@ -1,12 +1,14 @@
 {% extends "workshop/base.html" %}
-{% block title %}Run {{ record.id[:8] }}{% endblock %}
+{% block title %}{% if record.request.premise %}{{ record.request.premise }}{% else %}{{ record.request.theme.replace("_", " ") }}{% endif %}{% endblock %}
 {% block content %}
-  <section class="workshop-card">
-    <h2>{{ record.request.theme.replace("_", " ") }} · {{ record.request.language }}</h2>
-    <p class="workshop-meta">
-      run {{ record.id[:8] }} · {{ record.request.count }} story{{ "" if record.request.count == 1 else "ies" }}
-      {% if record.request.premise %} · “{{ record.request.premise }}”{% endif %}
-    </p>
-    {% include "workshop/_progress.html" %}
-  </section>
+<div class="ws-page">
+  <div class="ws-run-header">
+    <a href="/workshop" class="ws-back-btn">‹</a>
+    <div class="ws-run-head-text">
+      <div class="ws-run-head-title">{% if record.request.premise %}{{ record.request.premise }}{% else %}{{ record.request.theme.replace("_", " ") }}{% endif %}</div>
+      <div class="ws-run-head-meta">{{ record.request.language }} · {{ record.request.count }} stor{{ "y" if record.request.count == 1 else "ies" }} · {{ rel_time(record.created_at) }}</div>
+    </div>
+  </div>
+  {% include "workshop/_progress.html" %}
+</div>
 {% endblock %}
