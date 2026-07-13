@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # (text, audio, images together) before publish reads it back.
     staging_dir: Path = Path("staging")
 
-    # The operator face at /workshop (AI-388, ADR-004). Empty means the
+    # The operator face at /workshop (AI-388, ADR-005). Empty means the
     # workshop does not exist: every /workshop route answers 404. There are
     # no accounts — this one secret is the whole operator access model.
     workshop_secret: SecretStr = SecretStr("")

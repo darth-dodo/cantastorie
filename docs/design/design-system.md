@@ -60,7 +60,7 @@ washes standing in for pipeline art. The audio engine, real
 ## The workshop — the room behind the piazza
 
 The operator face at `/workshop`
-([ADR-004](../adr/ADR-004-workshop-area.md), AI-388): sign in with one
+([ADR-005](../adr/ADR-005-workshop-area.md), AI-388): sign in with one
 secret, start a pipeline run, watch its steps land, review the staged story
 page by page, approve & publish. Unlike the shell above this is **real,
 shipped code** — server-rendered Jinja2 + HTMX, with a progress fragment
