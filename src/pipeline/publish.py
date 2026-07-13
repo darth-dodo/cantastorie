@@ -471,7 +471,7 @@ def audit_published_bucket(
     for mkey in manifest_keys:
         manifests_checked += 1
         lang = mkey.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-        manifest = _load_manifest(client, bucket, lang)
+        manifest, _ = _load_manifest(client, bucket, lang)
         for entry in manifest.get("stories", []):
             sid = entry.get("id", "?")
             story_url = entry.get("story", "")
