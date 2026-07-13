@@ -184,6 +184,9 @@ async def require_parent(
     if disabled:
         raise HTTPException(status_code=403)
 
-    # 7. Return the identity context.
+    # 7. Require a non-empty sub — an absent or empty sub cannot be scoped to
+    #    a family and is treated as unauthenticated (mirrors family_token check).
     user_id = str(payload.get("sub", ""))
+    if not user_id:
+        raise HTTPException(status_code=401)
     return ParentContext(user_id=user_id, family_token=family_token, disabled=False)

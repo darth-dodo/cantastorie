@@ -346,6 +346,48 @@ def test_jwks_cache_stale_if_error_still_verifies(monkeypatch: pytest.MonkeyPatc
     assert call_count == 2  # both attempts were made
 
 
+def test_unknown_kid_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Given a token whose header kid is not present in the served JWKS,
+    When require_parent processes the request,
+    Then it raises 401 — the kid-not-found guard fires before signature check.
+
+    Regression guard: deleting the `if kid not in keys` branch in auth.py must
+    cause this test to fail (or raise a key-error), proving the guard is tested.
+    """
+    private_key = _generate_rsa_keypair()
+    # JWKS serves only TEST_KID; token claims a completely different kid.
+    monkeypatch.setattr(auth_module, "_fetch_jwks", _make_mock_fetch(private_key, kid=TEST_KID))
+
+    settings = _clerk_settings()
+    app = _make_app(settings)
+    # Mint an otherwise-valid token but stamp a kid that is absent from the JWKS.
+    token = _mint_token(private_key, _valid_payload(), kid="wrong-key-999")
+
+    with TestClient(app) as client:
+        resp = client.get("/me", cookies={SESSION_COOKIE: token})
+
+    assert resp.status_code == 401
+
+
+def test_empty_sub_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Given a validly-signed token with family_token present but sub empty/absent,
+    When require_parent processes the request,
+    Then it raises 401 — an identity without a subject cannot be scoped.
+    """
+    private_key = _generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", _make_mock_fetch(private_key))
+
+    settings = _clerk_settings()
+    app = _make_app(settings)
+    # sub="" is the edge case: present but empty string.
+    token = _mint_token(private_key, _valid_payload(sub=""))
+
+    with TestClient(app) as client:
+        resp = client.get("/me", cookies={SESSION_COOKIE: token})
+
+    assert resp.status_code == 401
+
+
 def test_jwks_cache_no_prior_fetch_on_failure_returns_401(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

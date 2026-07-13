@@ -63,3 +63,51 @@ None. The implementation is straightforward and all acceptance criteria are met:
 - No Clerk SDK in `pyproject.toml`.
 - `require_parent` is exported and importable but NOT wired into any router.
 - Full type coverage; mypy strict mode passes.
+
+---
+
+## AI-409 Review Fixes (post-commit)
+
+Two issues raised in code review were addressed on the same branch.
+
+### Changes made
+
+**`src/api/auth.py` — Fix 2: reject empty/absent `sub`**
+
+Step 7 of `require_parent` (line 187) now raises `HTTPException(status_code=401)` when `user_id` is an empty string (which covers both a missing `sub` claim and an explicit `sub: ""`). Previously it silently produced `ParentContext(user_id="", ...)`.
+
+```python
+user_id = str(payload.get("sub", ""))
+if not user_id:
+    raise HTTPException(status_code=401)
+```
+
+**`tests/api/test_auth.py` — Fix 1 + Fix 2: two new tests**
+
+- `test_unknown_kid_returns_401` — mints a token with `kid="wrong-key-999"` while the JWKS mock serves only `TEST_KID`. Asserts 401. A regression deleting the `if kid not in keys` guard (auth.py ~line 154) would cause this test to proceed to signature verification and fail differently, catching the deletion.
+- `test_empty_sub_returns_401` — mints a validly-signed token with `family_token` present and `sub=""`. Asserts 401. Exercises the new empty-sub guard added above.
+
+### Verification commands and output
+
+```
+$ uv run pytest tests/api/test_auth.py -v
+...
+tests/api/test_auth.py::test_valid_token_returns_parent_context PASSED
+tests/api/test_auth.py::test_expired_token_returns_401 PASSED
+tests/api/test_auth.py::test_bad_signature_returns_401 PASSED
+tests/api/test_auth.py::test_missing_family_token_returns_401 PASSED
+tests/api/test_auth.py::test_disabled_true_returns_403 PASSED
+tests/api/test_auth.py::test_unset_clerk_config_returns_404 PASSED
+tests/api/test_auth.py::test_missing_session_cookie_returns_401 PASSED
+tests/api/test_auth.py::test_jwks_cache_stale_if_error_still_verifies PASSED
+tests/api/test_auth.py::test_unknown_kid_returns_401 PASSED
+tests/api/test_auth.py::test_empty_sub_returns_401 PASSED
+tests/api/test_auth.py::test_jwks_cache_no_prior_fetch_on_failure_returns_401 PASSED
+======================= 11 passed, 11 warnings in 2.74s ========================
+
+$ uv run ruff check src/api/auth.py tests/api/test_auth.py
+All checks passed!
+
+$ uv run mypy src
+Success: no issues found in 28 source files
+```
