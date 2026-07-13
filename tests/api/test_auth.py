@@ -93,12 +93,16 @@ def _make_app(settings: Settings) -> FastAPI:
     return app
 
 
-def _clerk_settings(jwks_url: str = "https://test.clerk.test/.well-known/jwks.json") -> Settings:
+def _clerk_settings(
+    jwks_url: str = "https://test.clerk.test/.well-known/jwks.json",
+    clerk_issuer: str = "",
+) -> Settings:
     return Settings(
         _env_file=None,
         clerk_publishable_key=SecretStr("pk_test_xxx"),
         clerk_secret_key=SecretStr("sk_test_xxx"),
         clerk_jwks_url=jwks_url,
+        clerk_issuer=clerk_issuer,
     )
 
 
@@ -139,6 +143,7 @@ def _valid_payload(
     *,
     disabled: bool = False,
     include_family_token: bool = True,
+    iss: str = "",
 ) -> dict[str, Any]:
     n = _now()
     payload: dict[str, Any] = {
@@ -151,6 +156,8 @@ def _valid_payload(
         payload["family_token"] = family_token
     if disabled:
         payload["disabled"] = True
+    if iss:
+        payload["iss"] = iss
     return payload
 
 
@@ -401,6 +408,71 @@ def test_jwks_cache_no_prior_fetch_on_failure_returns_401(
     settings = _clerk_settings()
     app = _make_app(settings)
     token = _mint_token(private_key, _valid_payload())
+
+    with TestClient(app) as client:
+        resp = client.get("/me", cookies={SESSION_COOKIE: token})
+
+    assert resp.status_code == 401
+
+
+def test_issuer_mismatch_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Given clerk_issuer is set and the token's iss claim does not match,
+    When require_parent processes the request,
+    Then it raises 401 — the issuer check fails.
+    """
+    private_key = _generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", _make_mock_fetch(private_key))
+
+    settings = _clerk_settings(clerk_issuer="https://expected.clerk.accounts.dev")
+    app = _make_app(settings)
+    # iss in the token points at a different Clerk instance.
+    token = _mint_token(private_key, _valid_payload(iss="https://other.clerk.accounts.dev"))
+
+    with TestClient(app) as client:
+        resp = client.get("/me", cookies={SESSION_COOKIE: token})
+
+    assert resp.status_code == 401
+
+
+def test_issuer_match_returns_parent_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Given clerk_issuer is set and the token's iss claim matches exactly,
+    When require_parent processes the request,
+    Then it returns a ParentContext — issuer is valid.
+    """
+    private_key = _generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", _make_mock_fetch(private_key))
+
+    issuer = "https://expected.clerk.accounts.dev"
+    settings = _clerk_settings(clerk_issuer=issuer)
+    app = _make_app(settings)
+    token = _mint_token(private_key, _valid_payload(sub="user_iss_ok", iss=issuer))
+
+    with TestClient(app) as client:
+        resp = client.get("/me", cookies={SESSION_COOKIE: token})
+
+    assert resp.status_code == 200
+    assert resp.json()["user_id"] == "user_iss_ok"
+
+
+def test_non_string_family_token_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Given a validly-signed token whose family_token claim is a non-string (e.g. integer),
+    When require_parent processes the request,
+    Then it raises 401 — isinstance(family_token, str) guard fires.
+    """
+    private_key = _generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", _make_mock_fetch(private_key))
+
+    settings = _clerk_settings()
+    app = _make_app(settings)
+    n = _now()
+    payload: dict[str, Any] = {
+        "sub": "user_2abc",
+        "iat": n,
+        "nbf": n,
+        "exp": n + 3600,
+        "family_token": 123,  # integer, not a string
+    }
+    token = _mint_token(private_key, payload)
 
     with TestClient(app) as client:
         resp = client.get("/me", cookies={SESSION_COOKIE: token})

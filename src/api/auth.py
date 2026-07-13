@@ -158,6 +158,7 @@ async def require_parent(
             raw_token,
             public_key,
             algorithms=["RS256"],
+            issuer=settings.clerk_issuer or None,
             options={
                 "verify_exp": True,
                 "verify_nbf": True,

@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     clerk_publishable_key: SecretStr = SecretStr("")
     clerk_secret_key: SecretStr = SecretStr("")
     clerk_jwks_url: str = ""
+    # Clerk instance issuer (the Frontend API / `iss` claim); when set,
+    # require_parent pins it. Unset ⇒ issuer not enforced, mirroring the azp deferral.
+    clerk_issuer: str = ""
 
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
     # access keys follow the SecretStr pattern above — never logged, never
