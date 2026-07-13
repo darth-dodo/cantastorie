@@ -66,6 +66,7 @@ graph LR
 | LLMs, images & narration | OpenRouter | One gateway, per-step model choice — a different model family for the safety judge than the writer, and narration TTS on the same key (see [Narration / Audio](#narration--audio)) |
 | Narration | Voxtral Mini TTS via OpenRouter (`mistralai/voxtral-mini-tts-2603`); Deepgram for word timings and the fallback voice | One key / one gateway; ~10× cheaper than ElevenLabs, which is now retired. Word timings come from a Deepgram STT transcription pass over the narrated audio; Deepgram Aura is the named fallback voice — see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) |
 | Asset storage | Cloudflare R2 | Zero egress fees, access logs off, public bucket for published content |
+| Parent auth | Clerk (parent area only) | Recoverable family identity for Phase 2 pack requests and review; magic-link sign-in; FastAPI verifies session JWTs via JWKS with PyJWT, no vendor SDK server-side — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) |
 | App hosting | Render | Hermano's render.yaml precedent |
 | Child persistence | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
 | Testing | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows verified in a real browser |
@@ -282,6 +283,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
 - **Settings**: language multi-select, reading mode toggle.
 - **Export/import**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
 - **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
+- **Parent authentication (Phase 2)**: parents sign in via **Clerk** — magic link or OAuth — on `/parent` pages only; FastAPI verifies session JWTs against Clerk's JWKS (PyJWT, cached keys, no vendor SDK). The family token is minted or linked at first sign-in, stored in the Clerk user's metadata, and carried in the session JWT as a claim, making the family identity recoverable and multi-device. Signing in on the child's device writes the token into the shared-origin IndexedDB `family` store — that is how a family's approved packs reach its shelf. The player page never loads Clerk assets (CSP-enforced). See [ADR-003](adr/ADR-003-parent-authentication-clerk.md), Accepted 2026-07-12.
 
 ---
 
@@ -289,8 +291,8 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
 
 | Guarantee | Mechanism |
 |-----------|-----------|
-| Nothing about the child leaves the browser | Story-time traffic is bucket-direct asset fetches only; no cookies; no server-side state; R2 access logs disabled |
-| No accounts | The family token is a random capability in IndexedDB, created client-side, carried in export/import |
+| Nothing about the child leaves the browser | Story-time traffic is bucket-direct asset fetches only; the player loads no third-party script (CSP `script-src 'self'`), sets no cookies, and fetches carry no credentials; no server-side child state; R2 access logs disabled |
+| No child accounts | The family token is a random capability in IndexedDB, created client-side or minted at first parent sign-in, carried in export/import — and since [ADR-003](adr/ADR-003-parent-authentication-clerk.md) anchored to the parent's Clerk identity for recovery. A parent signs in only to request and review stories; the only family PII held server-side is the parent's sign-in identifier |
 | Zero unapproved assets reachable | Only the publish step writes to `published/`; the audit script (slice 5, then CI) verifies every manifest entry resolves to approved content and nothing else is listed |
 | Keys never reach the browser | The OpenRouter key (and the pipeline-only Deepgram key, if the timing pass needs one) exist only in pipeline/service environments |
 
@@ -350,6 +352,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | [System Overview](system-overview.md) | The code as built: module map, state machines, and seams |
 | [Setup & Deploy](setup.md) | R2 bucket, CORS, and the Render blueprint |
 | [ADR-001](adr/ADR-001-technology-stack.md) | Foundational technology stack (why this shape) |
+| [ADR-003](adr/ADR-003-parent-authentication-clerk.md) | Parent authentication via Clerk, parent area only (Accepted 2026-07-12, with amendments) |
 | [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram; ElevenLabs retired (supersedes [ADR-002](adr/ADR-002-narration-provider.md)) |
 | [ADR-005](adr/ADR-005-family-voice-narration.md) | Nonna Narrates — family voice narration (Proposed) |
 | [Architecture Decision Records](adr/) | The full ADR index |

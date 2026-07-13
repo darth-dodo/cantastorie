@@ -19,6 +19,7 @@ Cantastorie's stack is **settled and documented in `docs/architecture.md`**, wit
 | Audio playback | Web Audio API: decoded buffers + gain nodes | `<audio>` tags, Howler.js, media elements |
 | Story assets | Bucket-direct from Cloudflare R2 | Routing story bytes through the app server |
 | Child state | IndexedDB only | Cookies, accounts, server-side state |
+| Parent auth | **Clerk, parent area only** — magic link/OAuth on `/parent` pages; FastAPI verifies session JWTs via JWKS with PyJWT; family token as a session claim — see **[ADR-003](../../../docs/adr/ADR-003-parent-authentication-clerk.md)** | Any auth surface on child paths; a Clerk server SDK; child accounts of any kind |
 | Pipeline | Plain Python + Pydantic AI, filesystem checkpoints | LangGraph or any graph framework |
 | LLM/image access | OpenRouter (per-step model choice) | Direct provider SDKs |
 | Narration | **Voxtral Mini TTS via OpenRouter** (`mistralai/voxtral-mini-tts-2603`); **Deepgram** for word timings (STT pass) and the fallback voice (Aura) — see **[ADR-004](../../../docs/adr/ADR-004-narration-deepgram-voxtral.md)** | Browser TTS; ElevenLabs (retired — ADR-004); any vendor key beyond the flagged pipeline-only Deepgram exception |
@@ -35,5 +36,6 @@ Cantastorie's stack is **settled and documented in `docs/architecture.md`**, wit
 - "A bundler/framework would make this easier" — no-bundler is a settled decision, not an oversight.
 - "Let's just use ElevenLabs for narration" — ElevenLabs is retired by decision, not oversight (ADR-004); the narrator is Voxtral via OpenRouter, the fallback voice is Deepgram Aura, and re-adding ElevenLabs requires a superseding ADR.
 - Recommending `npm install <framework>` or a new provider SDK/key without citing `docs/architecture.md` or the relevant ADR.
+- "Just check the Clerk session on the player/shelf…" — Clerk script, cookie logic, or session checks on any child path break the settled boundary (ADR-003: parent area only). The player route's CSP (`script-src 'self'`) and the privacy guard test enforce it; the child player stays account-free, credential-free, and cookie-free.
 
 Changing a settled decision is possible — but it happens by editing `docs/architecture.md` (and adding or superseding an ADR in `docs/adr/`) with the human's agreement first, never by installing around it.

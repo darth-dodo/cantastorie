@@ -64,7 +64,7 @@ One warm narrator identity across every story and language, pointing at painted 
 
 **Luca, 5.** Italian-German home. Replays branches to hear both paths, narrates along by page 3 of a favorite. Frustration: stories that end scary before sleep.
 
-**Elena, parent.** Reviews packs on her phone after bedtime. Wants total certainty about content, zero accounts, and her data portable. Frustration: black-box "kid safe" claims.
+**Elena, parent.** Reviews packs on her phone after bedtime. Wants total certainty about content, no child accounts, and her data portable. Frustration: black-box "kid safe" claims.
 
 ### Experience by Age Band
 
@@ -93,7 +93,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Pack requests & review** | ⏳ Planned | Parents request 1–3 stories on a theme, preview everything, approve or reject (Phase 2) |
 | **Authoring pipeline** | ⏳ Planned | Generates story text, narration, watercolor images, word timings, and glosses for approval |
 | **Live generation** | ⏳ Planned | Auto safety gate with unanimous-pass publishing, audit log, kill switch (Phase 3) |
-| **Export / import** | ⏳ Planned | The whole family state round-trips through a file; no accounts anywhere |
+| **Export / import** | ⏳ Planned | The whole family state round-trips through a file; no child accounts anywhere |
 
 ---
 
@@ -313,10 +313,10 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Behavior | Detail |
 |----------|--------|
 | **Local-only progress** | Progress and the family token live only in IndexedDB |
-| **Family token** | A random identifier created on first parent-gate entry. It keys this family's packs and names no one — a capability, not an identity. |
+| **Family token** | A random identifier created on first parent-gate entry (or minted at first parent sign-in). It keys this family's packs and names no one — a capability, not an identity. Since [ADR-003](adr/ADR-003-parent-authentication-clerk.md) it is anchored to the parent's sign-in, so losing a device no longer orphans a family's packs. |
 | **Per-family shelves** | One shared deployment; each family's shelf shows the bundled launch set plus its own approved packs, via a token-keyed manifest overlay |
 | **Export / import** | The whole family state, token included, round-trips through a file. An invalid import changes nothing and names the failing field. |
-| **No accounts, ever** | No accounts means no child data to protect |
+| **No child accounts** | Nothing about the child ever leaves the device; a parent signs in only to request and review stories ([ADR-003](adr/ADR-003-parent-authentication-clerk.md), Accepted 2026-07-12) |
 
 ---
 
@@ -346,14 +346,14 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Phasing | 1: bundled stories · 2: packs with approval · 3: live behind guardrails | Ship the player before the factory, the factory before autonomy |
 | Launch content | 19 stories (see [Languages](#languages--localization)) | Depth where the users are |
 | Visuals | AI watercolor via pipeline, approved, published static | Consistent style, zero live image cost |
-| Persistence | IndexedDB + export/import, no accounts | No accounts means no child data to protect |
+| Persistence | IndexedDB + export/import, no child accounts | No child accounts means no child data to protect |
 | Privacy | No tracking, no analytics, no child data | Non-negotiable for this audience |
 | Connectivity | Online only (v1) | Bucket-direct playback is already resilient; offline is scope creep now |
 | Acceptance | This document is the single acceptance source | One source, three test runners |
 | Name | Cantastorie | The craft we are reviving |
 | Style | Soft watercolor, warm palette, rounded characters, nothing frightening | Bedtime, not Saturday cartoons |
 | Reading mode | Optional text with karaoke highlighting and tap-word glosses; parent-enabled, default off; timings and glosses precomputed at authoring | Serves reading-along parents without breaking the voice-first core |
-| Tenancy | One shared deployment; per-family shelves keyed by a local family token | One instance to run, still no accounts; the token is a random capability, not an identity |
+| Tenancy | One shared deployment; per-family shelves keyed by a family token, anchored to a recoverable parent identity in Phase 2 | One instance to run, no child accounts; the token is a random capability, not an identity — recoverable via parent sign-in since [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (amended 2026-07-12) |
 
 ---
 
@@ -375,7 +375,7 @@ One FastAPI app on Render with three faces, in the habla-hermano mold:
 - **Player**: a lean full-screen page of vanilla ES modules and Web Audio; at story time it talks only to Cloudflare R2 (bucket-direct assets) and IndexedDB — no cookies, no server calls with child data
 - **Parent area**: server-rendered Jinja2 + HTMX behind the gate
 - **Factory**: a plain-Python authoring pipeline (Pydantic AI over OpenRouter for stories, safety verdicts, glosses, images, and narration — narration on Voxtral via OpenRouter, per-language voices; word timings via a Deepgram transcription pass at slice 6; ElevenLabs retired, see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)) — a local CLI in Phase 1, the same functions behind routes in Phase 2
-- **State**: IndexedDB only — no server-side state, no accounts
+- **State**: child state in IndexedDB only — no server-side child state, no child accounts; a parent signs in (Clerk, [ADR-003](adr/ADR-003-parent-authentication-clerk.md)) only for Phase 2 pack requests and review
 - **Shelves**: a per-language manifest of launch content, plus a token-keyed overlay per family for approved packs
 
 See the [Architecture Documentation](architecture.md) for the pipeline design, storage layout, caching, and risks.
@@ -389,14 +389,13 @@ See the [Architecture Documentation](architecture.md) for the pipeline design, s
 | Phase | Focus | Target | Status |
 |-------|-------|--------|--------|
 | **Phase 1 (MVP)** | The player: shelf, story playback, choices, resume, parent gate, settings, export/import — with the 19 bundled launch stories from a manual pipeline run | **26 July 2026** | ⏳ Planned |
-| **Phase 2** | The factory: pack requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing | After MVP | ⏳ Planned |
+| **Phase 2** | The factory: pack requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing — parents sign in via Clerk ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) | After MVP | ⏳ Planned |
 | **Phase 3** | Autonomy, guarded: the automatic safety gate, unanimous-pass publishing, audit log, kill switch | After Phase 2 | ⏳ Planned |
 
 Phase 1 ships in seven vertical slices — each ends with a child hearing something new, from "one story plays" through "reading mode" and "portability". The slice-by-slice table lives in the [architecture doc](architecture.md#build-slices).
 
 ### Proposed (ADRs open, not yet on the roadmap)
 
-- **Parent authentication via Clerk** — a recoverable parent identity for Phase 2's pack requests and review queue; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md), Proposed)
 - **Nonna Narrates** — family voice narration: a grandparent or parent records one consent sentence and becomes the narrator of their family's stories, with never-stored clips and one-tap total revocation ([ADR-005](adr/ADR-005-family-voice-narration.md), Proposed; depends on the narration stack and a multi-tenant architecture ADR)
 
 ### Future Ideas

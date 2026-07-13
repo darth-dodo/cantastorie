@@ -61,7 +61,7 @@ Italian and Spanish are the flagships — deepest content, first through every q
 
 ### Truly Private, Parent-Approved
 
-No accounts, no tracking, no analytics. Progress lives in the browser (IndexedDB) and exports to a file; nothing about the child ever leaves the device. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no tracking, no analytics. Progress lives in the browser (IndexedDB) and exports to a file; nothing about the child ever leaves the device. A parent signs in only to request and review stories ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)) — the child player never loads an auth script or sets a cookie. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
 
 ---
 

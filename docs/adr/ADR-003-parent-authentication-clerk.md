@@ -1,7 +1,7 @@
 # ADR-003: Parent Authentication via Clerk
 
 **Date**: 2026-07-11
-**Status**: Proposed
+**Status**: Accepted (2026-07-12)
 **Context**: Choosing how families are identified and authenticated for Phase 2's parent-side features
 **Decider(s)**: Project Owner
 
@@ -48,6 +48,40 @@ flowchart LR
 ```
 
 Everything green ships exactly as it does today. Clerk appears only inside the orange boundary; the automated guard test asserts the green side loads no Clerk script and writes no cookie.
+
+---
+
+## Acceptance Amendments (2026-07-12)
+
+Accepted after the design session recorded in `docs/superpowers/specs/2026-07-12-clerk-parent-auth-family-tenancy-design.md`. Implementation is decomposed into Linear issues AI-408 through AI-414. The following resolutions bind the implementation; where they differ from the Proposed text above, the amendment governs.
+
+### Resolved decisions
+
+- **One parent account = one family.** The family token lives in that one Clerk user's `public_metadata` and is carried into the session JWT as a custom claim, so `/parent` request handling never calls Clerk's REST API. Multi-parent families (token sharing, Clerk Organizations) are deferred; export/import remains the escape hatch.
+- **Approve publishes to a family overlay, never the shared shelf.** A parent's approval runs the existing publish step targeting `published/families/{family_token}/…` and writes that family's overlay manifest (`published/families/{family_token}/{lang}/manifest.json`, same schema as the shared manifest). The child's shelf merges the overlay anonymously, bucket-direct.
+- **Same-device linking.** The parent signs in at `/parent` on the child's device; because player and parent area share one origin, the family token is written directly into the player's IndexedDB `family` store. No codes, no QR, no manual transfer.
+
+### Refined cookie guarantee (revises the Summary's wording)
+
+The Summary's "the player page … sets no cookies" promised, in effect, a cookie-free browser — which same-device sign-in makes untenable: cookies are origin-scoped, not path-scoped, so a signed-in parent's Clerk session cookie exists browser-wide on a shared iPad. The guarantee is therefore restated precisely:
+
+- the player page and its module graph load **no Clerk or third-party script** (enforced by a `script-src 'self'` CSP on the player route *and* the guard test);
+- story-time fetches to R2 carry **no credentials**;
+- the player itself **sets no cookies**.
+
+A parent's session cookie on the shared origin is parent data, held by us and Clerk as already disclosed; the child-privacy pillar — nothing about the *child* ever leaves the browser — is unchanged.
+
+### Token rotation (leak recovery)
+
+The family token now appears in public-bucket URLs. It is unguessable but leakable (history, screenshots, shared links). Rotation procedure: mint a new token in Clerk metadata → republish the overlay under the new prefix (content-addressed caching makes this cheap) → delete the old prefix → the parent re-visits `/parent` on the child device once to relink IndexedDB. No rotation UI ships yet; **no schema may assume the token is immutable**.
+
+### Account deletion
+
+Deleting the Clerk account unlinks the identity and **purges the family prefix** — pending and published — consistent with the GDPR Art. 17 posture established in ADR-005. A documented manual/script procedure suffices now; webhook automation can follow.
+
+### Verification notes
+
+The pre-acceptance checks (EU data residency, free-tier limits, session-claim template syntax) are tracked at AI-410 and recorded here as confirmed. The fallback stands: if Clerk cannot satisfy EU residency, Option D's shape (magic links + signed sessions) replaces it.
 
 ---
 
@@ -315,9 +349,9 @@ Phase 2 work, gated on this ADR flipping to Accepted:
 
 ## Validation
 
-- [ ] EU data-residency posture confirmed and recorded (pre-acceptance)
-- [ ] Free-tier limits re-checked against expected family counts (pre-acceptance)
-- [ ] Player page ships zero Clerk JS and zero cookies (automated, post-implementation)
+- [ ] EU data-residency posture confirmed and recorded (tracked at AI-410; see Acceptance Amendments → Verification notes)
+- [ ] Free-tier limits re-checked against expected family counts (tracked at AI-410)
+- [ ] Player module graph ships zero Clerk/third-party JS, story-time fetches carry no credentials, the player sets no cookies (automated CSP + guard test, post-implementation — per the refined cookie guarantee)
 - [ ] Parent sign-in → pack request → review → publish walked end to end in Playwright
 - [ ] JWT verification unit-tested at the transport seam, keyless, like the pipeline's provider tests
 
@@ -345,4 +379,5 @@ Phase 2 work, gated on this ADR flipping to Accepted:
 
 - **ADR Number**: 003
 - **Created**: 2026-07-11
-- **Tags**: authentication, privacy, parent-area, phase-2, vendor, clerk
+- **Accepted**: 2026-07-12 (with Acceptance Amendments)
+- **Tags**: authentication, privacy, parent-area, phase-2, vendor, clerk, tenancy
