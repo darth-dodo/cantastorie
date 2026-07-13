@@ -1,4 +1,4 @@
-# ADR-004: The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs
+# ADR-005: The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs
 
 **Date**: 2026-07-11
 **Status**: Accepted
@@ -298,6 +298,6 @@ Exact slicing is decided in `docs/plans/` per slice; this ADR fixes the architec
 
 ## Metadata
 
-- **ADR Number**: 004
+- **ADR Number**: 005 (renumbered 2026-07-12; originally filed as a second, colliding ADR-004)
 - **Created**: 2026-07-11
 - **Tags**: workshop, authoring, pipeline, parent-area, execution-model, render, r2

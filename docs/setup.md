@@ -8,7 +8,7 @@ Cantastorie has two deployed pieces and one that never deploys:
 | **Content bucket** | Cloudflare R2 | Published stories and prompts, fetched bucket-direct |
 | **Authoring pipeline** | Your laptop only | Runs the CLI; its two API keys stay in local `.env` |
 
-The pipeline's keys are **never** deployed — the running site needs no secrets. `OPENROUTER_API_KEY` is the one key that runs the pipeline (`ELEVENLABS_API_KEY` disappears with the [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) provider switch; a pipeline-only `DEEPGRAM_API_KEY` exists only if OpenRouter turns out not to carry the Deepgram timing models). See [architecture.md → Content Storage](architecture.md#content-storage).
+The pipeline's keys are **never** deployed — the running site needs no secrets. `OPENROUTER_API_KEY` is the one key that runs the default pipeline (ElevenLabs is retired — [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)). Two pipeline-only keys are the bounded exceptions: `DEEPGRAM_API_KEY` for the slice 6 word-timing pass (OpenRouter does not carry the Deepgram models), and `MISTRAL_API_KEY` for voice cloning only, once Nonna Narrates ships ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)). See [architecture.md → Content Storage](architecture.md#content-storage).
 
 ---
 
@@ -40,7 +40,7 @@ wrangler r2 bucket dev-url enable cantastorie -J eu
 
 This returns a `https://pub-<hash>.r2.dev` URL — the live bucket's is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev`. For a stable name, connect a custom domain instead (Dashboard → R2 → the bucket → Settings → Custom Domains) and add that origin to the CORS file below.
 
-### The private pending bucket (workshop, ADR-004)
+### The private pending bucket (workshop, ADR-005)
 
 Workshop run records and staged pack artifacts live under a `pending/` prefix — and the public bucket exposes **everything** under its public URL, with no prefix scoping. Pending content therefore gets its **own private bucket** (no public URL, no custom domain, no CORS):
 

@@ -1,4 +1,4 @@
-"""Behavior specs for the operator face at /workshop (AI-388, ADR-004).
+"""Behavior specs for the operator face at /workshop (AI-388, ADR-005).
 
 The operator retires the terminal: start a run, watch progress, inspect the
 staged story, publish — all in the browser. Access is a single env-var secret
@@ -99,7 +99,7 @@ class _Harness:
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager
         app.dependency_overrides[get_publisher] = lambda: self.published.append
-        self.client = TestClient(app)
+        self.client = TestClient(app, base_url="https://testserver")
 
     def login(self) -> None:
         response = self.client.post(
@@ -154,6 +154,19 @@ def test_the_session_cookie_is_not_the_secret_itself(tmp_path: Path, s3: S3Clien
     assert cookie
     assert SECRET not in cookie
     assert cookie == hashlib.sha256(SECRET.encode()).hexdigest()
+
+
+def test_login_sets_a_secure_expiring_workshop_scoped_cookie(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+
+    response = harness.client.post(
+        "/workshop/login", data={"secret": SECRET}, follow_redirects=False
+    )
+
+    cookie = response.headers["set-cookie"]
+    assert "Max-Age=86400" in cookie
+    assert "Path=/workshop" in cookie
+    assert "Secure" in cookie
 
 
 def test_starting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
@@ -269,6 +282,24 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
     assert reloaded.state == "approved"
+
+
+def test_approving_a_non_staged_run_is_rejected_without_publishing(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    failed = record.advance("running").advance("failed", story_ids=[story_id])
+    harness.store.save(failed)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/approve", follow_redirects=False)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Run is in failed state, must be staged to approve"}
+    assert harness.published == []
+    assert harness.store.load("operator", record.id) == failed
 
 
 def test_deleting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:

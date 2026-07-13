@@ -1,4 +1,4 @@
-"""Behavior specs for the workshop run manager (AI-387, ADR-004).
+"""Behavior specs for the workshop run manager (AI-387, ADR-005).
 
 The manager wraps the pipeline's step functions: one in-process run at a time,
 every state change persisted to the store before anything else happens, and

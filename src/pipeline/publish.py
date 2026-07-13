@@ -68,6 +68,7 @@ MANIFEST_PROMPT_KEYS = {
 }
 
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
+_MANIFEST_WRITE_ATTEMPTS = 3
 
 
 class PublishResult(BaseModel):
@@ -99,7 +100,18 @@ def _missing(error: ClientError) -> bool:
     return str(error.response.get("Error", {}).get("Code")) in _MISSING_CODES
 
 
-def _upload_if_new(client: S3Client, bucket: str, key: str, body: bytes, content_type: str) -> bool:
+def _precondition_failed(error: ClientError) -> bool:
+    return str(error.response.get("Error", {}).get("Code")) == "PreconditionFailed"
+
+
+def _upload_if_new(
+    client: S3Client,
+    bucket: str,
+    key: str,
+    body: bytes,
+    content_type: str,
+    cache_control: str | None = None,
+) -> bool:
     try:
         head = client.head_object(Bucket=bucket, Key=key)
     except ClientError as error:
@@ -108,20 +120,31 @@ def _upload_if_new(client: S3Client, bucket: str, key: str, body: bytes, content
     else:
         if head["ETag"].strip('"') == hashlib.md5(body, usedforsecurity=False).hexdigest():
             return False
-    client.put_object(Bucket=bucket, Key=key, Body=body, ContentType=content_type)
+    if cache_control is None:
+        client.put_object(Bucket=bucket, Key=key, Body=body, ContentType=content_type)
+    else:
+        client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+            CacheControl=cache_control,
+        )
     return True
 
 
-def _load_manifest(client: S3Client, bucket: str, language: str) -> dict[str, Any]:
+def _load_manifest(
+    client: S3Client, bucket: str, language: str
+) -> tuple[dict[str, Any], str | None]:
     key = f"{PUBLISHED_PREFIX}/{language}/manifest.json"
     try:
         obj = client.get_object(Bucket=bucket, Key=key)
     except ClientError as error:
         if _missing(error):
-            return {"language": language, "prompts": {}, "stories": []}
+            return {"language": language, "prompts": {}, "stories": []}, None
         raise
     loaded: dict[str, Any] = json.loads(obj["Body"].read())
-    return loaded
+    return loaded, obj["ETag"]
 
 
 def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> None:
@@ -140,6 +163,53 @@ def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> N
     stories.append(entry)
 
 
+def _publish_manifest(
+    client: S3Client,
+    bucket: str,
+    language: str,
+    story: Story,
+    public_base: str,
+    prompt_urls: dict[str, str],
+) -> tuple[list[str], list[str], list[str]]:
+    manifest_key = f"{PUBLISHED_PREFIX}/{language}/manifest.json"
+    for attempt in range(_MANIFEST_WRITE_ATTEMPTS):
+        manifest, etag = _load_manifest(client, bucket, language)
+        if prompt_urls:
+            manifest["prompts"] = {**manifest.get("prompts", {}), **prompt_urls}
+        _upsert_story(manifest, story, public_base)
+        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode()
+        story_ids = [entry["id"] for entry in manifest["stories"]]
+        if (
+            etag is not None
+            and etag.strip('"') == hashlib.md5(manifest_bytes, usedforsecurity=False).hexdigest()
+        ):
+            return [], [manifest_key], story_ids
+        try:
+            if etag is None:
+                client.put_object(
+                    Bucket=bucket,
+                    Key=manifest_key,
+                    Body=manifest_bytes,
+                    ContentType="application/json",
+                    CacheControl="public, max-age=60",
+                )
+            else:
+                client.put_object(
+                    Bucket=bucket,
+                    Key=manifest_key,
+                    Body=manifest_bytes,
+                    ContentType="application/json",
+                    CacheControl="public, max-age=60",
+                    IfMatch=etag,
+                )
+        except ClientError as error:
+            if _precondition_failed(error) and attempt < _MANIFEST_WRITE_ATTEMPTS - 1:
+                continue
+            raise
+        return [manifest_key], [], story_ids
+    raise RuntimeError("manifest publish retry loop exhausted")
+
+
 def stage_story(
     assembled: AssembledStory,
     settings: Settings,
@@ -154,6 +224,7 @@ def stage_story(
     client = client or _build_client(settings)
     bucket = settings.pending_bucket
     prefix = f"{STAGED_PREFIX}/{assembled.story.id}"
+    delete_staged_story(assembled.story.id, settings, client=client)
     client.put_object(
         Bucket=bucket,
         Key=f"{prefix}/{STORY_FILE}",
@@ -197,13 +268,24 @@ def publish_story(
         "Body"
     ].read()
     story = Story.model_validate_json(story_bytes)
+    if story.id != story_id:
+        raise ValueError(f"Staged story id {story.id!r} does not match requested id {story_id!r}")
     language = story.language
 
     uploaded: list[str] = []
     skipped: list[str] = []
 
     def send(key: str, body: bytes, content_type: str) -> None:
-        target = uploaded if _upload_if_new(client, bucket, key, body, content_type) else skipped
+        cache_control = (
+            "public, max-age=60"
+            if key.endswith("/manifest.json")
+            else "public, max-age=31536000, immutable"
+        )
+        target = (
+            uploaded
+            if _upload_if_new(client, bucket, key, body, content_type, cache_control)
+            else skipped
+        )
         target.append(key)
 
     paginator = client.get_paginator("list_objects_v2")
@@ -237,18 +319,17 @@ def publish_story(
             if manifest_key is not None:
                 prompt_urls[manifest_key] = f"{public_base}/prompts/{language}/{name}"
 
-    manifest = _load_manifest(client, bucket, language)
-    if prompt_urls:
-        manifest["prompts"] = {**manifest.get("prompts", {}), **prompt_urls}
-    _upsert_story(manifest, story, public_base)
-    manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode()
-    send(f"{PUBLISHED_PREFIX}/{language}/manifest.json", manifest_bytes, "application/json")
+    manifest_uploaded, manifest_skipped, manifest_story_ids = _publish_manifest(
+        client, bucket, language, story, public_base, prompt_urls
+    )
+    uploaded.extend(manifest_uploaded)
+    skipped.extend(manifest_skipped)
 
     return PublishResult(
         story_id=story_id,
         uploaded=uploaded,
         skipped=skipped,
-        manifest_story_ids=[entry["id"] for entry in manifest["stories"]],
+        manifest_story_ids=manifest_story_ids,
     )
 
 
@@ -270,7 +351,7 @@ def unpublish_story(
             if not key.endswith("/manifest.json"):
                 continue
             candidate = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-            loaded = _load_manifest(client, bucket, candidate)
+            loaded, _ = _load_manifest(client, bucket, candidate)
             if any(entry.get("id") == story_id for entry in loaded.get("stories", [])):
                 language = candidate
                 manifest = loaded

@@ -1,10 +1,10 @@
-# ADR-005: Nonna Narrates (family voice narration)
+# ADR-006: Nonna Narrates (family voice narration)
 
 **Date**: 2026-07-11
 **Status**: Proposed
 **Context**: Letting a family member's cloned voice narrate their family's stories, with the strictest data handling in the codebase
 **Decider(s)**: Project Owner
-**Depends on**: [ADR-002](ADR-002-narration-provider.md) / [ADR-004](ADR-004-narration-deepgram-voxtral.md) (narration provider and voice cloning); a multi-tenant architecture ADR (forthcoming — per-family voice profiles assume the token-keyed per-family shelves described in the product spec)
+**Depends on**: [ADR-002](ADR-002-narration-provider.md) / [ADR-004](ADR-004-narration-deepgram-voxtral.md) (narration provider and voice cloning), as amended by [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md) (cloning runs on Voxtral voice profiles via the Mistral API); a multi-tenant architecture ADR (forthcoming — per-family voice profiles assume the token-keyed per-family shelves described in the product spec)
 
 ---
 
@@ -29,6 +29,8 @@ Family voice narration ships behind the parent area with these rules, all of the
 
 Under the settled narration stack, the cloning provider is **Voxtral via OpenRouter** (zero-shot cloning, carried forward from ADR-002 through ADR-004), and the consent-transcription check in rule 2 is exactly the **Deepgram STT pass** ADR-004 introduces for word timings — the feature adds no new provider. Two claims must be **verified before acceptance**: that the provider exposes a persistent voice-profile create/delete API (rules 5 and 6 depend on it), and that zero-shot cloning quality on a short kitchen-table clip is usable. If the provider offers only per-request cloning rather than stored profiles, rule 5 inverts into a harder problem (a reference clip would need to exist somewhere), and this design must be revisited rather than bent.
 
+> **Update (2026-07-12, [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md))**: field testing found OpenRouter's Voxtral endpoint exposes no cloning parameter, so cloning runs on **Voxtral voice profiles via the Mistral API** — `MISTRAL_API_KEY` exists for this single capability and is used by no other code path. This does add one provider key, bounded to this feature. The two verification claims above now apply to the Mistral API's voice-profile surface. Default narration meanwhile moves to Gemini TTS, so switching Nonna on changes vocal character entirely — which is the feature, but should be understood.
+
 ## Consequences
 
 **Positive**: the emotionally strongest feature the product can offer, built almost entirely from existing pipeline parts; the revocation flow gives the platform its erasure machinery for free; the consent-in-the-clip design removes the abuse path of cloning a non-consenting third party.
@@ -44,9 +46,9 @@ Under the settled narration stack, the cloning provider is **Voxtral via OpenRou
 
 ## Metadata
 
-**ADR Number**: 005
+**ADR Number**: 006 (renumbered 2026-07-12; originally filed as ADR-005 while a second, colliding ADR-004 existed)
 **Created**: 2026-07-11
-**Last Updated**: 2026-07-11
+**Last Updated**: 2026-07-12 (renumbered; provider note updated per ADR-008)
 **Version**: 1.0
 
 **Authors**: Project Owner (draft), Claude (AI Assistant, formatting and provider note)
