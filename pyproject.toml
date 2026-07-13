@@ -19,6 +19,9 @@ dependencies = [
     "pydantic-ai>=0.4.0",
     "typer>=0.15.0",
     "httpx>=0.28.0",
+    # JWT verification: PyJWT + cryptography for RS256/JWKS (AI-409 identity layer).
+    "pyjwt>=2.9.0",
+    "cryptography>=43.0.0",
     # Publish: R2 is S3-compatible, reached with boto3
     "boto3>=1.35.0",
     # Observability: LangSmith tracing for the pipeline and FastAPI app
