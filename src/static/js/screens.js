@@ -80,22 +80,33 @@ export function buildShelf(
   header.append(mascot, text);
 
   const covers = el("div", "covers");
-  stories.forEach((entry) => {
-    const name = entry.title ?? entry.label;
-    const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
-    if (entry.cover) {
-      const img = el("img", "cover-art");
-      img.src = entry.cover;
-      img.alt = "";
-      img.loading = "lazy";
-      cover.appendChild(img);
-    }
-    const caption = el("span");
-    caption.textContent = name;
-    cover.appendChild(caption);
-    cover.addEventListener("click", () => onOpen(entry));
-    covers.appendChild(cover);
-  });
+
+  if (stories.length === 0) {
+    const meadow = el("div", "empty-shelf");
+    const bird = el("div", "meadow-bird");
+    meadow.appendChild(bird);
+    const note = el("p", "empty-shelf-text");
+    note.textContent = subText;
+    meadow.appendChild(note);
+    covers.appendChild(meadow);
+  } else {
+    stories.forEach((entry) => {
+      const name = entry.title ?? entry.label;
+      const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
+      if (entry.cover) {
+        const img = el("img", "cover-art");
+        img.src = entry.cover;
+        img.alt = "";
+        img.loading = "lazy";
+        cover.appendChild(img);
+      }
+      const caption = el("span");
+      caption.textContent = name;
+      cover.appendChild(caption);
+      cover.addEventListener("click", () => onOpen(entry));
+      covers.appendChild(cover);
+    });
+  }
 
   const language = el("div", "language-sticker");
   const flag = el("div", `flag flag-${currentLang}`);
