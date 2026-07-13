@@ -60,6 +60,19 @@ class Settings(BaseSettings):
     # no accounts — this one secret is the whole operator access model.
     workshop_secret: SecretStr = SecretStr("")
 
+    # Clerk parent auth (AI-409, ADR-003). Empty clerk_jwks_url means the
+    # /parent area does not exist: every /parent route answers 404, exactly
+    # like the workshop above. clerk_secret_key is reserved for the
+    # mint-or-link REST call in step 3 (same pattern as the R2 keys being
+    # declared together even when only some are active); JWT verification
+    # itself uses JWKS only — the secret key never touches the verify path.
+    clerk_publishable_key: SecretStr = SecretStr("")
+    clerk_secret_key: SecretStr = SecretStr("")
+    clerk_jwks_url: str = ""
+    # Clerk instance issuer (the Frontend API / `iss` claim); when set,
+    # require_parent pins it. Unset ⇒ issuer not enforced, mirroring the azp deferral.
+    clerk_issuer: str = ""
+
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
     # access keys follow the SecretStr pattern above — never logged, never
     # repr'd. r2_public_base is the URL the published/ prefix is served at,
