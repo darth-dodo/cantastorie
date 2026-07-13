@@ -10,16 +10,19 @@ records how those foundations live in code.
 
 | Layer | File |
 |-------|------|
-| Tokens (color, type, motion, shape) | [`src/static/css/tokens.css`](../../src/static/css/tokens.css) |
+| Tokens (color, type, motion, shape) — 4 palettes × 2 modes | [`src/static/css/tokens.css`](../../src/static/css/tokens.css) |
+| Palette selection (whole app) | [`src/static/js/palette.js`](../../src/static/js/palette.js) |
 | Screens & components (child player) | [`src/static/css/player.css`](../../src/static/css/player.css) |
 | State machine | [`src/static/js/store.js`](../../src/static/js/store.js) |
 | Rendering | [`src/static/js/screens.js`](../../src/static/js/screens.js) |
-| Workshop screens (operator) | [`src/static/css/workshop.css`](../../src/static/css/workshop.css) + [`src/templates/workshop/`](../../src/templates/workshop/) |
+| Workshop screens (operator) | [`src/static/css/workshop.css`](../../src/static/css/workshop.css) + [`src/templates/workshop/`](../../src/templates/workshop/) + [`src/static/js/workshop.js`](../../src/static/js/workshop.js) |
 
 ## The rules, briefly
 
-- **Two modes.** Light (warm cream) and dusk (lamplit charcoal); the shelf
-  follows the clock (dusk from 19:00), `?theme=` overrides for development.
+- **Four palettes, two modes.** Colour is now a two-axis system (see
+  [Palettes](#palettes)): a palette (`indigo` default, plus `warm`, `seaglass`,
+  `plum`) crossed with a mode — light and dusk (lamplit). The shelf follows the
+  clock (dusk from 19:00); `?palette=` and `?theme=` override for development.
   The player itself always lives at dusk — stories are bedtime.
 - **Two typefaces only.** Baloo 2 for everything the app says; Literata for
   everything the story says (reading mode, later).
@@ -34,6 +37,39 @@ records how those foundations live in code.
 - **Beads, never numbers.** Progress is a string of colored beads; the current
   one is bright, the past ones settled, the future ones faint.
 - **Child targets ≥ 96 px**; parent UI and reading-mode words ≥ 44 px.
+
+## Palettes
+
+Colour used to be a single warm cream-and-terracotta look. It is now a
+**two-axis system**: a *palette* (the hues) crossed with a *mode* (light or
+dusk). Both the child shelf/player and the operator workshop obey it.
+
+| Palette | Name | Feel |
+|---------|------|------|
+| `indigo` **(default)** | Moonlit indigo | Cool slate and periwinkle — the new house look. |
+| `warm` | Warm cream | The original Anthropic-adjacent cream and terracotta. |
+| `seaglass` | Sea glass & slate | Muted teal-green over cool stone. |
+| `plum` | Plum & lantern | Soft aubergine with a lantern-gold accent. |
+
+**Semantic tokens, not raw hues.** [`tokens.css`](../../src/static/css/tokens.css)
+defines one semantic set — `--surface`, `--card`, `--ink`, `--primary`,
+`--confirm`, `--accent`, `--info`, `--rest`, and their derived alphas — for
+every palette × mode. Screens reference the semantic names; they never hardcode
+a hex. Legacy aliases (`--terracotta → --primary`, `--sage → --confirm`,
+`--honey → --accent`, `--sea → --info`) let `player.css` and the shelf ride the
+system without a rewrite.
+
+**Selection contract.** `<html>` carries `data-palette` and `data-theme`.
+A tiny synchronous head script,
+[`palette.js`](../../src/static/js/palette.js), sets both before first paint
+(no flash):
+
+- **palette** = `?palette=` if valid (and persisted) → else
+  `localStorage["cantastorie-palette"]` → else `indigo`.
+- **theme** = `?theme=light|dusk` → else dusk when the local hour ≥ 19.
+
+It exposes `window.cantastoriePalette.set(name)` for the switcher UI (the
+four-dot row on the workshop bench). No-JS fallback is indigo light.
 
 ## The user journey
 
@@ -66,46 +102,51 @@ page by page, approve & publish. Unlike the shell above this is **real,
 shipped code** — server-rendered Jinja2 + HTMX, with a progress fragment
 that re-polls itself every 2 s while a run is live.
 
-### As built (first pass, deliberately plain)
+### As built (the sticker-book, AI-395)
 
-`workshop.css` keeps the palette but none of the craft: warm cream
-(`#faf6ef`), ink (`#3b332c`), and a workshop green (`#4a7c59`) on
-`system-ui` — **not** Baloo 2, no tokens beyond the include, no wobble.
-Run states are six pastel chips: `queued` · `running` · `staged` ·
-`approved` · `rejected` · `failed`.
+The first pass was deliberately plain — palette kept, craft absent. It is now
+the design system's own look: Baloo 2 throughout, `tokens.css` semantic colours
+(so the workshop re-themes with every palette), and the parent-UI rule — keep
+the warmth, calm the shapes. Vanilla `workshop.js` (~100 lines) carries the
+three interactions HTMX can't: the stories stepper, the armed two-tap delete,
+and the review audio pill. No new dependencies; no SPA.
+
+- **Beads, never numbers.** Run progress is the player's bead language brought
+  to the fixed pipeline order — `write · revise · safety · narrate ·
+  illustrate · assemble`. Settled beads are sage, the current one is honey at
+  24 px with a static halo, future ones faint. Because the progress fragment
+  `outerHTML`-swaps every 2 s, the states are *steady* — no looping animation
+  that would restart on each swap.
+- **Six states, one of them renamed.** The chip vocabulary is `queued`,
+  `running`, `staged — review`, `approved`, `rejected`, and `failed` — which
+  the operator sees as **`rested`** (a calm terracotta, not an alarm), since
+  failures are routine while the pipeline is tuned. Internal state names are
+  unchanged.
+- **Armed delete, not a browser dialog.** The old `hx-confirm` is replaced by a
+  quiet `×` that arms to "Sure?" on first tap and deletes on the second
+  (disarms on an outside tap) — the same idiom for per-story deletes on the
+  review page. The delete plumbing shipped in #32 is untouched underneath.
+- **A phone-first bench.** The runs table that overflowed at phone width is now
+  a stack of run cards (title, meta line, state chip, armed `×`); live runs
+  hide the delete affordance. Empty state: *"No runs yet — the shelf is waiting
+  for its first story."*
+- **A real review, no native controls.** Each page is a card — full-bleed
+  illustration, Literata story text, and a custom **audio pill** (play/pause
+  circle, honey progress track, `m:ss` label over a hidden `<audio>`, one
+  playing at a time) instead of clashing native `<audio>` chrome. A sticky
+  footer offers *Approve & publish* / *Reject*, shown only while the run is
+  staged.
+- **The palette switcher** lives quietly at the foot of the bench: four dots,
+  the current one ring-highlighted, calling `window.cantastoriePalette.set()`.
 
 ### The operator journey
 
-Captured from the running app with real generated stories (402×874):
+Captured from the running app with seeded runs (402×874, indigo default):
 
 | | |
 |---|---|
-| ![Login](journey/08-workshop-login.png) | **8 · The door.** One secret, one button. No accounts — with no secret configured, the workshop answers 404 and does not exist. |
-| ![Dashboard](journey/09-workshop-dashboard.png) | **9 · The bench.** Start a run (theme, language, count, optional premise) above the run history with state chips. The table already overflows at phone width — a known gap. |
-| ![Run](journey/10-workshop-run.png) | **10 · A run.** Header, meta line, live state chip; while running, checkpoint steps tick in as a plain list, and a staged run grows an *Approve & publish* button. |
-| ![Review](journey/11-workshop-review.png) | **11 · The review.** The staged story page by page — illustration, text, native audio controls — the parent-gate promise in operator form: everything is seen before publish. |
-
-### The design brief (for the Claude Design session)
-
-What the workshop needs from the design system, screen by screen:
-
-- **Foundations first.** Baloo 2 for UI text, the token palette, and the
-  parent-UI rule from above: keep the warmth, calm the shapes. Targets
-  ≥ 44 px (operator, not child).
-- **Dashboard.** The runs table needs a phone-first answer (cards or a
-  collapsing row) — review happens on a phone after bedtime. The
-  start-a-run form and the empty state (*"No runs yet — the shelf is
-  waiting for its first story."*) deserve their moment.
-- **Run progress.** Today a state chip and a ✓ list. The pipeline has a
-  known step order — this wants the bead language from the player:
-  settled · bright · faint. One constraint: the fragment outerHTML-swaps
-  every 2 s while live, so continuous CSS animations restart on each
-  swap — design to that (steady states, not loops).
-- **Failed runs.** The error box (`workshop-error`) is the only failure
-  styling; failed runs are routine while the pipeline is tuned and deserve
-  a calm, legible treatment.
-- **Review.** Native `<audio>` controls clash with everything else; page
-  cards, image sizing, and the approve action need real design.
-- **Constraints.** Server-rendered HTML + HTMX — every design must land as
-  plain HTML/CSS (no SPA components). English-only UI. The six run states
-  above are the complete state vocabulary.
+| ![Login](journey/08-workshop-login.png) | **8 · The door.** Wordmark over *"the room behind the piazza"*, one secret, one Enter pill. No accounts — with no secret configured, the workshop answers 404 and does not exist. |
+| ![Bench](journey/09-workshop-dashboard.png) | **9 · The bench.** The start-a-run card (theme, premise, language, a stories stepper) over the run cards with their state chips and armed delete — and the palette switcher at the foot. |
+| ![Run](journey/10-workshop-run.png) | **10 · A run.** The bead card: six beads on the pipeline's step order with a state headline; while live the fragment re-polls itself every 2 s, and a staged run offers *Review N pages*. |
+| ![Rested](journey/12-workshop-rested.png) | **11 · Rested.** A failed run rests calmly — a terracotta ring on the step it stopped at, the note in a mono box, and a *Run it again* pill that submits a fresh run. |
+| ![Review](journey/11-workshop-review.png) | **12 · The review.** The staged story page by page — illustration, Literata text, the custom audio pill — with the *Approve & publish* / *Reject* footer: the parent-gate promise in operator form, everything seen before publish. |
