@@ -114,3 +114,50 @@ describe("story-configured playback (a loaded story.json sets the shape)", () =>
     expect(store.state.choiceOpen).toBe(true);
   });
 });
+
+describe("audio-error state (AI-367)", () => {
+  it("audioError() marks the player errored; it is a no-op off the player", () => {
+    const store = createStore();
+    store.audioError(); // still on the shelf
+    expect(store.state.audioError).toBe(false);
+    store.openStory();
+    store.audioError();
+    expect(store.state.audioError).toBe(true);
+  });
+
+  it("retryAudio() clears the error and plays", () => {
+    const store = createStore();
+    store.openStory();
+    store.togglePlay(); // paused when the failure hit
+    store.audioError();
+    store.retryAudio();
+    expect(store.state.audioError).toBe(false);
+    expect(store.state.playing).toBe(true);
+  });
+
+  it("leaving or restarting the story clears the error", () => {
+    const store = createStore();
+    store.openStory();
+    store.audioError();
+    store.exitStory();
+    expect(store.state.audioError).toBe(false);
+
+    store.openStory();
+    store.audioError();
+    store.replay();
+    expect(store.state.audioError).toBe(false);
+
+    store.audioError();
+    store.toShelf();
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("a fresh openStory() never starts errored", () => {
+    const store = createStore();
+    store.openStory();
+    store.audioError();
+    store.exitStory();
+    store.openStory();
+    expect(store.state.audioError).toBe(false);
+  });
+});

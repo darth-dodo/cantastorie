@@ -11,6 +11,7 @@ export function initialState() {
     playing: true,
     choiceOpen: false,
     resumeOpen: false,
+    audioError: false, // narration failed to load; the sleeping bird holds the stage
     // The open story's shape; a loaded story.json reconfigures both on
     // openStory(). The defaults keep the design-shell mock behavior.
     pageCount: PAGE_COUNT,
@@ -53,6 +54,7 @@ export function createStore(saved = null) {
           resumeOpen: true,
           playing: false,
           choiceOpen: false,
+          audioError: false,
         });
       } else {
         set({
@@ -63,6 +65,7 @@ export function createStore(saved = null) {
           playing: true,
           choiceOpen: false,
           resumeOpen: false,
+          audioError: false,
         });
       }
     },
@@ -88,9 +91,22 @@ export function createStore(saved = null) {
       set({ playing: !state.playing });
     },
 
+    // Narration for the current page failed to load (AI-367). Only the
+    // player shows the sleeping bird; a stale failure after exiting is noise.
+    audioError() {
+      if (state.screen !== "player") return;
+      set({ audioError: true });
+    },
+
+    // The bird was tapped: clear the error and play — sync() re-narrates.
+    retryAudio() {
+      if (!state.audioError) return;
+      set({ audioError: false, playing: true });
+    },
+
     exitStory() {
       // Page is kept: reopening offers "Continuiamo o ricominciamo?"
-      set({ screen: "shelf", playing: false, choiceOpen: false, resumeOpen: false });
+      set({ screen: "shelf", playing: false, choiceOpen: false, resumeOpen: false, audioError: false });
     },
 
     resumeContinue() {
@@ -102,11 +118,11 @@ export function createStore(saved = null) {
     },
 
     replay() {
-      set({ screen: "player", page: 0, playing: true, choiceOpen: false, resumeOpen: false });
+      set({ screen: "player", page: 0, playing: true, choiceOpen: false, resumeOpen: false, audioError: false });
     },
 
     toShelf() {
-      set({ screen: "shelf", page: 0, playing: true, choiceOpen: false, resumeOpen: false });
+      set({ screen: "shelf", page: 0, playing: true, choiceOpen: false, resumeOpen: false, audioError: false });
     },
   };
 }
