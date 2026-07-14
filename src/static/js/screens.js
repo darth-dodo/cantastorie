@@ -251,8 +251,10 @@ export function buildResumeOverlay(store) {
 // overlay is one big tap target — never a small button for small hands.
 export function buildAudioError(store) {
   const overlay = el("button", "overlay audio-error", { "aria-label": "riprova" });
-  const bird = el("div", "bird");
-  bird.appendChild(el("div", "wing"));
+  // A hand-painted sleeping bird (illustrate pipeline, locked watercolor
+  // style), bundled same-origin so the overlay never depends on the network
+  // it is reacting to. Decorative — the overlay's aria-label carries meaning.
+  const bird = el("img", "bird", { src: "/static/img/sleeping-bird.webp", alt: "" });
   const prompt = el("div", "prompt");
   prompt.textContent = "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.";
   overlay.append(bird, prompt);

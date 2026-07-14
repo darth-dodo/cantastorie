@@ -786,48 +786,14 @@ button.presses:active {
   gap: 22px;
 }
 
-/* A round little bird, eyes closed mid-nap. Same technique as .mascot:
-   one gradient body, pseudo-element eyes — here closed arcs, not dots. */
+/* The hand-painted sleeping bird (src/static/img/sleeping-bird.webp). Sized
+   for small hands to see and tap; the gentle breathe keeps it feeling asleep,
+   not frozen. Same steady-state discipline as the rest of the player. */
 .audio-error .bird {
-  width: 140px;
-  height: 120px;
-  position: relative;
-  border-radius: 50% 50% 46% 46%;
-  background: radial-gradient(circle at 35% 30%, #cfe3f5, #8fb4d9 78%);
-  box-shadow: 0 0 0 12px rgba(143, 180, 217, 0.15);
+  width: min(56vw, 240px);
+  height: auto;
+  display: block;
   animation: bird-breathe 3.2s ease-in-out infinite;
-}
-
-/* Closed eyes: two small downward arcs. */
-.audio-error .bird::before,
-.audio-error .bird::after {
-  content: "";
-  position: absolute;
-  top: 44px;
-  width: 16px;
-  height: 8px;
-  border-bottom: 3px solid #3d4f63;
-  border-radius: 0 0 16px 16px;
-}
-
-.audio-error .bird::before {
-  left: 34px;
-}
-
-.audio-error .bird::after {
-  right: 34px;
-}
-
-/* A folded wing, tucked in for the nap. */
-.audio-error .bird .wing {
-  position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 56px;
-  height: 30px;
-  border-radius: 50% 50% 60% 60%;
-  background: rgba(61, 79, 99, 0.25);
 }
 
 .audio-error .prompt {
