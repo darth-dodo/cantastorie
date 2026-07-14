@@ -11,9 +11,10 @@ Note: no `from __future__ import annotations` here — FastAPI resolves route
 handler annotations at decoration time and PEP 563 lazy strings break that.
 """
 
+import inspect
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 import httpx
@@ -116,11 +117,14 @@ def _make_mock_fetch(
     kid: str = TEST_KID,
     *,
     fail: bool = False,
-) -> Callable[[str], dict[str, Any]]:
-    """Return a fetch callable that serves a local JWKS (or raises on fail)."""
+) -> Callable[[str], Awaitable[dict[str, Any]]]:
+    """Return an async fetch callable that serves a local JWKS (or raises on fail).
+
+    Async to match the awaited seam in auth.py (_fetch_jwks, AI-419).
+    """
     jwks = _jwks_document(private_key, kid)
 
-    def _fetch(url: str) -> dict[str, Any]:
+    async def _fetch(url: str) -> dict[str, Any]:
         if fail:
             raise httpx.ConnectError("simulated network failure")
         return jwks
@@ -176,6 +180,14 @@ def reset_jwks_cache(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+
+def test_fetch_jwks_is_async_to_avoid_blocking_the_event_loop() -> None:
+    """require_parent is an async dependency; a synchronous httpx.get in the
+    JWKS fetch blocks the uvicorn event loop on cold start / TTL expiry
+    (AI-419). The fetch seam must be a coroutine function so it can be awaited.
+    """
+    assert inspect.iscoroutinefunction(auth_module._fetch_jwks)
 
 
 def test_valid_token_returns_parent_context(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -321,7 +333,7 @@ def test_jwks_cache_stale_if_error_still_verifies(monkeypatch: pytest.MonkeyPatc
     private_key = _generate_rsa_keypair()
     call_count = 0
 
-    def fetch_that_fails_second_time(url: str) -> dict[str, Any]:
+    async def fetch_that_fails_second_time(url: str) -> dict[str, Any]:
         nonlocal call_count
         call_count += 1
         if call_count == 1:

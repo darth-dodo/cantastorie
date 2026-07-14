@@ -59,15 +59,18 @@ _jwks_state = _JwksState()
 # ---------------------------------------------------------------------------
 
 
-def _fetch_jwks(url: str) -> dict[str, Any]:
+async def _fetch_jwks(url: str) -> dict[str, Any]:
     """Fetch and return the raw JWKS document from *url*.
 
-    Uses httpx so tests can monkeypatch this function at the module seam
-    (matching the NarrationClient transport pattern in test_providers.py).
-    PyJWT's built-in PyJWKClient uses urllib under the hood and cannot be
-    intercepted at the httpx seam — hence we own the fetch here.
+    Async (httpx.AsyncClient) so it never blocks the uvicorn event loop when
+    require_parent awaits it on a cold start or TTL refresh (AI-419). Uses httpx
+    so tests can monkeypatch this function at the module seam (matching the
+    NarrationClient transport pattern in test_providers.py). PyJWT's built-in
+    PyJWKClient uses urllib under the hood and cannot be intercepted at the
+    httpx seam — hence we own the fetch here.
     """
-    response = httpx.get(url, timeout=10.0)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(url)
     response.raise_for_status()
     result: dict[str, Any] = response.json()
     return result
@@ -78,7 +81,7 @@ def _fetch_jwks(url: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _get_keys(jwks_url: str) -> dict[str, Any]:
+async def _get_keys(jwks_url: str) -> dict[str, Any]:
     """Return the cached kid→key map, refreshing if the TTL has elapsed.
 
     Stale-if-error: if a refresh attempt fails but we already have a cached
@@ -93,7 +96,7 @@ def _get_keys(jwks_url: str) -> dict[str, Any]:
 
     # Attempt to refresh.
     try:
-        doc = _fetch_jwks(jwks_url)
+        doc = await _fetch_jwks(jwks_url)
         keys: dict[str, Any] = {}
         for jwk_entry in doc.get("keys", []):
             kid: str = jwk_entry["kid"]
@@ -150,7 +153,7 @@ async def require_parent(
     try:
         header = jwt.get_unverified_header(raw_token)
         kid: str = header.get("kid", "")
-        keys = _get_keys(settings.clerk_jwks_url)
+        keys = await _get_keys(settings.clerk_jwks_url)
         if kid not in keys:
             raise HTTPException(status_code=401)
         public_key = keys[kid]
