@@ -90,9 +90,9 @@ export async function init(
 
   let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
 
-  // The offline prompt is served same-origin: in this state the manifest —
-  // and R2 with it — is unreachable by definition, but the origin that
-  // delivered this page is provably up.
+  // Same-origin on purpose — NOT assetBase. assetBase is the R2 bucket in
+  // prod, which is unreachable in the very offline case this screen handles;
+  // the offline prompt must come from the origin that served this page.
   const offlinePromptUrl = `/static/content/${lang}/prompts/offline.wav`;
 
   while (fetchFn && manifest === null) {

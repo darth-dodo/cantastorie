@@ -256,7 +256,7 @@ export function buildOffline(onRetry) {
   const prompt = el("div", "prompt");
   prompt.textContent = "Le nuvole hanno preso le storie. Riprova tra poco!";
   screen.append(clouds, prompt);
-  screen.addEventListener("click", onRetry);
+  screen.addEventListener("click", onRetry, { once: true });
   return screen;
 }
 

@@ -19,7 +19,6 @@ const storyFixture = JSON.parse(
 );
 
 const manifestFetch = async () => ({ ok: true, json: async () => manifest });
-const brokenFetch = async () => ({ ok: false, status: 503 });
 
 // The full dev content tree: manifest, story.json, and byte assets.
 const routedFetch = async (url) => {
