@@ -15,6 +15,7 @@ import {
   buildChoiceOverlay,
   buildResumeOverlay,
   buildAudioError,
+  buildOffline,
   buildEnd,
   playerView,
 } from "./screens.js";
@@ -47,7 +48,9 @@ async function fetchManifest(assetBase, fetchFn, lang) {
     if (!res.ok) throw new Error(`manifest fetch failed (${res.status})`);
     return await res.json();
   } catch (err) {
-    console.warn("manifest unavailable, using built-in shelf", err);
+    // Cold-load failure: the clouds screen (AI-367) holds the boot until
+    // a tap retries and the manifest answers.
+    console.warn("manifest unavailable", err);
     return null;
   }
 }
@@ -81,11 +84,34 @@ export async function init(
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
   let lang = pickLang(params, loadLang());
-  let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
-  let stories = manifest?.stories ?? fallbackShelf;
 
   const store = createStore(load());
   engine ??= createAudioEngine();
+
+  let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
+
+  // The offline prompt is served same-origin: in this state the manifest —
+  // and R2 with it — is unreachable by definition, but the origin that
+  // delivered this page is provably up.
+  const offlinePromptUrl = `/static/content/${lang}/prompts/offline.wav`;
+
+  while (fetchFn && manifest === null) {
+    await new Promise((resolve) => {
+      app.replaceChildren(
+        buildOffline(() => {
+          // The tap is also the wake gesture: unlock, speak, retry.
+          engine
+            .unlock()
+            .then(() => engine.playPrompt(offlinePromptUrl))
+            .catch((err) => console.warn("offline prompt skipped", err));
+          resolve();
+        }),
+      );
+    });
+    manifest = await fetchManifest(assetBase, fetchFn, lang);
+  }
+
+  let stories = manifest?.stories ?? fallbackShelf;
   let prefetcher = createPrefetcher({ engine, fetchFn });
   let playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
 

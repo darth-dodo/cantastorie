@@ -110,11 +110,46 @@ describe("player shell", () => {
     );
   });
 
-  it("falls back to the built-in covers when the manifest is unreachable", async () => {
+  it("a dead manifest shows the clouds; when the sky clears, a tap brings the shelf (AI-367)", async () => {
     document.body.innerHTML = '<main id="app"></main>';
-    running = await init(document, { fetchFn: brokenFetch });
-    expect(running.manifestLoaded).toBe(false);
-    expect(document.querySelectorAll(".shelf .cover")).toHaveLength(4);
+    let manifestUp = false;
+    const flakyFetch = async (url) => {
+      if (String(url).endsWith("manifest.json")) {
+        if (!manifestUp) return { ok: false, status: 503 };
+        return { ok: true, json: async () => manifest };
+      }
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+    };
+    const engine = fakeEngine();
+    const promptUrls = [];
+    const playPrompt = engine.playPrompt.bind(engine);
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+
+    const pending = init(document, { fetchFn: flakyFetch, engine });
+
+    // The clouds hold the boot: no shelf, no spinner, one big tap target.
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    expect(document.querySelector(".offline .prompt").textContent).toBe(
+      "Le nuvole hanno preso le storie. Riprova tra poco!",
+    );
+    expect(document.querySelector(".cover")).toBeNull();
+
+    // A tap while still offline speaks the line and retries — clouds remain.
+    document.querySelector(".offline").click();
+    await vi.waitFor(() =>
+      expect(promptUrls).toContain("/static/content/it/prompts/offline.wav"),
+    );
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+
+    // The network returns; the next tap loads the shelf and init resolves.
+    manifestUp = true;
+    document.querySelector(".offline").click();
+    running = await pending;
+    expect(running.manifestLoaded).toBe(true);
+    expect(document.querySelectorAll(".shelf .cover").length).toBeGreaterThan(0);
   });
 
   it("a cover tap opens the player with beads and the play-pause control", async () => {
