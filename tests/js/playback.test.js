@@ -503,4 +503,25 @@ describe("Audio won't load (AI-367) — the bird speaks, a tap wakes the story",
     expect(store.state.audioError).toBe(true);
     expect(promptsSpoken()).not.toContain(PROMPTS.audio_retry);
   });
+
+  it("retryAudio() that fails again leaves the player in audioError — no page skip, no wedge", async () => {
+    engine = failingEngine(); // all narration calls keep failing
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt(); // "Si parte!" ends; page 1's voice rejects (first failure)
+    await flush();
+    expect(store.state.audioError).toBe(true);
+
+    const pageBeforeRetry = store.state.page;
+
+    store.retryAudio(); // the bird was tapped; narration is attempted again and fails
+    await flush();
+
+    // The player must be back in audioError — not silently advanced to the next page.
+    expect(store.state.audioError).toBe(true);
+    // No page skip happened.
+    expect(store.state.page).toBe(pageBeforeRetry);
+    // The player is still in the player screen, not wedged on end/shelf.
+    expect(store.state.screen).toBe("player");
+  });
 });

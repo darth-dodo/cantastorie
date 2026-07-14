@@ -72,6 +72,7 @@ export function createStore(saved = null) {
 
     // Narration for the current page ended (or the timer stood in for it).
     advance() {
+      if (state.audioError) return;
       if (state.screen !== "player" || !state.playing) return;
       if (state.choiceOpen || state.resumeOpen) return;
       if (state.choicePage !== null && state.page === state.choicePage) {
