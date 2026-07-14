@@ -235,3 +235,33 @@ describe("published shelf: cross-origin R2 manifest", () => {
     expect(document.querySelectorAll(".bead")).toHaveLength(8);
   });
 });
+
+describe("audio-error overlay (AI-367): the sleeping bird", () => {
+  it("a narration failure shows the bird with the retry line; a tap retries", async () => {
+    const engine = fakeEngine();
+    let failNarration = true;
+    const playNarration = engine.playNarration.bind(engine);
+    engine.playNarration = async (url, opts) => {
+      if (failNarration) throw new Error("audio fetch failed");
+      return playNarration(url, opts);
+    };
+
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: routedFetch, engine });
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    engine.endPrompt(); // "Si parte!" ends; page 1 narration fails
+
+    await vi.waitFor(() => expect(document.querySelector(".audio-error")).not.toBeNull());
+    expect(document.querySelector(".audio-error .bird")).not.toBeNull();
+    expect(document.querySelector(".audio-error .prompt").textContent).toBe(
+      "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
+    );
+
+    failNarration = false;
+    document.querySelector(".audio-error").click();
+    await vi.waitFor(() => expect(document.querySelector(".audio-error")).toBeNull());
+    expect(running.store.state.audioError).toBe(false);
+    await vi.waitFor(() => expect(engine.state).toBe("playing"));
+  });
+});

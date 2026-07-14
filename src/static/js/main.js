@@ -14,6 +14,7 @@ import {
   updatePlayer,
   buildChoiceOverlay,
   buildResumeOverlay,
+  buildAudioError,
   buildEnd,
   playerView,
 } from "./screens.js";
@@ -125,7 +126,7 @@ export async function init(
     prefetcher = createPrefetcher({ engine, fetchFn });
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
     store.toShelf();
-    shown = { screen: null, choiceOpen: false, resumeOpen: false };
+    shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false };
     render(store.state);
   }
 
@@ -146,7 +147,7 @@ export async function init(
     { capture: true, once: true },
   );
 
-  let shown = { screen: null, choiceOpen: false, resumeOpen: false };
+  let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false };
   let playerScreen = null;
 
   function render(state) {
@@ -155,7 +156,8 @@ export async function init(
     const structural =
       state.screen !== shown.screen ||
       state.choiceOpen !== shown.choiceOpen ||
-      state.resumeOpen !== shown.resumeOpen;
+      state.resumeOpen !== shown.resumeOpen ||
+      state.audioError !== shown.audioError;
 
     const view = activeStory ? playerView(activeStory) : undefined;
 
@@ -182,11 +184,12 @@ export async function init(
         app.appendChild(playerScreen);
         if (state.choiceOpen) playerScreen.appendChild(buildChoiceOverlay(store));
         if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store));
+        if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {
         playerScreen = null;
         app.appendChild(buildEnd(store));
       }
-      shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen };
+      shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError };
     }
 
     if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state, view);

@@ -780,6 +780,77 @@ button.presses:active {
   background: radial-gradient(circle at 40% 65%, rgba(217, 139, 102, 0.85), rgba(127, 166, 168, 0.7));
 }
 
+/* ── Audio-error: the sleeping bird (AI-367) ───────────────────────── */
+
+.audio-error {
+  gap: 22px;
+}
+
+/* A round little bird, eyes closed mid-nap. Same technique as .mascot:
+   one gradient body, pseudo-element eyes — here closed arcs, not dots. */
+.audio-error .bird {
+  width: 140px;
+  height: 120px;
+  position: relative;
+  border-radius: 50% 50% 46% 46%;
+  background: radial-gradient(circle at 35% 30%, #cfe3f5, #8fb4d9 78%);
+  box-shadow: 0 0 0 12px rgba(143, 180, 217, 0.15);
+  animation: bird-breathe 3.2s ease-in-out infinite;
+}
+
+/* Closed eyes: two small downward arcs. */
+.audio-error .bird::before,
+.audio-error .bird::after {
+  content: "";
+  position: absolute;
+  top: 44px;
+  width: 16px;
+  height: 8px;
+  border-bottom: 3px solid #3d4f63;
+  border-radius: 0 0 16px 16px;
+}
+
+.audio-error .bird::before {
+  left: 34px;
+}
+
+.audio-error .bird::after {
+  right: 34px;
+}
+
+/* A folded wing, tucked in for the nap. */
+.audio-error .bird .wing {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 30px;
+  border-radius: 50% 50% 60% 60%;
+  background: rgba(61, 79, 99, 0.25);
+}
+
+.audio-error .prompt {
+  max-width: 280px;
+  font: 700 22px/1.35 var(--font-app);
+}
+
+@keyframes bird-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audio-error .bird {
+    animation: none;
+  }
+}
+
 /* ── Story end ─────────────────────────────────────────────────────── */
 
 .end {
