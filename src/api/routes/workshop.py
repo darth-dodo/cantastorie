@@ -167,6 +167,7 @@ def _rel_time(dt: datetime) -> str:
 async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> HTMLResponse:
     if not _authed(request, settings):
         return templates.TemplateResponse(request, "workshop/login.html", {})
+    manager.reap_stale()  # retire zombie runs before the bench renders them (AI-417)
     runs = sorted(manager.store.list_runs(), key=lambda r: r.created_at, reverse=True)
     step_order = ["write", "revise", "safety", "narrate", "illustrate", "assemble"]
 
@@ -268,6 +269,7 @@ async def run_progress(
 ) -> HTMLResponse:
     if not _authed(request, settings):
         raise HTTPException(status_code=404)
+    manager.reap_stale()  # a stale run's own poll heals it, so it stops polling (AI-417)
     record = _record_or_404(manager, run_id)
     staged_stories = _staged_story_summaries(record.story_ids, settings)
     return templates.TemplateResponse(

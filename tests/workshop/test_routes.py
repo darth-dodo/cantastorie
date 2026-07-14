@@ -9,6 +9,7 @@ generation seam — zero network, no mocking of the code under test.
 
 import hashlib
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import boto3
@@ -23,7 +24,7 @@ from src.config import Settings, get_settings
 from src.pipeline.models import Page, PageAudio, Story
 from src.pipeline.publish import STAGED_PREFIX
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunStore, new_run
+from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
 
 BUCKET = "cantastorie-published"
 SECRET = "correct-horse-battery"
@@ -213,6 +214,44 @@ def test_the_progress_fragment_reports_the_run_state(tmp_path: Path, s3: S3Clien
     assert fragment.status_code == 200
     assert 'data-state="running"' in fragment.text
     assert "hx-get" in fragment.text  # still polling while the run is live
+
+
+def _aged_running(theme: str = "first_snow") -> RunRecord:
+    """A running record whose backing process died two hours ago (AI-417)."""
+    return (
+        new_run("operator", PackRequest(theme=theme, language="it", count=1))
+        .advance("running")
+        .model_copy(update={"updated_at": datetime.now(UTC) - timedelta(hours=2)})
+    )
+
+
+def test_the_bench_reaps_a_stale_running_run_on_render(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    zombie = _aged_running()
+    harness.store.save(zombie)
+    harness.login()
+
+    harness.client.get("/workshop")
+
+    reloaded = harness.store.load("operator", zombie.id)
+    assert reloaded is not None
+    assert reloaded.state == "failed"
+    assert "interrupted" in (reloaded.error or "")
+
+
+def test_a_stale_runs_progress_poll_self_heals_and_stops_polling(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+    zombie = _aged_running()
+    harness.store.save(zombie)
+
+    fragment = harness.client.get(f"/workshop/runs/{zombie.id}/progress")
+
+    assert fragment.status_code == 200
+    assert 'data-state="failed"' in fragment.text  # reaped, not still "running"
+    assert "hx-get" not in fragment.text  # a reaped run no longer polls forever
 
 
 def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S3Client) -> None:

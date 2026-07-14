@@ -11,6 +11,7 @@ import asyncio
 import threading
 import time
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import boto3
 import pytest
@@ -19,7 +20,7 @@ from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunStore, new_run
+from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
 
 BUCKET = "cantastorie-published"
 
@@ -145,6 +146,67 @@ def test_runs_execute_one_at_a_time(s3: S3Client) -> None:
 
     assert peak == 1
     assert [r.state for r in store.list_runs()] == ["staged", "staged"]
+
+
+def _aged(record: "RunRecord", age: timedelta) -> "RunRecord":
+    """A copy stamped as though its last heartbeat was `age` in the past."""
+    return record.model_copy(update={"updated_at": datetime.now(UTC) - age})
+
+
+def test_reap_stale_fails_a_running_run_with_no_recent_heartbeat(s3: S3Client) -> None:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    # A running record whose backing process died: its heartbeat is hours old.
+    zombie = _aged(new_run("family-abc", REQUEST).advance("running"), timedelta(hours=2))
+    live = new_run("family-abc", REQUEST).advance("running")  # fresh — genuinely running
+    store.save(zombie)
+    store.save(live)
+    manager = RunManager(store, settings, generate_pack=_staged_pack)
+
+    reaped = manager.reap_stale()
+
+    assert {r.id for r in reaped} == {zombie.id}
+    reaped_zombie = store.load("family-abc", zombie.id)
+    assert reaped_zombie is not None
+    assert reaped_zombie.state == "failed"
+    assert "interrupted" in (reaped_zombie.error or "")
+    reloaded_live = store.load("family-abc", live.id)
+    assert reloaded_live is not None
+    assert reloaded_live.state == "running"  # a fresh run is never reaped
+
+
+def test_reap_stale_retires_a_queued_run_that_never_started(s3: S3Client) -> None:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    zombie = _aged(new_run("family-abc", REQUEST), timedelta(hours=2))  # stuck in queued
+    store.save(zombie)
+    manager = RunManager(store, settings, generate_pack=_staged_pack)
+
+    reaped = manager.reap_stale()
+
+    assert [r.id for r in reaped] == [zombie.id]
+    retired = store.load("family-abc", zombie.id)
+    assert retired is not None
+    assert retired.state == "failed"
+
+
+def test_reap_stale_leaves_an_old_staged_run_awaiting_review(s3: S3Client) -> None:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    # A staged run has no process behind it either, but it is not a zombie —
+    # it is waiting for the operator. Only live states (queued/running) are swept.
+    settled = _aged(
+        new_run("family-xyz", REQUEST).advance("running").advance("staged"), timedelta(hours=2)
+    )
+    store.save(settled)
+    manager = RunManager(store, settings, generate_pack=_staged_pack)
+
+    reaped = manager.reap_stale()
+
+    assert reaped == []
+    reloaded = store.load("family-xyz", settled.id)
+    assert reloaded is not None
+    assert reloaded.state == "staged"
 
 
 def test_resume_on_boot_reenters_queued_and_running_runs_only(s3: S3Client) -> None:

@@ -16,6 +16,7 @@ content-addressed ArtifactCache, so completed steps are pure lookups
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from src.pipeline.generate import generate_story
@@ -27,6 +28,10 @@ if TYPE_CHECKING:
     from src.workshop.records import PackRequest, RunRecord, RunStore
 
 from src.workshop.records import new_run
+
+# The reaper's error note, kept distinct from a pipeline-step failure so the
+# rested screen can tell "the workshop restarted" apart from "narrate exploded".
+INTERRUPTED_NOTE = "run interrupted — the workshop restarted while this was generating"
 
 
 def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
@@ -82,6 +87,25 @@ class RunManager:
                 record = record.advance("failed", error=str(error))
             self._store.save(record)
             return record
+
+    def reap_stale(self) -> list[RunRecord]:
+        """Retire live runs (queued/running) whose heartbeat is too old to belong
+        to a process that is still alive — a deploy or crash left them stranded
+        (AI-417). Each transitions to failed with INTERRUPTED_NOTE. Terminal and
+        review-waiting states (staged/approved/rejected/failed) are never swept.
+        The threshold is generous by design so a genuinely-slow run is safe."""
+        cutoff = datetime.now(UTC) - timedelta(seconds=self._settings.run_stale_after_seconds)
+        live = self._store.list_runs(state="queued") + self._store.list_runs(state="running")
+        reaped: list[RunRecord] = []
+        for record in live:
+            updated = record.updated_at
+            if updated.tzinfo is None:  # records persisted before tz-aware writes
+                updated = updated.replace(tzinfo=UTC)
+            if updated < cutoff:
+                failed = record.advance("failed", error=INTERRUPTED_NOTE)
+                self._store.save(failed)
+                reaped.append(failed)
+        return reaped
 
     async def resume_on_boot(self) -> list[RunRecord]:
         pending = self._store.list_runs(state="queued") + self._store.list_runs(state="running")

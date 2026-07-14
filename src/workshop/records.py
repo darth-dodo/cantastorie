@@ -37,7 +37,9 @@ RunState = Literal["queued", "running", "staged", "approved", "rejected", "faile
 # The whole lifecycle. A service restart is deliberately not a state: an
 # interrupted run stays "running" in its record and resume-on-boot re-enters it.
 _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
-    "queued": frozenset({"running"}),
+    # queued → failed is the reaper's edge (AI-417): a run whose process died
+    # before it ever started still needs retiring, not only a mid-generation one.
+    "queued": frozenset({"running", "failed"}),
     "running": frozenset({"staged", "failed"}),
     "failed": frozenset({"queued"}),
     "staged": frozenset({"approved", "rejected"}),

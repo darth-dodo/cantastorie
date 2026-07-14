@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     # no accounts — this one secret is the whole operator access model.
     workshop_secret: SecretStr = SecretStr("")
 
+    # Stale-run reaper (AI-417): a run whose process dies mid-generation (deploy,
+    # crash, OOM) is left live with no heartbeat. The bench sweeps queued/running
+    # records older than this many seconds to failed. Generous by default —
+    # generation runs as one opaque step, so updated_at is only stamped on entry;
+    # the threshold must clear the slowest genuine run, never reap it.
+    run_stale_after_seconds: int = 1800
+
     # Clerk parent auth (AI-409, ADR-003). Empty clerk_jwks_url means the
     # /parent area does not exist: every /parent route answers 404, exactly
     # like the workshop above. clerk_secret_key is reserved for the
