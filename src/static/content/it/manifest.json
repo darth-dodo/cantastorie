@@ -3,7 +3,9 @@
   "prompts": {
     "greeting": "/static/content/it/prompts/greeting.wav",
     "story_start": "/static/content/it/prompts/story-start.wav",
-    "end": "/static/content/it/prompts/end.wav"
+    "end": "/static/content/it/prompts/end.wav",
+    "audio_retry": "/static/content/it/prompts/audio-retry.wav",
+    "offline": "/static/content/it/prompts/offline.wav"
   },
   "stories": [
     {
