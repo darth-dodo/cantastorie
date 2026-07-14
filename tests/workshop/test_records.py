@@ -107,6 +107,17 @@ def test_advance_rejects_a_transition_the_lifecycle_does_not_allow() -> None:
         record.advance("approved")  # queued → approved skips the whole pipeline
 
 
+def test_a_queued_run_interrupted_before_starting_can_be_failed() -> None:
+    # If the process dies while a run is still queued, the reaper (AI-417) must
+    # retire it: queued → failed is a legitimate edge, not only running → failed.
+    record = new_run("family-abc", REQUEST)
+
+    failed = record.advance("failed", error="interrupted")
+
+    assert failed.state == "failed"
+    assert failed.error == "interrupted"
+
+
 def test_failed_is_retryable_back_to_queued() -> None:
     record = new_run("family-abc", REQUEST).advance("running").advance("failed", error="boom")
 
