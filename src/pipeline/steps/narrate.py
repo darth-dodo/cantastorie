@@ -37,14 +37,16 @@ CONTENT_HASH_LENGTH = 16
 PAGE_STEP = "narrate"
 UTTERANCE_STEP = "utterances"
 
-UtteranceName = Literal["shelf_greeting", "story_start", "end_prompt"]
+UtteranceName = Literal["shelf_greeting", "story_start", "end_prompt", "audio_retry", "offline"]
 
 # Final Italian copy, verbatim from docs/product.md **Spoken Prompts** —
-# the slice-1 set: **Shelf greeting**, **Story start**, **End prompt**.
+# the slice-1 set plus the slice-2 failure prompts (AI-367).
 IT_UTTERANCES: Mapping[UtteranceName, str] = {
     "shelf_greeting": "Ciao! Quale storia ascoltiamo oggi?",
     "story_start": "Si parte!",
     "end_prompt": "Fine! Ancora, o un'altra storia?",
+    "audio_retry": "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
+    "offline": "Le nuvole hanno preso le storie. Riprova tra poco!",
 }
 
 

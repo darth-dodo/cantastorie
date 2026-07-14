@@ -130,6 +130,11 @@ def main() -> None:
     (PROMPTS_DIR / "story-start.wav").write_bytes(chime([(659.25, 0.25), (880.0, 0.35)]))
     # End prompt ("Fine! Ancora, o un'altra storia?"): a settling third.
     (PROMPTS_DIR / "end.wav").write_bytes(chime([(587.33, 0.3), (493.88, 0.45)]))
+    # Slice-2 failure prompts (AI-367): a sleepy falling third for the
+    # napping story, a soft low pair for the clouds. Chime stand-ins until
+    # the pipeline produces real utterance audio.
+    (PROMPTS_DIR / "audio-retry.wav").write_bytes(chime([(659.25, 0.3), (523.25, 0.5)]))
+    (PROMPTS_DIR / "offline.wav").write_bytes(chime([(440.0, 0.35), (392.0, 0.5)]))
 
 
 if __name__ == "__main__":

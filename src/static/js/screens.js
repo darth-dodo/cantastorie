@@ -247,6 +247,34 @@ export function buildResumeOverlay(store) {
   return overlay;
 }
 
+// The offline state (AI-367): the shelf manifest failed on cold load.
+// The whole screen is the retry button; each tap speaks the line again.
+export function buildOffline(onRetry) {
+  const screen = el("button", "screen offline", { "aria-label": "riprova" });
+  const clouds = el("div", "clouds");
+  for (let i = 0; i < 3; i++) clouds.appendChild(el("div", "puff"));
+  const prompt = el("div", "prompt");
+  prompt.textContent = "Le nuvole hanno preso le storie. Riprova tra poco!";
+  screen.append(clouds, prompt);
+  screen.addEventListener("click", onRetry, { once: true });
+  return screen;
+}
+
+// The audio-retry state (AI-367): narration failed to load. The whole
+// overlay is one big tap target — never a small button for small hands.
+export function buildAudioError(store) {
+  const overlay = el("button", "overlay audio-error", { "aria-label": "riprova" });
+  // A hand-painted sleeping bird (illustrate pipeline, locked watercolor
+  // style), bundled same-origin so the overlay never depends on the network
+  // it is reacting to. Decorative — the overlay's aria-label carries meaning.
+  const bird = el("img", "bird", { src: "/static/img/sleeping-bird.webp", alt: "" });
+  const prompt = el("div", "prompt");
+  prompt.textContent = "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.";
+  overlay.append(bird, prompt);
+  overlay.addEventListener("click", () => store.retryAudio());
+  return overlay;
+}
+
 export function buildEnd(store) {
   const screen = el("div", "screen end night");
 

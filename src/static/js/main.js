@@ -14,6 +14,8 @@ import {
   updatePlayer,
   buildChoiceOverlay,
   buildResumeOverlay,
+  buildAudioError,
+  buildOffline,
   buildEnd,
   playerView,
 } from "./screens.js";
@@ -46,7 +48,9 @@ async function fetchManifest(assetBase, fetchFn, lang) {
     if (!res.ok) throw new Error(`manifest fetch failed (${res.status})`);
     return await res.json();
   } catch (err) {
-    console.warn("manifest unavailable, using built-in shelf", err);
+    // Cold-load failure: the clouds screen (AI-367) holds the boot until
+    // a tap retries and the manifest answers.
+    console.warn("manifest unavailable", err);
     return null;
   }
 }
@@ -80,11 +84,34 @@ export async function init(
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
   let lang = pickLang(params, loadLang());
-  let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
-  let stories = manifest?.stories ?? fallbackShelf;
 
   const store = createStore(load());
   engine ??= createAudioEngine();
+
+  let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
+
+  // Same-origin on purpose — NOT assetBase. assetBase is the R2 bucket in
+  // prod, which is unreachable in the very offline case this screen handles;
+  // the offline prompt must come from the origin that served this page.
+  const offlinePromptUrl = `/static/content/${lang}/prompts/offline.wav`;
+
+  while (fetchFn && manifest === null) {
+    await new Promise((resolve) => {
+      app.replaceChildren(
+        buildOffline(() => {
+          // The tap is also the wake gesture: unlock, speak, retry.
+          engine
+            .unlock()
+            .then(() => engine.playPrompt(offlinePromptUrl))
+            .catch((err) => console.warn("offline prompt skipped", err));
+          resolve();
+        }),
+      );
+    });
+    manifest = await fetchManifest(assetBase, fetchFn, lang);
+  }
+
+  let stories = manifest?.stories ?? fallbackShelf;
   let prefetcher = createPrefetcher({ engine, fetchFn });
   let playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
 
@@ -125,7 +152,7 @@ export async function init(
     prefetcher = createPrefetcher({ engine, fetchFn });
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
     store.toShelf();
-    shown = { screen: null, choiceOpen: false, resumeOpen: false };
+    shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false };
     render(store.state);
   }
 
@@ -146,7 +173,7 @@ export async function init(
     { capture: true, once: true },
   );
 
-  let shown = { screen: null, choiceOpen: false, resumeOpen: false };
+  let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false };
   let playerScreen = null;
 
   function render(state) {
@@ -155,7 +182,8 @@ export async function init(
     const structural =
       state.screen !== shown.screen ||
       state.choiceOpen !== shown.choiceOpen ||
-      state.resumeOpen !== shown.resumeOpen;
+      state.resumeOpen !== shown.resumeOpen ||
+      state.audioError !== shown.audioError;
 
     const view = activeStory ? playerView(activeStory) : undefined;
 
@@ -182,11 +210,12 @@ export async function init(
         app.appendChild(playerScreen);
         if (state.choiceOpen) playerScreen.appendChild(buildChoiceOverlay(store));
         if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store));
+        if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {
         playerScreen = null;
         app.appendChild(buildEnd(store));
       }
-      shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen };
+      shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError };
     }
 
     if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state, view);

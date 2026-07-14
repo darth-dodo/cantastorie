@@ -31,7 +31,15 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
           store.advance(); // Auto page turn: immediate on audio end
         },
       })
-      .catch((err) => console.warn("narration failed", err)); // audio-retry state is slice 2
+      .catch((err) => {
+        if (narratingPage !== index) return; // a superseded voice's failure is noise
+        narratingPage = null;
+        console.warn("narration failed", err);
+        store.audioError();
+        // The bird speaks its line — banked by prefetch on the cover tap,
+        // so it plays even on the flaky network that caused the failure.
+        if (prompts.audio_retry) engine.playPrompt(prompts.audio_retry).catch(() => {});
+      });
   }
 
   // The end prompt speaks over the final scene — but only if the child is
@@ -67,6 +75,7 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
 
     if (!story || starting) return;
     if (state.resumeOpen || state.choiceOpen) return;
+    if (state.audioError) return; // the sleeping bird holds the stage until a tap retries
 
     if (!state.playing) {
       // Unconditional: the engine also cancels a voice still loading, so
@@ -104,7 +113,7 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
     async openStory(loaded) {
       story = loaded;
       narratingPage = null;
-      const promptUrls = [prompts.story_start, prompts.end].filter(Boolean);
+      const promptUrls = [prompts.story_start, prompts.end, prompts.audio_retry].filter(Boolean);
       prefetcher?.prefetchStory(loaded, promptUrls); // fire and forget; load() dedupes
 
       const choiceIndex = loaded.pages.findIndex((page) => page.choice);

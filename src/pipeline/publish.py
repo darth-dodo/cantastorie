@@ -61,10 +61,21 @@ THEME_WASH: dict[Theme, str] = {
     "first_snow": "wash-guanto",
 }
 
+# Utterance file-name stems (narrate.py: shelf_greeting/story_start/end_prompt/
+# audio_retry/offline) → the manifest's prompt keys the player reads (the dev
+# fixture's greeting/story_start/end/audio_retry/offline). The player plays a
+# published manifest unchanged.
+# NOTE: the "offline" key is published for a uniform utterance set, but the
+# player deliberately does NOT read it from the manifest — the offline screen
+# fires when the manifest itself couldn't load, so its prompt is fetched
+# same-origin (see main.js), never via ASSET_BASE/R2. Do not "wire up" this
+# key on the player: R2 is exactly what's unreachable when the screen shows.
 MANIFEST_PROMPT_KEYS = {
     "shelf_greeting": "greeting",
     "story_start": "story_start",
     "end_prompt": "end",
+    "audio_retry": "audio_retry",
+    "offline": "offline",
 }
 
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})

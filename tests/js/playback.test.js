@@ -98,7 +98,11 @@ function fixtureStory(pageCount = 8) {
   };
 }
 
-const PROMPTS = { story_start: "/p/story-start.wav", end: "/p/end.wav" };
+const PROMPTS = {
+  story_start: "/p/story-start.wav",
+  end: "/p/end.wav",
+  audio_retry: "/p/audio-retry.wav",
+};
 
 let store;
 let engine;
@@ -148,6 +152,7 @@ describe("Story start prompt — \"Tap a cover. 'Si parte!' — and page 1 narra
     expect(prefetcher.prefetchStory).toHaveBeenCalledWith(story, [
       PROMPTS.story_start,
       PROMPTS.end,
+      PROMPTS.audio_retry,
     ]);
   });
 
@@ -397,5 +402,126 @@ describe("Stories the pipeline hasn't produced yet", () => {
     expect(playback.hasStory()).toBe(true);
     playback.clearStory();
     expect(playback.hasStory()).toBe(false);
+  });
+});
+
+describe("Audio won't load (AI-367) — the bird speaks, a tap wakes the story", () => {
+  // The file's fakeEngine never fails; wrap it so the first `failures`
+  // narrations reject the way a dead network makes the real engine reject.
+  function failingEngine(failures = Infinity) {
+    const wrapped = fakeEngine();
+    let remaining = failures;
+    const playNarration = wrapped.playNarration;
+    wrapped.playNarration = async (url, opts) => {
+      if (remaining > 0) {
+        remaining -= 1;
+        wrapped.calls.push(["narration", url]); // the attempt happened; the wire died
+        throw new Error(`audio fetch failed: ${url}`);
+      }
+      return playNarration(url, opts);
+    };
+    return wrapped;
+  }
+
+  it("a narration load failure flips the store to audioError and speaks the retry prompt", async () => {
+    engine = failingEngine();
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt(); // "Si parte!" ends; page 1's voice rejects
+    await flush();
+
+    expect(store.state.audioError).toBe(true);
+    expect(promptsSpoken()).toContain(PROMPTS.audio_retry);
+  });
+
+  it("retryAudio() re-narrates the same page once the network is back", async () => {
+    engine = failingEngine(1); // fail once, then recover
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt();
+    await flush();
+    expect(store.state.audioError).toBe(true);
+
+    store.retryAudio(); // the bird was tapped
+    await flush();
+    expect(store.state.audioError).toBe(false);
+    expect(narrations()).toEqual(["/s/p1.wav", "/s/p1.wav"]);
+  });
+
+  it("while the bird holds the stage, sync neither narrates nor pauses", async () => {
+    engine = failingEngine();
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt();
+    await flush();
+    const callsWhenErrored = engine.calls.length;
+
+    store.togglePlay(); // stray taps land under the overlay
+    store.togglePlay();
+    expect(engine.calls.length).toBe(callsWhenErrored);
+  });
+
+  it("a failure that lands after the child left the player never wakes the bird", async () => {
+    const wrapped = fakeEngine();
+    let rejectLate;
+    const playNarration = wrapped.playNarration;
+    let firstCall = true;
+    wrapped.playNarration = async (url, opts) => {
+      if (firstCall) {
+        firstCall = false;
+        return new Promise((_, reject) => {
+          rejectLate = reject; // page 1's voice hangs on the wire
+        });
+      }
+      return playNarration(url, opts);
+    };
+    engine = wrapped;
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt();
+
+    store.exitStory(); // the child bails out to the shelf...
+    rejectLate(new Error("late failure"));
+    await flush();
+
+    // ...so the stale failure is noise: no bird, no retry prompt.
+    expect(store.state.audioError).toBe(false);
+    expect(promptsSpoken()).not.toContain(PROMPTS.audio_retry);
+  });
+
+  it("a missing audio_retry prompt still shows the bird, just silently", async () => {
+    engine = failingEngine();
+    playback = createPlayback({
+      store,
+      engine,
+      prefetcher,
+      prompts: { story_start: PROMPTS.story_start, end: PROMPTS.end },
+    });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt();
+    await flush();
+    expect(store.state.audioError).toBe(true);
+    expect(promptsSpoken()).not.toContain(PROMPTS.audio_retry);
+  });
+
+  it("retryAudio() that fails again leaves the player in audioError — no page skip, no wedge", async () => {
+    engine = failingEngine(); // all narration calls keep failing
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt(); // "Si parte!" ends; page 1's voice rejects (first failure)
+    await flush();
+    expect(store.state.audioError).toBe(true);
+
+    const pageBeforeRetry = store.state.page;
+
+    store.retryAudio(); // the bird was tapped; narration is attempted again and fails
+    await flush();
+
+    // The player must be back in audioError — not silently advanced to the next page.
+    expect(store.state.audioError).toBe(true);
+    // No page skip happened.
+    expect(store.state.page).toBe(pageBeforeRetry);
+    // The player is still in the player screen, not wedged on end/shelf.
+    expect(store.state.screen).toBe("player");
   });
 });

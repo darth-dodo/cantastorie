@@ -19,7 +19,6 @@ const storyFixture = JSON.parse(
 );
 
 const manifestFetch = async () => ({ ok: true, json: async () => manifest });
-const brokenFetch = async () => ({ ok: false, status: 503 });
 
 // The full dev content tree: manifest, story.json, and byte assets.
 const routedFetch = async (url) => {
@@ -110,11 +109,46 @@ describe("player shell", () => {
     );
   });
 
-  it("falls back to the built-in covers when the manifest is unreachable", async () => {
+  it("a dead manifest shows the clouds; when the sky clears, a tap brings the shelf (AI-367)", async () => {
     document.body.innerHTML = '<main id="app"></main>';
-    running = await init(document, { fetchFn: brokenFetch });
-    expect(running.manifestLoaded).toBe(false);
-    expect(document.querySelectorAll(".shelf .cover")).toHaveLength(4);
+    let manifestUp = false;
+    const flakyFetch = async (url) => {
+      if (String(url).endsWith("manifest.json")) {
+        if (!manifestUp) return { ok: false, status: 503 };
+        return { ok: true, json: async () => manifest };
+      }
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+    };
+    const engine = fakeEngine();
+    const promptUrls = [];
+    const playPrompt = engine.playPrompt.bind(engine);
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+
+    const pending = init(document, { fetchFn: flakyFetch, engine });
+
+    // The clouds hold the boot: no shelf, no spinner, one big tap target.
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    expect(document.querySelector(".offline .prompt").textContent).toBe(
+      "Le nuvole hanno preso le storie. Riprova tra poco!",
+    );
+    expect(document.querySelector(".cover")).toBeNull();
+
+    // A tap while still offline speaks the line and retries — clouds remain.
+    document.querySelector(".offline").click();
+    await vi.waitFor(() =>
+      expect(promptUrls).toContain("/static/content/it/prompts/offline.wav"),
+    );
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+
+    // The network returns; the next tap loads the shelf and init resolves.
+    manifestUp = true;
+    document.querySelector(".offline").click();
+    running = await pending;
+    expect(running.manifestLoaded).toBe(true);
+    expect(document.querySelectorAll(".shelf .cover").length).toBeGreaterThan(0);
   });
 
   it("a cover tap opens the player with beads and the play-pause control", async () => {
@@ -145,11 +179,11 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
     expect(document.querySelector(".page-art.current")).not.toBeNull();
   });
 
-  it("whole-story prefetch banks all 18 assets around the cover tap — pages and prompts", async () => {
+  it("whole-story prefetch banks all 19 assets around the cover tap — pages and prompts", async () => {
     const engine = fakeEngine();
     await openFirstCover(engine);
     await vi.waitFor(() =>
-      expect(running.prefetcher.status()).toEqual({ total: 18, loaded: 18, failed: 0 }),
+      expect(running.prefetcher.status()).toEqual({ total: 19, loaded: 19, failed: 0 }),
     );
   });
 
@@ -233,5 +267,35 @@ describe("published shelf: cross-origin R2 manifest", () => {
     await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
     expect(running.playback.hasStory()).toBe(true);
     expect(document.querySelectorAll(".bead")).toHaveLength(8);
+  });
+});
+
+describe("audio-error overlay (AI-367): the sleeping bird", () => {
+  it("a narration failure shows the bird with the retry line; a tap retries", async () => {
+    const engine = fakeEngine();
+    let failNarration = true;
+    const playNarration = engine.playNarration.bind(engine);
+    engine.playNarration = async (url, opts) => {
+      if (failNarration) throw new Error("audio fetch failed");
+      return playNarration(url, opts);
+    };
+
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: routedFetch, engine });
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    engine.endPrompt(); // "Si parte!" ends; page 1 narration fails
+
+    await vi.waitFor(() => expect(document.querySelector(".audio-error")).not.toBeNull());
+    expect(document.querySelector(".audio-error .bird")).not.toBeNull();
+    expect(document.querySelector(".audio-error .prompt").textContent).toBe(
+      "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
+    );
+
+    failNarration = false;
+    document.querySelector(".audio-error").click();
+    await vi.waitFor(() => expect(document.querySelector(".audio-error")).toBeNull());
+    expect(running.store.state.audioError).toBe(false);
+    await vi.waitFor(() => expect(engine.state).toBe("playing"));
   });
 });

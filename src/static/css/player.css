@@ -780,6 +780,114 @@ button.presses:active {
   background: radial-gradient(circle at 40% 65%, rgba(217, 139, 102, 0.85), rgba(127, 166, 168, 0.7));
 }
 
+/* ── Audio-error: the sleeping bird (AI-367) ───────────────────────── */
+
+.audio-error {
+  gap: 22px;
+}
+
+/* The hand-painted sleeping bird (src/static/img/sleeping-bird.webp). Sized
+   for small hands to see and tap; the gentle breathe keeps it feeling asleep,
+   not frozen. Same steady-state discipline as the rest of the player. */
+.audio-error .bird {
+  width: min(56vw, 240px);
+  height: auto;
+  display: block;
+  animation: bird-breathe 3.2s ease-in-out infinite;
+}
+
+.audio-error .prompt {
+  max-width: 280px;
+  font: 700 22px/1.35 var(--font-app);
+}
+
+@keyframes bird-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audio-error .bird {
+    animation: none;
+  }
+}
+
+/* ── Offline: soft clouds took the stories (AI-367) ─────────────────── */
+
+.screen.offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  text-align: center;
+}
+
+.offline .clouds {
+  position: relative;
+  width: 220px;
+  height: 100px;
+}
+
+/* Three overlapping puffs, the middle one proud — same gradient trick
+   as .mascot, drifting a little unless motion is reduced. */
+.offline .puff {
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #f3f0ea, #cfd6df 80%);
+  box-shadow: 0 0 0 10px rgba(207, 214, 223, 0.18);
+  animation: cloud-drift 6s ease-in-out infinite;
+}
+
+.offline .puff:nth-child(1) {
+  left: 0;
+  width: 84px;
+  height: 64px;
+}
+
+.offline .puff:nth-child(2) {
+  left: 58px;
+  bottom: 10px;
+  width: 110px;
+  height: 84px;
+  animation-delay: -2s;
+}
+
+.offline .puff:nth-child(3) {
+  right: 0;
+  width: 78px;
+  height: 58px;
+  animation-delay: -4s;
+}
+
+.offline .prompt {
+  max-width: 280px;
+  font: 700 22px/1.35 var(--font-app);
+  color: var(--greeting-sub);
+}
+
+@keyframes cloud-drift {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offline .puff {
+    animation: none;
+  }
+}
+
 /* ── Story end ─────────────────────────────────────────────────────── */
 
 .end {
