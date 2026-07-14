@@ -145,11 +145,11 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
     expect(document.querySelector(".page-art.current")).not.toBeNull();
   });
 
-  it("whole-story prefetch banks all 18 assets around the cover tap — pages and prompts", async () => {
+  it("whole-story prefetch banks all 19 assets around the cover tap — pages and prompts", async () => {
     const engine = fakeEngine();
     await openFirstCover(engine);
     await vi.waitFor(() =>
-      expect(running.prefetcher.status()).toEqual({ total: 18, loaded: 18, failed: 0 }),
+      expect(running.prefetcher.status()).toEqual({ total: 19, loaded: 19, failed: 0 }),
     );
   });
 

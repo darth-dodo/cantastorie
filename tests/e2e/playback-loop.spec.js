@@ -89,13 +89,13 @@ test.describe("Whole-story prefetch (architecture.md -> The Player)", () => {
     await wakeAndOpenTheStory(page);
 
     // Then the prefetcher reports the whole story banked: 8 audio +
-    // 8 images + the start and end prompts.
+    // 8 images + the start, end, and audio-retry prompts.
     await page.waitForFunction(() => {
       const status = window.__shell?.prefetcher?.status();
-      return status && status.loaded + status.failed >= status.total && status.total >= 18;
+      return status && status.loaded + status.failed >= status.total && status.total >= 19;
     });
     const status = await page.evaluate(() => window.__shell.prefetcher.status());
-    expect(status.total).toBe(18);
+    expect(status.total).toBe(19);
     expect(status.failed).toBe(0);
 
     // And the requests really left while page 1 was still on screen.
