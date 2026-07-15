@@ -61,9 +61,7 @@ export function buildShelf(
   greeting,
   subText,
   stories = shelf,
-  langs = [],
-  currentLang = "it",
-  onLangChange = () => {},
+  onOpenSettings = () => {},
   onOpen = () => store.openStory(),
 ) {
   const screen = el("div", "screen shelf");
@@ -108,32 +106,79 @@ export function buildShelf(
     });
   }
 
-  const language = el("div", "language-sticker");
-  const flag = el("div", `flag flag-${currentLang}`);
-  language.appendChild(flag);
-  const langLabel = el("span", "lang-label");
-  const current = langs.find((l) => l.code === currentLang);
-  langLabel.textContent = current?.label ?? currentLang;
-  language.appendChild(langLabel);
-
-  if (langs.length > 1) {
-    language.classList.add("clickable");
-    language.setAttribute("role", "button");
-    language.setAttribute("tabindex", "0");
-    language.setAttribute("aria-label", "Change language");
-    language.addEventListener("click", () => {
-      const idx = langs.findIndex((l) => l.code === currentLang);
-      const next = langs[(idx + 1) % langs.length];
-      onLangChange(next.code);
-    });
-  }
+  const gear = el("button", "settings-gear", { "aria-label": "Impostazioni" });
+  gear.innerHTML = GEAR_SVG;
+  gear.addEventListener("click", onOpenSettings);
 
   const parent = el("a", "parent-corner");
   parent.href = "/workshop";
   parent.textContent = "parent";
 
-  screen.append(header, covers, language, parent);
+  screen.append(header, covers, gear, parent);
   return screen;
+}
+
+const GEAR_SVG =
+  '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>';
+
+export function buildSettingsOverlay({
+  langs = [],
+  currentLang = "it",
+  onLangChange = () => {},
+  palettes = [],
+  paletteLabels = {},
+  currentPalette = "indigo",
+  onPaletteChange = () => {},
+  onClose = () => {},
+}) {
+  const overlay = el("div", "overlay settings");
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) onClose();
+  });
+
+  const panel = el("div", "settings-panel");
+
+  const langSection = el("div", "settings-section");
+  const langLabel = el("div", "settings-label");
+  langLabel.textContent = "Lingua";
+  const langRow = el("div", "settings-row");
+  langs.forEach((lang) => {
+    const pill = el("button", "settings-pill", {
+      "aria-current": String(lang.code === currentLang),
+    });
+    pill.textContent = lang.label;
+    pill.addEventListener("click", () => onLangChange(lang.code));
+    langRow.appendChild(pill);
+  });
+  langSection.append(langLabel, langRow);
+
+  const themeSection = el("div", "settings-section");
+  const themeLabel = el("div", "settings-label");
+  themeLabel.textContent = "Tema";
+  const themeRow = el("div", "settings-row");
+  palettes.forEach((name) => {
+    const pill = el("button", "settings-pill", {
+      "aria-current": String(name === currentPalette),
+    });
+    pill.textContent = paletteLabels[name] ?? name;
+    pill.addEventListener("click", () => {
+      onPaletteChange(name);
+      themeRow
+        .querySelectorAll(".settings-pill")
+        .forEach((p) => p.setAttribute("aria-current", "false"));
+      pill.setAttribute("aria-current", "true");
+    });
+    themeRow.appendChild(pill);
+  });
+  themeSection.append(themeLabel, themeRow);
+
+  const done = el("button", "settings-done");
+  done.textContent = "Fatto";
+  done.addEventListener("click", onClose);
+
+  panel.append(langSection, themeSection, done);
+  overlay.appendChild(panel);
+  return overlay;
 }
 
 export function buildPlayer(store, view = mockView) {

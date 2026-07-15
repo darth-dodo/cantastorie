@@ -8,6 +8,7 @@ import { createAudioEngine } from "./audio-engine.js";
 import { createPlayback } from "./playback.js";
 import { createPrefetcher } from "./prefetch.js";
 import { loadStory, shelf as fallbackShelf } from "./story.js";
+import { VALID_PALETTES } from "./palette-resolve.js";
 import {
   buildShelf,
   buildPlayer,
@@ -17,8 +18,16 @@ import {
   buildAudioError,
   buildOffline,
   buildEnd,
+  buildSettingsOverlay,
   playerView,
 } from "./screens.js";
+
+const PALETTE_LABELS = {
+  warm: "Caldo",
+  indigo: "Indaco",
+  seaglass: "Verdemare",
+  plum: "Prugna",
+};
 
 const PAGE_SECONDS = 3.8;
 
@@ -152,7 +161,7 @@ export async function init(
     prefetcher = createPrefetcher({ engine, fetchFn });
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
     store.toShelf();
-    shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false };
+    shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen };
     render(store.state);
   }
 
@@ -163,7 +172,7 @@ export async function init(
         .unlock()
         .then(() => {
           const url = manifest?.prompts?.greeting;
-          if (url && !event.target.closest(".cover") && !event.target.closest(".language-sticker")) {
+          if (url && !event.target.closest(".cover") && !event.target.closest(".settings-gear")) {
             return engine.playPrompt(url);
           }
           return undefined;
@@ -173,8 +182,19 @@ export async function init(
     { capture: true, once: true },
   );
 
-  let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false };
+  let settingsOpen = false;
+  let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen: false };
   let playerScreen = null;
+
+  function openSettings() {
+    settingsOpen = true;
+    render(store.state);
+  }
+
+  function closeSettings() {
+    settingsOpen = false;
+    render(store.state);
+  }
 
   function render(state) {
     save(state);
@@ -183,7 +203,8 @@ export async function init(
       state.screen !== shown.screen ||
       state.choiceOpen !== shown.choiceOpen ||
       state.resumeOpen !== shown.resumeOpen ||
-      state.audioError !== shown.audioError;
+      state.audioError !== shown.audioError ||
+      settingsOpen !== shown.settingsOpen;
 
     const view = activeStory ? playerView(activeStory) : undefined;
 
@@ -197,14 +218,29 @@ export async function init(
             GREETINGS[lang] ?? "Ciao!",
             SUBS[lang] ?? "Quale storia oggi?",
             stories,
-            LANGS,
-            lang,
-            (newLang) => switchLanguage(newLang),
+            () => openSettings(),
             (entry) => {
               openCover(entry).catch((err) => console.warn("cover tap failed", err));
             },
           ),
         );
+        if (settingsOpen) {
+          app.appendChild(
+            buildSettingsOverlay({
+              langs: LANGS,
+              currentLang: lang,
+              onLangChange: (newLang) => switchLanguage(newLang),
+              palettes: VALID_PALETTES,
+              paletteLabels: PALETTE_LABELS,
+              currentPalette: root.documentElement.getAttribute("data-palette") || "indigo",
+              onPaletteChange: (name) => {
+                if (globalThis.cantastoriePalette) globalThis.cantastoriePalette.set(name);
+                else root.documentElement.setAttribute("data-palette", name);
+              },
+              onClose: () => closeSettings(),
+            }),
+          );
+        }
       } else if (state.screen === "player") {
         playerScreen = buildPlayer(store, view);
         app.appendChild(playerScreen);
@@ -215,7 +251,7 @@ export async function init(
         playerScreen = null;
         app.appendChild(buildEnd(store));
       }
-      shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError };
+      shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError, settingsOpen };
     }
 
     if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state, view);
