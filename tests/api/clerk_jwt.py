@@ -64,17 +64,14 @@ def mint_token(
 def clerk_settings(
     jwks_url: str = "https://test.clerk.test/.well-known/jwks.json",
     clerk_issuer: str = "",
-    **overrides: Any,
 ) -> Settings:
-    settings_dict = {
-        "_env_file": None,
-        "clerk_publishable_key": SecretStr("pk_test_xxx"),
-        "clerk_secret_key": SecretStr("sk_test_xxx"),
-        "clerk_jwks_url": jwks_url,
-        "clerk_issuer": clerk_issuer,
-    }
-    settings_dict.update(overrides)
-    return Settings(**settings_dict)
+    return Settings(
+        _env_file=None,
+        clerk_publishable_key=SecretStr("pk_test_xxx"),
+        clerk_secret_key=SecretStr("sk_test_xxx"),
+        clerk_jwks_url=jwks_url,
+        clerk_issuer=clerk_issuer,
+    )
 
 
 def make_mock_fetch(
