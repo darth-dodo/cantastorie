@@ -29,17 +29,17 @@ class Settings(BaseSettings):
     gloss_model: str = "google/gemini-2.5-flash-lite"
     image_model: str = "google/gemini-3.1-flash-lite-image"
 
-    # Narration — Voxtral Mini TTS via OpenRouter (ADR-004). Per-language voice
-    # IDs from OpenRouter's supported_voices list; Italian has no native voice
-    # so it uses the English warm voice until AI-366 validates alternatives.
+    # Narration — Gemini 3.1 Flash TTS via OpenRouter (ADR-008). One house voice
+    # ("Kore") is pinned across every language (overridable via NARRATION_VOICES);
+    # the per-language voice set is finalized by the AI-366 bake-off.
     # NARRATION_VOICES is a JSON dict mapping language codes to voice IDs.
-    narration_model: str = "mistralai/voxtral-mini-tts-2603"
+    narration_model: str = "google/gemini-2.5-flash-preview-tts"
     narration_voices: dict[str, str] = {
-        "it": "en_paul_happy",
-        "es": "en_paul_happy",
-        "en": "en_paul_happy",
-        "el": "en_paul_happy",
-        "de": "gb_oliver_cheerful",
+        "it": "Kore",
+        "es": "Kore",
+        "en": "Kore",
+        "el": "Kore",
+        "de": "Kore",
     }
     narration_response_format: str = "mp3"
 

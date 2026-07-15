@@ -33,7 +33,7 @@ flowchart LR
         CLI <--> Cache
     end
 
-    OR["OpenRouter<br/>write · safety · gloss · images<br/>narration (Voxtral)"]
+    OR["OpenRouter<br/>write · safety · gloss · images<br/>narration (Gemini TTS)"]
     R2["Cloudflare R2<br/>(future: published stories)"]
 
     Browser -- "page load" --> App
@@ -175,7 +175,7 @@ Plain Python, typed end to end. The CLI is a scaffold (each command validates in
 flowchart LR
     G["generate<br/>(CLI)"] --> W["write<br/>(AI-358)"]
     W --> SG{"safety gate<br/>9 rules, judge ≠ writer family"}
-    SG -- pass --> N["narrate<br/>Voxtral TTS (no timings)"]
+    SG -- pass --> N["narrate<br/>Gemini TTS (no timings)"]
     SG -- fail --> RV["revise (bounded)"]
     RV --> SG
     N --> I["illustrate ✅<br/>sheet → pages + cover"]
@@ -194,7 +194,7 @@ flowchart LR
 |--------|------|--------------------------------------|
 | `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `ChoicePoint` is exactly two options; `SafetyReport` must contain each of the nine rules exactly once |
 | `cache.py` | Content-addressed artifact store; the filesystem **is** the checkpoint | `cache_key()` = sha256 of canonical-JSON inputs; writes are tmp-then-rename atomic; `run_step()` makes unchanged inputs a pure lookup — zero API calls |
-| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Voxtral Mini TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration returns raw audio bytes with no timestamps (ADR-004; Deepgram STT reconstructs them at slice 6) |
+| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration returns raw audio bytes with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
 | `cli.py` | `generate` / `publish` / `audit` entry points | Input validation is live; behaviors land with AI-358/361/378 |
 | `steps/illustrate.py` | Character sheet first, then every page and the cover generated **against that sheet** — never page-to-page chaining (drift compounds) | `STYLE_PROMPT` is a module constant participating verbatim in every cache key: edit it and every image knowingly regenerates. Uses httpx against OpenRouter chat completions directly because pydantic-ai 2.5.0 can't parse image *outputs*; the ban is on direct vendor SDKs, and OpenRouter remains the only gateway |
 | `src/config.py` | Settings for both halves (shared with the API) | A model validator **refuses config where the safety judge and writer share a model family** — the shared-blind-spot failure mode |

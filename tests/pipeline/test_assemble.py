@@ -5,7 +5,7 @@
 bytes. Assembled asset names embed a content hash — immutable, cache-forever
 (docs/architecture.md "R2 layout").
 
-Word timings are empty at slice 1 (ADR-004: Voxtral returns no timestamps);
+Word timings are empty at slice 1 (ADR-008: Gemini returns no timestamps);
 Deepgram STT reconstructs them at slice 6. Assembly passes timings through
 unchanged — whatever a page carries, assembled or empty, reaches story.json.
 """
@@ -155,7 +155,7 @@ def test_word_timings_survive_assembly_untouched(tmp_path: Path) -> None:
 
 
 def test_empty_timings_survive_assembly_untouched(tmp_path: Path) -> None:
-    """Given pages narrated without word timings (the Voxtral/ADR-004 default),
+    """Given pages narrated without word timings (the Gemini/ADR-008 default),
     When the story is assembled,
     Then every page keeps its empty timings — assembly does not require or
     synthesize timings; they arrive empty from narrate and stay that way.

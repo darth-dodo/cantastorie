@@ -1,7 +1,7 @@
-"""Narration step (AI-391): Voxtral TTS via OpenRouter, no timestamps.
+"""Narration step (AI-391): Gemini TTS via OpenRouter, no timestamps.
 
-Every page is narrated with the single narrator voice through OpenRouter's
-POST /audio/speech endpoint (ADR-004). Voxtral returns raw audio bytes with
+Every page is narrated with the single house voice ("Kore") through OpenRouter's
+POST /audio/speech endpoint (ADR-008). Gemini returns raw audio bytes with
 no word or character timestamps — page timings stay empty until reading mode
 (slice 6) reconstructs them via a Deepgram STT transcription pass.
 
@@ -89,7 +89,7 @@ def narrate_pages(
     """Narrate every page with the single narrator voice.
 
     Returns pages with audio attached: the cached mp3 path plus empty word
-    timings (Voxtral returns no timestamps; Deepgram STT reconstructs them
+    timings (Gemini returns no timestamps; Deepgram STT reconstructs them
     at slice 6). Unchanged page text is a pure cache lookup — zero TTS calls.
     """
     client = client or NarrationClient(settings)

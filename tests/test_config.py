@@ -14,14 +14,14 @@ def test_settings_provide_safe_defaults_without_any_environment() -> None:
     """Given no .env file and no environment variables,
     When Settings load,
     Then the key defaults to an empty secret, the OpenRouter base URL gets its
-    documented default, and narration defaults to Voxtral via OpenRouter.
+    documented default, and narration defaults to Gemini TTS via OpenRouter.
     """
     settings = Settings(_env_file=None)
     assert settings.openrouter_api_key.get_secret_value() == ""
     assert settings.openrouter_base_url == "https://openrouter.ai/api/v1"
-    assert settings.narration_model == "mistralai/voxtral-mini-tts-2603"
+    assert settings.narration_model == "google/gemini-2.5-flash-preview-tts"
     assert settings.narration_response_format == "mp3"
-    assert settings.narration_voices["it"] == "en_paul_happy"
+    assert settings.narration_voices["it"] == "Kore"
     assert settings.content_dir.name == "content"
 
 
