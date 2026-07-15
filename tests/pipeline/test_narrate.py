@@ -1,7 +1,7 @@
 """Behavior specs for the narration step (AI-391).
 
-One narrator voice per story, audio synthesized through Voxtral via OpenRouter
-(ADR-004). Voxtral returns raw audio with no timestamps — word timings stay
+One narrator voice per story, audio synthesized through Gemini TTS via OpenRouter
+(ADR-008). Gemini returns raw audio with no timestamps — word timings stay
 empty until slice 6 reconstructs them via Deepgram STT. Spoken prompts are
 first-class assets (docs/product.md **Spoken Prompts**). Every OpenRouter
 interaction is served by httpx.MockTransport — zero network.
@@ -59,7 +59,7 @@ def test_every_narrated_page_carries_audio_with_empty_timings(tmp_path: Path) ->
     """Given a story's pages and the single narrator voice,
     When the narrate step runs,
     Then every page comes back with an mp3 on disk and empty word timings —
-    Voxtral returns no timestamps; Deepgram STT reconstructs them at slice 6.
+    Gemini returns no timestamps; Deepgram STT reconstructs them at slice 6.
     """
     calls: list[str] = []
     settings = _settings()

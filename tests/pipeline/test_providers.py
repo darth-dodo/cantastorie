@@ -32,11 +32,11 @@ def test_every_llm_model_is_bound_to_openrouter_not_a_vendor_api() -> None:
 
 
 def test_narration_posts_to_openrouter_audio_speech_and_returns_raw_audio() -> None:
-    """Given Voxtral configured in settings,
+    """Given Gemini configured in settings,
     When text is synthesized,
     Then the client POSTs to /audio/speech with the OpenRouter bearer key and
     the narration model id, and returns the raw audio bytes — no timestamps
-    (ADR-004: Voxtral returns raw audio; Deepgram STT reconstructs timings later).
+    (ADR-008: Gemini returns raw audio; Deepgram STT reconstructs timings later).
     """
     seen: dict[str, object] = {}
 
@@ -53,9 +53,9 @@ def test_narration_posts_to_openrouter_audio_speech_and_returns_raw_audio() -> N
     assert "/audio/speech" in str(seen["url"])
     assert seen["auth"] == "Bearer sk-or-test"
     assert seen["body"] == {
-        "model": "mistralai/voxtral-mini-tts-2603",
+        "model": "google/gemini-2.5-flash-preview-tts",
         "input": "shh, shh",
-        "voice": "en_paul_happy",
+        "voice": "Kore",
         "response_format": "mp3",
     }
 

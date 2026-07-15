@@ -77,7 +77,7 @@ Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a se
 | **Player UI** | Vanilla ES modules + Web Audio API | Full-screen, audio-driven, FSM-managed; crossfades that work on iOS |
 | **Parent UI** | Jinja2 + HTMX + Tailwind | Server-driven UI, minimal JS |
 | **Pipeline** | Plain Python + Pydantic AI | Typed step functions, filesystem checkpoints, no graph framework |
-| **LLMs, images & narration** | OpenRouter | One gateway, per-step model choice; narration on Voxtral Mini TTS, word timings via Deepgram (ElevenLabs retired — [ADR-004](docs/adr/ADR-004-narration-deepgram-voxtral.md)) |
+| **LLMs, images & narration** | OpenRouter | One gateway, per-step model choice; narration on Gemini 3.1 Flash TTS, word timings via Deepgram (ElevenLabs retired — [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) |
 | **Asset storage** | Cloudflare R2 | Zero egress fees, access logs off, bucket-direct playback |
 | **Hosting** | Render (Docker, `render.yaml`) | Hermano's deploy precedent |
 | **Child persistence** | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
@@ -144,9 +144,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Status
 
-The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Voxtral as coded; moving to Gemini TTS per [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and IndexedDB state. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — all behind a single env-var secret, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). Published stories are live on R2 with bucket-direct playback.
+The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and IndexedDB state. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — all behind a single env-var secret, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). Published stories are live on R2 with bucket-direct playback.
 
-What's next: the Gemini TTS narration switch and bake-off ([ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), parent-face pack requests and the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
+What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), parent-face pack requests and the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
 
 ---
 
