@@ -333,7 +333,7 @@ describe("shelf settings (language + theme)", () => {
     });
   });
 
-  it("picking a palette marks it current", async () => {
+  it("picking a palette marks it current and applies it to the document", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     document.querySelector(".settings-gear").click();
@@ -343,6 +343,7 @@ describe("shelf settings (language + theme)", () => {
     );
     plum.click();
     expect(plum.getAttribute("aria-current")).toBe("true");
+    expect(document.documentElement.getAttribute("data-palette")).toBe("plum");
   });
 
   it("the Done button closes the overlay", async () => {
