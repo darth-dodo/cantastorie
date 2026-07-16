@@ -12,9 +12,12 @@ Endpoint verified against Clerk docs 2026-07-15: PATCH
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import httpx
 
-from src.config import Settings  # noqa: TC001
+if TYPE_CHECKING:
+    from src.config import Settings
 
 CLERK_API_BASE = "https://api.clerk.com/v1"
 
