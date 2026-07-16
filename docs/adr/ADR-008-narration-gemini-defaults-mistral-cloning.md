@@ -366,7 +366,7 @@ ADR-004 bet that one provider through one gateway could narrate five languages a
 
 **Watermarking**: SynthID-embedded audio for AI-content provenance.
 
-**Model**: `gemini-2.5-flash-preview-tts` (preview model; model id on OpenRouter verified at T0).
+**Model**: `google/gemini-3.1-flash-tts-preview` (preview model; model id on OpenRouter verified at T0).
 
 ### Voxtral TTS via Mistral API (cloning path only)
 
