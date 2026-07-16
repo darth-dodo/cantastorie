@@ -16,7 +16,7 @@ content rules are enforced as pipeline validation in assemble):
   STT pass reconstructs them — ADR-004).
 
 Published asset names embed a content hash and so are immutable, cache-forever
-(docs/architecture.md "R2 layout"): ``p1.{hash8}.mp3`` for audio, ``p1.{hash8}
+(docs/architecture.md "R2 layout"): ``p1.{hash8}.wav`` for audio, ``p1.{hash8}
 .webp`` for images. The rewritten references are relative filenames — the
 player resolves them against the story.json URL — so the assembled Story is
 exactly the shape the dev fixture already plays.
@@ -33,10 +33,10 @@ from src.pipeline.models import Page, PageAudio, Story
 from src.pipeline.steps.illustrate import IllustrationSet
 
 # Enough of the SHA-256 to make collisions a non-worry while keeping filenames
-# short (docs/architecture.md "R2 layout": p1.{hash}.mp3, matching the fixture).
+# short (docs/architecture.md "R2 layout": p1.{hash}.wav, matching the fixture).
 CONTENT_HASH_LENGTH = 8
 
-AUDIO_SUFFIX = ".mp3"
+AUDIO_SUFFIX = ".wav"
 IMAGE_SUFFIX = ".webp"
 
 
@@ -69,7 +69,7 @@ class MissingAssetError(Exception):
 class AssembledStory(BaseModel):
     """The validated story.json plus the assets it now references by hashed name.
 
-    ``assets`` maps each published filename (``p1.{hash8}.mp3``, ``p1.{hash8}
+    ``assets`` maps each published filename (``p1.{hash8}.wav``, ``p1.{hash8}
     .webp``) to the source bytes on disk, so stage and publish copy without
     re-deriving anything.
     """

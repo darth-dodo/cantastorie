@@ -58,7 +58,7 @@ def _narrated_story_with_illustrations(
     page_images: dict[str, Path] = {}
     for n in range(1, pages_count + 1):
         pid = f"p{n}"
-        audio_path = narrate_dir / f"{pid}.audio.mp3"
+        audio_path = narrate_dir / f"{pid}.audio.wav"
         audio_path.write_bytes((audio_bytes or {}).get(pid, f"mp3:{pid}".encode()))
         timings = [] if drop_timings == pid else _timings()
         pages.append(
@@ -98,7 +98,7 @@ def _narrated_story_with_illustrations(
 def test_assembly_rewrites_every_asset_to_its_immutable_hashed_name(tmp_path: Path) -> None:
     """Given a narrated, illustrated story that clears the content rules,
     When it is assembled,
-    Then every page's audio and image are rewritten to p{n}.{hash8}.mp3 and
+    Then every page's audio and image are rewritten to p{n}.{hash8}.wav and
     p{n}.{hash8}.webp — the immutable, cache-forever naming — and each name
     maps to the source bytes on disk.
     """
@@ -109,7 +109,7 @@ def test_assembly_rewrites_every_asset_to_its_immutable_hashed_name(tmp_path: Pa
     assert isinstance(assembled, AssembledStory)
     for page in assembled.story.pages:
         assert page.audio is not None
-        assert re.fullmatch(rf"{page.id}\.[0-9a-f]{{8}}\.mp3", page.audio.file)
+        assert re.fullmatch(rf"{page.id}\.[0-9a-f]{{8}}\.wav", page.audio.file)
         assert page.image is not None
         assert re.fullmatch(rf"{page.id}\.[0-9a-f]{{8}}\.webp", page.image)
         assert page.audio.file in assembled.assets
@@ -216,7 +216,7 @@ def test_a_missing_image_fails_hard_naming_the_page_and_asset(tmp_path: Path) ->
 
 
 def test_a_missing_audio_file_fails_hard(tmp_path: Path) -> None:
-    """Given a page whose narration mp3 was deleted from the cache,
+    """Given a page whose narration wav was deleted from the cache,
     When assembly runs,
     Then it raises a MissingAssetError for that page's audio.
     """

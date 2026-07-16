@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         "el": "Kore",
         "de": "Kore",
     }
-    narration_response_format: str = "mp3"
+    narration_response_format: str = "pcm"
 
     content_dir: Path = Path("content")
 
