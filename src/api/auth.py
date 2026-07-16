@@ -1,8 +1,10 @@
-"""Clerk parent-auth identity layer (AI-409, ADR-003).
+"""Clerk parent-auth identity layer (AI-409, AI-410).
 
-Provides `require_parent`, a FastAPI dependency that reads the Clerk session
-JWT from the __session cookie, verifies its RS256 signature against JWKS
-keys, and returns a ParentContext.
+Provides two FastAPI dependencies:
+- `require_parent_candidate`: verifies the Clerk session JWT; tolerates a
+  missing family_token (for unprovisioned first-sign-in parents, AI-410).
+- `require_parent`: thin wrapper that additionally requires the family_token
+  claim; identical observable contract to the AI-409 implementation.
 
 This module is Clerk SDK-free: the only external deps are PyJWT + cryptography
 for RS256, and httpx (already a project dep) for the JWKS fetch.
@@ -127,18 +129,38 @@ class ParentContext:
 
 
 # ---------------------------------------------------------------------------
-# Dependency
+# CandidateContext
 # ---------------------------------------------------------------------------
 
 
-async def require_parent(
+@dataclass(frozen=True)
+class CandidateContext:
+    """Identity for a verified session that may not carry a family token yet.
+
+    The provision endpoint (AI-410) is the only consumer: it must admit a
+    first-sign-in parent whose claims have no family_token, which
+    require_parent deliberately rejects.
+    """
+
+    user_id: str
+    family_token: str | None
+
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+
+
+async def require_parent_candidate(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> ParentContext:
-    """FastAPI dependency: verify the Clerk session and return a ParentContext.
+) -> CandidateContext:
+    """Verify the Clerk session but tolerate a missing family_token claim.
 
-    Mirrors _require_workshop in routes/workshop.py for the 404-when-unset
-    pattern; raises 401 on any auth failure, 403 if the account is disabled.
+    Same guards as require_parent (404 feature-unset, 401 bad/missing JWT,
+    403 disabled) — only the family_token requirement is relaxed. The kill
+    switch is checked before provisioning state, so a disabled account can
+    never mint or link a token.
     """
     # 1. Feature guard — unset jwks_url means /parent does not exist.
     if not settings.clerk_jwks_url:
@@ -172,25 +194,38 @@ async def require_parent(
     except Exception:
         raise HTTPException(status_code=401) from None
 
-    # 4. Read azp if present — Clerk sets this to the publishable key origin.
-    # Hard-fail enforcement deferred until the azp allowlist config field is
-    # added in a later step (design spec §2, "azp per Clerk guidance").
-    # For now we accept any azp value.
+    # 4. azp accepted as-is — hard-fail enforcement deferred (design spec §2).
 
-    # 5. Custom claims — family_token is required; missing means not provisioned yet.
-    family_token = payload.get("family_token")
-    if not isinstance(family_token, str) or not family_token:
-        raise HTTPException(status_code=401)
-
-    # 6. Kill switch — disabled=true in metadata propagates within ~60 s via
-    #    Clerk's short-lived session JWT refresh cycle.
-    disabled: bool = bool(payload.get("disabled", False))
-    if disabled:
+    # 5. Kill switch — disabled=true propagates within ~60 s via Clerk's
+    #    short-lived session JWT refresh cycle. Checked before any
+    #    family_token logic so a disabled account cannot provision.
+    if bool(payload.get("disabled", False)):
         raise HTTPException(status_code=403)
 
-    # 7. Require a non-empty sub — an absent or empty sub cannot be scoped to
-    #    a family and is treated as unauthenticated (mirrors family_token check).
+    # 6. Require a non-empty sub — an absent or empty sub cannot be scoped
+    #    to a family and is treated as unauthenticated.
     user_id = str(payload.get("sub", ""))
     if not user_id:
         raise HTTPException(status_code=401)
-    return ParentContext(user_id=user_id, family_token=family_token, disabled=False)
+
+    # 7. family_token is optional here — None means "not provisioned yet".
+    raw_family = payload.get("family_token")
+    family_token = raw_family if isinstance(raw_family, str) and raw_family else None
+    return CandidateContext(user_id=user_id, family_token=family_token)
+
+
+async def require_parent(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ParentContext:
+    """FastAPI dependency: verify the Clerk session and return a ParentContext.
+
+    Thin wrapper over require_parent_candidate that additionally requires the
+    family_token claim. One deliberate edge change vs AI-409: a *disabled*
+    session with *no* family_token now gets 403 (kill switch wins) rather
+    than 401 — the candidate checks disabled first.
+    """
+    ctx = await require_parent_candidate(request, settings)
+    if ctx.family_token is None:
+        raise HTTPException(status_code=401)
+    return ParentContext(user_id=ctx.user_id, family_token=ctx.family_token, disabled=False)

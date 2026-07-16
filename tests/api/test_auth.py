@@ -20,7 +20,14 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.auth as auth_module
-from src.api.auth import SESSION_COOKIE, ParentContext, _jwks_state, require_parent
+from src.api.auth import (
+    SESSION_COOKIE,
+    CandidateContext,
+    ParentContext,
+    _jwks_state,
+    require_parent,
+    require_parent_candidate,
+)
 from src.config import Settings, get_settings
 from tests.api.clerk_jwt import (
     TEST_KID,
@@ -375,3 +382,79 @@ def test_non_string_family_token_returns_401(monkeypatch: pytest.MonkeyPatch) ->
         resp = client.get("/me", cookies={SESSION_COOKIE: token})
 
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# require_parent_candidate — AI-410
+# ---------------------------------------------------------------------------
+
+
+def _make_candidate_app(settings: Settings) -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/candidate")
+    async def candidate(
+        ctx: Annotated[CandidateContext, Depends(require_parent_candidate)],
+    ) -> dict[str, Any]:
+        return {"user_id": ctx.user_id, "family_token": ctx.family_token}
+
+    app.dependency_overrides[get_settings] = lambda: settings
+    return app
+
+
+def test_candidate_without_family_token_returns_context_with_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The whole point: an unprovisioned (first sign-in) session is admitted."""
+    private_key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+    settings = clerk_settings()
+    app = _make_candidate_app(settings)
+    # Adaptation: valid_payload's default sub is "user_2abc" (not "user_123"),
+    # so the expected user_id is adjusted to match the helper's actual default.
+    token = mint_token(private_key, valid_payload(include_family_token=False))
+    client = TestClient(app)
+    response = client.get("/candidate", cookies={SESSION_COOKIE: token})
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "user_2abc", "family_token": None}
+
+
+def test_candidate_with_family_token_returns_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+    settings = clerk_settings()
+    app = _make_candidate_app(settings)
+    token = mint_token(private_key, valid_payload(sub="user_abc", family_token="fam_xyz"))
+    client = TestClient(app)
+    response = client.get("/candidate", cookies={SESSION_COOKIE: token})
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "user_abc", "family_token": "fam_xyz"}
+
+
+def test_candidate_disabled_returns_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kill switch applies to unprovisioned sessions too."""
+    private_key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+    settings = clerk_settings()
+    app = _make_candidate_app(settings)
+    token = mint_token(
+        private_key,
+        valid_payload(include_family_token=False, disabled=True),
+    )
+    client = TestClient(app)
+    response = client.get("/candidate", cookies={SESSION_COOKIE: token})
+    assert response.status_code == 403
+
+
+def test_candidate_missing_cookie_returns_401() -> None:
+    app = _make_candidate_app(clerk_settings())
+    response = TestClient(app).get("/candidate")
+    assert response.status_code == 401
+
+
+def test_candidate_unset_clerk_config_returns_404() -> None:
+    app = _make_candidate_app(clerk_settings(jwks_url=""))
+    response = TestClient(app).get("/candidate")
+    assert response.status_code == 404
