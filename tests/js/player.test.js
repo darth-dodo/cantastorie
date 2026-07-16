@@ -299,3 +299,57 @@ describe("audio-error overlay (AI-367): the sleeping bird", () => {
     await vi.waitFor(() => expect(engine.state).toBe("playing"));
   });
 });
+
+describe("shelf settings (language + theme)", () => {
+  it("the gear opens a settings overlay with language and palette pills", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    const gear = document.querySelector(".settings-gear");
+    expect(gear).not.toBeNull();
+    gear.click();
+    const overlay = document.querySelector(".overlay.settings");
+    expect(overlay).not.toBeNull();
+    expect([...overlay.querySelectorAll(".settings-pill")]).toHaveLength(7);
+    expect(overlay.textContent).toContain("Lingua");
+    expect(overlay.textContent).toContain("Tema");
+  });
+
+  it("picking a language persists it and keeps the overlay open on the new language", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    const overlay = document.querySelector(".overlay.settings");
+    const esPill = [...overlay.querySelectorAll(".settings-pill")].find(
+      (p) => p.textContent === "Español",
+    );
+    esPill.click();
+    await vi.waitFor(() => {
+      expect(localStorage.getItem("cantastorie-lang")).toBe("es");
+      const overlay2 = document.querySelector(".overlay.settings");
+      const active = [...overlay2.querySelectorAll(".settings-pill")].find(
+        (p) => p.getAttribute("aria-current") === "true",
+      );
+      expect(active.textContent).toBe("Español");
+    });
+  });
+
+  it("picking a palette marks it current", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    const overlay = document.querySelector(".overlay.settings");
+    const plum = [...overlay.querySelectorAll(".settings-pill")].find(
+      (p) => p.textContent === "Prugna",
+    );
+    plum.click();
+    expect(plum.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("the Done button closes the overlay", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    document.querySelector(".settings-done").click();
+    expect(document.querySelector(".overlay.settings")).toBeNull();
+  });
+});
