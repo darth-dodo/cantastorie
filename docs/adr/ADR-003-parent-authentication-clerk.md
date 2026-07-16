@@ -184,13 +184,13 @@ The current answer — a random family token living in IndexedDB — was chosen 
 - **Buys the dangerous code**: credential handling, magic-link delivery, session security, MFA, and abuse protection are Clerk's product, not this repo's code.
 - **Fits the no-framework constraint**: JWT verification server-side is dependency-light; the browser side is confined to parent pages that are server-rendered anyway.
 - **Magic-link UX** matches the audience — a parent on a phone at 21:30.
-- **Free tier** comfortably covers a family-scale app (about 10k monthly active users as of 2026-07 — *unverified, confirm current pricing*).
+- **Free tier** comfortably covers a family-scale app: as of 2026-07-16 the Hobby plan allows 50,000 MRU (monthly retained users) at no cost, up from the 10,000 limit cited at proposal time; custom session token claims (JWT templates) are included on the free plan. A handful of families is well within this ceiling.
 
 **Cons**:
 
 - **A third party now processes parent PII** (email, sign-in metadata). The privacy pillar's wording must change, and Clerk becomes a data processor to disclose.
 - **External dependency on the auth path**: a Clerk outage locks parents out of the review queue (the child player is unaffected by design).
-- **EU data residency is unverified**: where Clerk stores user records and whether an EU region can be pinned must be confirmed before acceptance.
+- **EU data residency is not available**: as of 2026-07-16, Clerk stores user records in the United States (Google Cloud and Cloudflare, US data centres); no EU region pinning exists. GDPR transfers rely on the EU–US Data Privacy Framework (adequacy decision July 2023) with Standard Contractual Clauses as fallback. This is a confirmed limitation, not a gap to close — see Findings note below.
 
 **Risks**:
 
@@ -366,6 +366,12 @@ Phase 2 work, gated on this ADR flipping to Accepted — **now Accepted (2026-07
 - [ ] Player page ships zero Clerk JS and zero cookies (automated, post-implementation)
 - [ ] Parent sign-in → pack request → review → publish walked end to end in Playwright
 - [ ] JWT verification unit-tested at the transport seam, keyless, like the pipeline's provider tests
+
+### Findings (verified 2026-07-16)
+
+1. **EU data residency** — No EU region pinning is available. Clerk stores parent user records in US data centres (Google Cloud + Cloudflare). GDPR cross-border transfer is covered by the EU–US Data Privacy Framework (Commission adequacy decision July 2023) with Standard Contractual Clauses as contractual fallback. A DPA is available on request. Sources: <https://clerk.com/legal/dpa>, <https://clerk.com/legal/gdpr>, <https://clerk.com/legal/dpf>. The risk row "EU data residency inadequate → Option D fallback" in the Consequences table remains live; DPF coverage is considered sufficient for a family-scale app holding only parent sign-in identifiers, but must be disclosed in the privacy notice.
+
+2. **Free-tier limits** — Clerk's Hobby plan (free) allows **50,000 MRU** (monthly retained users) per app, raised from 10,000 on 2026-02-05. Custom session token claims (JWT templates) are included on the free plan; only custom session *duration* (beyond the 7-day default) requires Pro. A deployment serving a handful of families is well inside this ceiling with no paid upgrade needed. Source: <https://clerk.com/pricing>.
 
 ---
 
