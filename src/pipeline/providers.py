@@ -4,10 +4,15 @@ The whole system has exactly one key; it arrives as SecretStr and is only
 unwrapped at the transport boundary — never logged, never repr'd.
 
 Narration uses Gemini 3.1 Flash TTS (google/gemini-3.1-flash-tts-preview) through
-OpenRouter's OpenAI-compatible POST /audio/speech endpoint, returning raw
-audio bytes with no timestamps (ADR-008). Word timings are reconstructed by
+OpenRouter's OpenAI-compatible POST /audio/speech endpoint. Gemini emits raw
+PCM (it rejects response_format="mp3"), so the client requests pcm and wraps
+the returned frames into a WAV container here — WAV decodes everywhere
+decodeAudioData runs, iOS Safari included. Word timings are reconstructed by
 a Deepgram STT pass at slice 6, not here.
 """
+
+import io
+import wave
 
 import httpx
 from pydantic import BaseModel
@@ -32,6 +37,28 @@ def build_model(model_id: str, settings: Settings) -> OpenAIChatModel:
 
 class NarrationResult(BaseModel):
     audio: bytes
+
+
+def _parse_pcm_params(content_type: str) -> tuple[int, int]:
+    rate, channels = 24000, 1
+    for token in content_type.split(";"):
+        t = token.strip().lower()
+        if t.startswith("rate="):
+            rate = int(t.split("=", 1)[1])
+        elif t.startswith("channels="):
+            channels = int(t.split("=", 1)[1])
+    return rate, channels
+
+
+def _wrap_pcm_as_wav(pcm: bytes, content_type: str) -> bytes:
+    rate, channels = _parse_pcm_params(content_type)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
 
 
 class NarrationClient:
@@ -60,4 +87,8 @@ class NarrationClient:
             },
         )
         response.raise_for_status()
-        return NarrationResult(audio=response.content)
+        content_type = response.headers.get("Content-Type", "")
+        audio = response.content
+        if content_type.startswith("audio/pcm"):
+            audio = _wrap_pcm_as_wav(audio, content_type)
+        return NarrationResult(audio=audio)

@@ -17,6 +17,7 @@ router = APIRouter()
 
 CONTENT_TYPES = {
     ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
     ".webp": "image/webp",
     ".json": "application/json",
 }

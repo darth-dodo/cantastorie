@@ -20,7 +20,7 @@ def test_settings_provide_safe_defaults_without_any_environment() -> None:
     assert settings.openrouter_api_key.get_secret_value() == ""
     assert settings.openrouter_base_url == "https://openrouter.ai/api/v1"
     assert settings.narration_model == "google/gemini-3.1-flash-tts-preview"
-    assert settings.narration_response_format == "mp3"
+    assert settings.narration_response_format == "pcm"
     assert settings.narration_voices["it"] == "Kore"
     assert settings.content_dir.name == "content"
 

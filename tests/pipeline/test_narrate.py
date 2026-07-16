@@ -40,7 +40,9 @@ def _fake_openrouter(calls: list[str]) -> httpx.MockTransport:
         text = body["input"]
         calls.append(text)
         return httpx.Response(
-            200, content=f"mp3:{text}".encode(), headers={"Content-Type": "audio/mpeg"}
+            200,
+            content=f"pcm:{text}".encode(),
+            headers={"Content-Type": "audio/pcm;rate=24000;channels=1"},
         )
 
     return httpx.MockTransport(handler)
@@ -58,7 +60,7 @@ def _client(settings: Settings, calls: list[str]) -> NarrationClient:
 def test_every_narrated_page_carries_audio_with_empty_timings(tmp_path: Path) -> None:
     """Given a story's pages and the single narrator voice,
     When the narrate step runs,
-    Then every page comes back with an mp3 on disk and empty word timings —
+    Then every page comes back with a wav on disk and empty word timings —
     Gemini returns no timestamps; Deepgram STT reconstructs them at slice 6.
     """
     calls: list[str] = []
@@ -72,8 +74,8 @@ def test_every_narrated_page_carries_audio_with_empty_timings(tmp_path: Path) ->
     assert len(narrated) == len(pages)
     for page in narrated:
         assert page.audio is not None
-        assert page.audio.file.endswith(".mp3")
-        assert Path(page.audio.file).read_bytes() == f"mp3:{page.text}".encode()
+        assert page.audio.file.endswith(".wav")
+        assert Path(page.audio.file).read_bytes()[:4] == b"RIFF"
         assert page.audio.timings == []
 
 
@@ -157,7 +159,7 @@ def test_the_utterance_set_ships_final_italian_copy() -> None:
 def test_utterance_audio_lands_under_prompts_it_with_hashed_filenames(tmp_path: Path) -> None:
     """Given the Italian prompt set,
     When utterances are synthesized into a local output folder,
-    Then each lands at prompts/it/{name}.{contenthash}.mp3 — the immutable,
+    Then each lands at prompts/it/{name}.{contenthash}.wav — the immutable,
     cache-forever naming of docs/architecture.md **R2 layout**.
     """
     calls: list[str] = []
@@ -174,8 +176,8 @@ def test_utterance_audio_lands_under_prompts_it_with_hashed_filenames(tmp_path: 
     assert set(produced) == set(IT_UTTERANCES)
     for name, path in produced.items():
         assert path.parent == out_dir / "prompts" / "it"
-        assert re.fullmatch(rf"{name}\.[0-9a-f]{{16}}\.mp3", path.name)
-        assert path.read_bytes() == f"mp3:{IT_UTTERANCES[name]}".encode()  # type: ignore[index]
+        assert re.fullmatch(rf"{name}\.[0-9a-f]{{16}}\.wav", path.name)
+        assert path.read_bytes()[:4] == b"RIFF"  # type: ignore[index]
 
 
 def test_rerunning_utterances_makes_zero_tts_calls_and_identical_filenames(tmp_path: Path) -> None:

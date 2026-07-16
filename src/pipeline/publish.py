@@ -44,7 +44,12 @@ PUBLISHED_PREFIX = "published"
 STAGED_PREFIX = "pending/staged"
 STORY_FILE = "story.json"
 
-CONTENT_TYPES = {".mp3": "audio/mpeg", ".webp": "image/webp", ".json": "application/json"}
+CONTENT_TYPES = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".webp": "image/webp",
+    ".json": "application/json",
+}
 
 THEME_WASH: dict[Theme, str] = {
     "animals_helping_each_other": "wash-bosco",

@@ -9,9 +9,10 @@ Cache contract (docs/architecture.md "Content-addressed caching"): narration
 is keyed on page text + voice ID + model/settings, so unchanged text costs
 zero TTS calls.
 
-Audio format: mp3 (the format providers.py requests) — mp3 decodes everywhere
-iOS Safari included, at bedtime-speech quality; opus saves bytes but its Safari
-support is too patchy for a player that must never stall.
+Audio format: wav — Gemini TTS emits raw PCM (it rejects response_format="mp3"),
+so providers.py requests pcm and wraps the frames into a WAV container here.
+WAV decodes everywhere decodeAudioData runs, iOS Safari included, at bedtime-speech
+quality.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
     from src.config import Settings
 
-AUDIO_SUFFIX = ".mp3"
+AUDIO_SUFFIX = ".wav"
 CONTENT_HASH_LENGTH = 16
 
 PAGE_STEP = "narrate"
@@ -88,7 +89,7 @@ def narrate_pages(
 ) -> list[Page]:
     """Narrate every page with the single narrator voice.
 
-    Returns pages with audio attached: the cached mp3 path plus empty word
+    Returns pages with audio attached: the cached wav path plus empty word
     timings (Gemini returns no timestamps; Deepgram STT reconstructs them
     at slice 6). Unchanged page text is a pure cache lookup — zero TTS calls.
     """
@@ -111,7 +112,7 @@ def synthesize_utterances(
     *,
     s3_client: S3Client | None = None,
 ) -> dict[UtteranceName, Path]:
-    """Produce the spoken-prompt assets: prompts/{lang}/{name}.{hash}.mp3.
+    """Produce the spoken-prompt assets: prompts/{lang}/{name}.{hash}.wav.
 
     Filenames embed a hash of the audio content, so published prompt assets
     are immutable and cache-forever (docs/architecture.md "R2 layout").
