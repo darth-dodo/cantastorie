@@ -3,7 +3,7 @@
 The whole system has exactly one key; it arrives as SecretStr and is only
 unwrapped at the transport boundary — never logged, never repr'd.
 
-Narration uses Gemini 3.1 Flash TTS (google/gemini-2.5-flash-preview-tts) through
+Narration uses Gemini 3.1 Flash TTS (google/gemini-3.1-flash-tts-preview) through
 OpenRouter's OpenAI-compatible POST /audio/speech endpoint, returning raw
 audio bytes with no timestamps (ADR-008). Word timings are reconstructed by
 a Deepgram STT pass at slice 6, not here.

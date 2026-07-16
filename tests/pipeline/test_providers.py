@@ -53,7 +53,7 @@ def test_narration_posts_to_openrouter_audio_speech_and_returns_raw_audio() -> N
     assert "/audio/speech" in str(seen["url"])
     assert seen["auth"] == "Bearer sk-or-test"
     assert seen["body"] == {
-        "model": "google/gemini-2.5-flash-preview-tts",
+        "model": "google/gemini-3.1-flash-tts-preview",
         "input": "shh, shh",
         "voice": "Kore",
         "response_format": "mp3",

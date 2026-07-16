@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # ("Kore") is pinned across every language (overridable via NARRATION_VOICES);
     # the per-language voice set is finalized by the AI-366 bake-off.
     # NARRATION_VOICES is a JSON dict mapping language codes to voice IDs.
-    narration_model: str = "google/gemini-2.5-flash-preview-tts"
+    narration_model: str = "google/gemini-3.1-flash-tts-preview"
     narration_voices: dict[str, str] = {
         "it": "Kore",
         "es": "Kore",
