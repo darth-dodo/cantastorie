@@ -86,7 +86,13 @@ class NarrationClient:
                 "response_format": self._settings.narration_response_format,
             },
         )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                f"{response.status_code} {response.reason_phrase} from OpenRouter "
+                f"/audio/speech: {response.text}",
+                request=response.request,
+                response=response,
+            )
         content_type = response.headers.get("Content-Type", "")
         audio = response.content
         if content_type.startswith("audio/pcm"):

@@ -7,6 +7,7 @@ environment — never in the browser, never in logs.
 import json
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from src.config import Settings
@@ -80,6 +81,27 @@ def test_pcm_from_openrouter_is_wrapped_into_a_wav_container() -> None:
 
     assert result.audio[:4] == b"RIFF"
     assert len(result.audio) > 200  # WAV header + frames
+
+
+def test_a_400_surfaces_openrouter_error_body_not_just_the_status() -> None:
+    """Given OpenRouter rejects the request (e.g. bad model, wrong format),
+    When the client synthesizes,
+    Then the raised HTTPStatusError carries OpenRouter's reason in its message
+    so the failure is self-diagnosing instead of a bare '400 Bad Request'.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            content=b'{"error":{"message":"Gemini TTS only supports response_format=\\"pcm\\". Got \\"mp3\\".","code":400}}',
+            headers={"Content-Type": "application/json"},
+        )
+
+    client = NarrationClient(_settings(), transport=httpx.MockTransport(handler))
+    with pytest.raises(httpx.HTTPStatusError) as excinfo:
+        client.synthesize("Ciao!", "it")
+    assert "400" in str(excinfo.value)
+    assert "only supports response_format" in str(excinfo.value)
 
 
 def test_the_narration_client_never_leaks_its_key_when_rendered() -> None:
