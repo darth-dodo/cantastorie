@@ -171,10 +171,9 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
     await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
   }
 
-  it("shows the loaded story full-bleed: its text as the caption, its art layer per page", async () => {
+  it("shows the loaded story full-bleed: its art layer per page", async () => {
     const engine = fakeEngine();
     await openFirstCover(engine);
-    expect(document.querySelector(".caption span").textContent).toContain("la barchetta Nina");
     expect(document.querySelectorAll(".page-art")).toHaveLength(8);
     expect(document.querySelector(".page-art.current")).not.toBeNull();
   });

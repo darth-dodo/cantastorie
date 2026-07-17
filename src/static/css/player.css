@@ -500,23 +500,6 @@ button.presses:active {
   opacity: 1;
 }
 
-.caption {
-  position: absolute;
-  top: 48%;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  transition: opacity var(--fade);
-}
-
-.caption span {
-  font: 11px ui-monospace, Menlo, monospace;
-  color: rgba(243, 233, 218, 0.4);
-  padding: 0 30px;
-  text-align: center;
-}
-
 /* Bead progress — read like beads on a string, never a number */
 .beads {
   position: absolute;
