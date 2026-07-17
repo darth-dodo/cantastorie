@@ -10,7 +10,6 @@ import { PAGE_COUNT } from "./store.js";
 // view from a loaded story.json.
 const mockView = {
   pageCount: PAGE_COUNT,
-  captions: story.captions,
   beadColors: story.beadColors,
   images: null,
 };
@@ -18,7 +17,6 @@ const mockView = {
 export function playerView(loaded) {
   return {
     pageCount: loaded.pages.length,
-    captions: loaded.pages.map((page) => page.text),
     beadColors: loaded.pages.map((_, i) => story.beadColors[i % story.beadColors.length]),
     images: loaded.pages.map((page) => page.imageUrl),
   };
@@ -203,10 +201,6 @@ export function buildPlayer(store, view = mockView) {
   stars.style.left = "70px";
   screen.appendChild(stars);
 
-  const caption = el("div", "caption");
-  caption.appendChild(el("span"));
-  screen.appendChild(caption);
-
   const beads = el("div", "beads");
   view.beadColors.forEach((color, i) => {
     const bead = el("div", "bead", { "data-bead": i });
@@ -236,7 +230,6 @@ export function updatePlayer(screen, state, view = mockView) {
   screen.querySelectorAll(".page-art").forEach((art, i) => {
     art.classList.toggle("current", i === state.page);
   });
-  screen.querySelector(".caption span").textContent = view.captions[state.page] ?? "";
   screen.querySelectorAll(".bead").forEach((bead, i) => {
     bead.classList.toggle("current", i === state.page);
     bead.classList.toggle("past", i < state.page);

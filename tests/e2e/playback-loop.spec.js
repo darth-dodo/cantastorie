@@ -33,7 +33,6 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
 
     // And the full-bleed page shows the fixture story with progress dots.
     await expect(page.locator(".bead")).toHaveCount(8);
-    await expect(page.locator(".caption span")).toContainText("la barchetta Nina");
   });
 
   test("pages turn themselves within 500 ms of the audio ending, hands-free to the end screen", async ({ page }) => {
