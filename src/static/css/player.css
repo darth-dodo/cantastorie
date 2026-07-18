@@ -180,7 +180,7 @@ button.presses:active {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  align-content: safe center;
+  align-content: start;
   padding-bottom: 96px;
 }
 
@@ -243,22 +243,22 @@ button.presses:active {
 }
 
 /* Wobble — four cover shapes, alternating tilt */
-.cover:nth-child(1) {
+.cover:nth-child(4n+1) {
   border-radius: 58% 42% 55% 45% / 52% 48% 40% 60%;
   transform: rotate(-2.5deg);
 }
 
-.cover:nth-child(2) {
+.cover:nth-child(4n+2) {
   border-radius: 45% 55% 48% 52% / 55% 45% 58% 42%;
   transform: rotate(2deg);
 }
 
-.cover:nth-child(3) {
+.cover:nth-child(4n+3) {
   border-radius: 50% 50% 44% 56% / 46% 54% 52% 48%;
   transform: rotate(1.5deg);
 }
 
-.cover:nth-child(4) {
+.cover:nth-child(4n+4) {
   border-radius: 52% 48% 58% 42% / 50% 50% 45% 55%;
   transform: rotate(-1.5deg);
 }
