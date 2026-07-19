@@ -96,7 +96,69 @@ Without `ASSET_BASE`, the player falls back to the app's own `/static/content` m
 
 ---
 
-## 4. Verify (the AI-365 acceptance)
+## 4. Clerk (parent sign-in, ADR-003)
+
+The parent area authenticates through Clerk. The player never loads Clerk
+JS; the server verifies session JWTs locally via JWKS — the only REST call
+to Clerk in the whole codebase is the one-time family-token write at first
+sign-in (`src/api/clerk.py`).
+
+### 1. Create the application
+
+1. [dashboard.clerk.com](https://dashboard.clerk.com) → **Create application**.
+2. Sign-in options: enable **Email** with **magic link** (passwordless).
+   Optionally enable **Google** OAuth.
+3. Note the **Publishable key** and **Secret key** from **API keys**.
+   The **Frontend API URL** on the same page gives you the other two values:
+   - JWKS URL: `https://<frontend-api>/.well-known/jwks.json`
+   - Issuer: `https://<frontend-api>`
+
+### 2. Session token template (custom claims)
+
+Dashboard → **Sessions** → **Customize session token** → Claims editor:
+
+```json
+{
+  "family_token": "{{user.public_metadata.family_token}}",
+  "disabled": "{{user.public_metadata.disabled}}"
+}
+```
+
+Save. Individual fields — not the whole `public_metadata` object — keep the
+session token under Clerk's 1.2 KB limit. Until a user is provisioned these
+claims resolve to null, which the server treats as "not provisioned yet"
+(and `disabled: null` as not disabled).
+
+### 3. Bot protection
+
+Dashboard → **Attack protection** → enable **Bot sign-up protection**.
+Sign-up now guards a wallet (pack generation costs money), so this is
+required, not optional. Suspected bots get an interactive challenge; if we
+later build a custom sign-up form it must include the
+`<div id="clerk-captcha">` placeholder element.
+
+### 4. Environment variables (Render → Environment)
+
+| Variable | Value |
+| -- | -- |
+| `CLERK_PUBLISHABLE_KEY` | `pk_…` from API keys |
+| `CLERK_SECRET_KEY` | `sk_…` from API keys |
+| `CLERK_JWKS_URL` | `https://<frontend-api>/.well-known/jwks.json` |
+| `CLERK_ISSUER` | `https://<frontend-api>` |
+
+Leaving `CLERK_JWKS_URL` unset disables the whole parent surface (routes
+404) — the safe default for deploys that don't want Clerk yet.
+
+### 5. Verify
+
+Sign in at `/parent` (once the pages land — until then, any Clerk-hosted
+account page works for template testing), then decode the `__session`
+cookie at jwt.io: it must carry `family_token` and `disabled` claims
+(null before first provision).
+
+---
+
+## 5. Verify (the AI-365 acceptance)
 
 On a phone on **cellular** (not home wifi), open the Render URL and confirm:
 
