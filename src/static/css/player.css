@@ -181,6 +181,7 @@ button.presses:active {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   align-content: start;
+  grid-auto-rows: max-content;
   padding-bottom: 96px;
 }
 
