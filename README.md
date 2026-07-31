@@ -43,17 +43,17 @@ The target is a single warm narrator identity across every story and language, l
 
 Soft watercolor, warm palette, rounded characters, nothing frightening — bedtime, not Saturday cartoons. Images carry no text and nothing scary. Every story's final page lands on comfort or sleepiness.
 
-### The Parent Gate
+### The Parent Gate (planned)
 
-Everything grown-up sits behind a small, low-contrast corner of the shelf. The gate is a three-second hold followed by a two-integer addition on a keypad — no PIN, freshly random each time. Five failures lock it for five minutes, and the lockout survives reloads. Behind it: language settings, reading mode, and export/import (with the dashboard and review queue arriving in Phase 2).
+Everything grown-up will sit behind a small, low-contrast corner of the shelf. The gate is a three-second hold followed by a two-integer addition on a keypad — no PIN, freshly random each time. Five failures lock it for five minutes, and the lockout survives reloads. Behind it: reading mode and export/import (with the dashboard and review queue arriving in Phase 2). Today the gate is not yet built — language and theme settings sit in an ungated settings overlay on the shelf.
 
 ### The Workshop
 
 Behind a separate operator secret, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. Runs execute in-process and survive restarts — the pipeline's filesystem checkpoints double as the resume mechanism, so a mid-run reboot re-buys zero API calls. The design is settled in [ADR-005](docs/adr/ADR-005-workshop-area.md).
 
-### Reading Mode, Optional
+### Reading Mode, Optional (planned)
 
-For reading-along parents and emerging readers, an optional text panel shows the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading.
+For reading-along parents and emerging readers, an optional text panel will show the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading. The pipeline's word-timing (Deepgram) and gloss steps ship with this slice.
 
 ### Five Languages
 
@@ -61,13 +61,13 @@ Italian and Spanish are the flagships — deepest content, first through every q
 
 ### Truly Private, Parent-Approved
 
-No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (IndexedDB) and exports to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only to request and review stories — no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (localStorage today, IndexedDB when real stories land) and will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — today that mints or links the family token; requesting and reviewing stories arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
 
 ---
 
 ## For Developers
 
-Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area, and an operator workshop (`/workshop`) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area (today a Clerk-verified provisioning endpoint; the parent pages arrive with Phase 2), and an operator workshop (`/workshop`) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
 
 ### Tech Stack
 
