@@ -82,16 +82,18 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Curated shelf** | ⏳ Planned | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published packs |
-| **Voice-first player** | ⏳ Planned | Full-bleed watercolor pages, one play-pause control, auto page turns, exact-position resume |
-| **Picture choices** | ⏳ Planned | Two picture options with spoken labels at fixed branch points |
+| **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published packs |
+| **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, one play-pause control, auto page turns, exact-position resume |
+| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at fixed branch points |
 | **Reading mode** | ⏳ Planned | Parent-enabled story text with karaoke word highlighting and tap-word English glosses |
-| **Launch library** | ⏳ Planned | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language |
-| **5 languages** | ⏳ Planned | Italian and Spanish flagship; English, Greek, German alongside |
+| **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
+| **5 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German alongside — per-language manifests and the settings switch are live; content exists for it/es/en trials only |
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
 | **Parent dashboard** | ⏳ Planned | Language tabs, unpublish toggles, kill switch |
 | **Pack requests & review** | ⏳ Planned | Parents request 1–3 stories on a theme, preview everything, approve or reject (Phase 2) |
-| **Authoring pipeline** | ⏳ Planned | Generates story text, narration, watercolor images, word timings, and glosses for approval |
+| **Operator workshop** | ✅ Shipped | Secret-gated screens to run the pipeline, watch progress, review staged stories, and publish ([ADR-005](adr/ADR-005-workshop-area.md)) |
+| **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
+| **Authoring pipeline** | 🔄 In progress | Generates story text, narration, watercolor images, word timings, and glosses for approval — all steps ship except word timings (Deepgram pass) and glosses |
 | **Live generation** | ⏳ Planned | Auto safety gate with unanimous-pass publishing, audit log, kill switch (Phase 3) |
 | **Export / import** | ⏳ Planned | The whole family state round-trips through a file; no child accounts anywhere |
 
@@ -384,19 +386,18 @@ See the [Architecture Documentation](architecture.md) for the pipeline design, s
 
 ## Roadmap
 
-**MVP target: 26 July 2026.** The MVP is Phase 1 — a child hears a bundled story end to end through the shipped player.
+**MVP target: 26 July 2026 (passed).** The MVP is Phase 1 — a child hears a bundled story end to end through the shipped player. The player-side slices are shipped; the launch library, parent gate, reading mode, and export/import remain.
 
 | Phase | Focus | Target | Status |
 |-------|-------|--------|--------|
-| **Phase 1 (MVP)** | The player: shelf, story playback, choices, resume, parent gate, settings, export/import — with the 19 bundled launch stories from a manual pipeline run | **26 July 2026** | ⏳ Planned |
-| **Phase 2** | The factory: pack requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing | After MVP | ⏳ Planned |
+| **Phase 1 (MVP)** | The player: shelf, story playback, choices, resume, parent gate, settings, export/import — with the 19 bundled launch stories from a manual pipeline run | **26 July 2026** (passed) | 🔄 In progress — shelf, playback, choices, resume, settings, failure states shipped; library, parent gate, reading mode, export/import outstanding |
+| **Phase 2** | The factory: pack requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing | After MVP | ⏳ Planned — groundwork shipped: operator workshop (ADR-005) and Clerk parent identity with family tokens (ADR-003) |
 | **Phase 3** | Autonomy, guarded: the automatic safety gate, unanimous-pass publishing, audit log, kill switch | After Phase 2 | ⏳ Planned |
 
 Phase 1 ships in seven vertical slices — each ends with a child hearing something new, from "one story plays" through "reading mode" and "portability". The slice-by-slice table lives in the [architecture doc](architecture.md#build-slices).
 
 ### Proposed (ADRs open, not yet on the roadmap)
 
-- **Parent authentication via Clerk** — a recoverable parent identity for Phase 2's pack requests and review queue; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md), Accepted)
 - **Nonna Narrates** — family voice narration: a grandparent or parent records one consent sentence and becomes the narrator of their family's stories, with never-stored clips and one-tap total revocation ([ADR-006](adr/ADR-006-family-voice-narration.md), Proposed; cloning runs on Voxtral via the Mistral API per [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md); depends on a multi-tenant architecture ADR)
 
 ### Future Ideas
