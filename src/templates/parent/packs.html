@@ -2,4 +2,31 @@
 {% block title %}Your story packs{% endblock %}
 {% block content %}
   <h1 class="ws-title">Your story packs</h1>
+
+  {% if cap_message %}
+    <div class="ws-card" data-cap-message>
+      <p>{{ cap_message }}</p>
+      {% if cap_active %}<p>Your current pack is <strong>{{ cap_active.state }}</strong>.</p>{% endif %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/parent/packs" class="ws-card">
+    <label>Theme
+      <select name="theme">
+        {% for theme in themes %}<option value="{{ theme }}">{{ theme }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Language
+      <select name="language">
+        {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>How many stories
+      <select name="count"><option>1</option><option>2</option><option>3</option></select>
+    </label>
+    <label>A wish for the story (optional)
+      <input name="premise" maxlength="300" />
+    </label>
+    <button type="submit" class="ws-pill ws-pill-primary">Make our stories</button>
+  </form>
 {% endblock %}

@@ -9,21 +9,41 @@ from __future__ import annotations
 import secrets
 from base64 import b64decode
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, get_args
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+)
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from src.api.auth import CandidateContext, require_parent_candidate
+from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
+from src.api.routes.workshop import get_run_manager  # shared DI seam, overridable in tests
 from src.config import Settings, get_settings
+from src.pipeline.models import Language, Theme
+from src.workshop.manager import RunCapExceeded, RunManager
+from src.workshop.records import PackRequest
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 router = APIRouter(prefix="/parent")
+
+Manager = Annotated[RunManager, Depends(get_run_manager)]
+
+# The form's theme/language choices come straight from the pipeline literals,
+# exactly like the workshop dashboard (routes/workshop.py builds these with
+# get_args too).
+THEMES = get_args(Theme)
+LANGUAGES = get_args(Language)
 
 # Canonical family-token format: 32 lowercase hex chars (secrets.token_hex(16)).
 # Strict validation is a security boundary — the token becomes an R2 key
@@ -96,8 +116,46 @@ async def parent_home(
     # Provisioned parents get the packs page — Task 4 fills in the run list;
     # until then render it with an empty runs list.
     return templates.TemplateResponse(
-        request, "parent/packs.html", {**context, "runs": [], "cap_message": None}
+        request,
+        "parent/packs.html",
+        {
+            **context,
+            "runs": [],
+            "cap_message": None,
+            "themes": THEMES,
+            "languages": LANGUAGES,
+        },
     )
+
+
+@router.post("/packs")
+async def request_pack(
+    request: Request,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+    background: BackgroundTasks,
+    theme: Annotated[str, Form()],
+    language: Annotated[str, Form()],
+    count: Annotated[int, Form()] = 1,
+    premise: Annotated[str, Form()] = "",
+) -> Response:
+    pack = PackRequest(theme=theme, language=language, count=count, premise=premise or None)  # type: ignore[arg-type]
+    try:
+        record = await manager.submit(ctx.family_token, pack)
+    except RunCapExceeded as cap:
+        context: dict[str, object] = {
+            "fapi_host": _fapi_host(settings),
+            "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+            "runs": [],
+            "cap_message": str(cap),
+            "cap_active": cap.active,
+            "themes": THEMES,
+            "languages": LANGUAGES,
+        }
+        return templates.TemplateResponse(request, "parent/packs.html", context)
+    background.add_task(manager.execute, record)
+    return RedirectResponse("/parent", status_code=303)
 
 
 @router.post("/api/provision")
