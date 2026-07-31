@@ -49,8 +49,8 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
 
     // ...and the end screen offers replay and back-to-shelf pictures.
     await expect(page.locator(".end")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Ancora!" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Un'altra storia" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Again!" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Another story" })).toBeVisible();
   });
 
   test("the end prompt plays on the end screen, and replay starts the story over", async ({ page }) => {
@@ -63,8 +63,8 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
     await expect(page.locator(".end")).toBeVisible({ timeout: 30_000 });
     expect(endPromptRequests.length).toBeGreaterThan(0);
 
-    // When "Ancora!" is tapped, the story begins again from page 1...
-    await page.getByRole("button", { name: "Ancora!" }).click();
+    // When "Again!" is tapped, the story begins again from page 1...
+    await page.getByRole("button", { name: "Again!" }).click();
     await expect(page.locator(".player")).toBeVisible();
     await expect(page.locator(".page-wash.current")).toHaveAttribute("data-page", "0");
 

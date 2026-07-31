@@ -60,7 +60,7 @@ export async function loadStory(url, fetchFn) {
 // from docs/product.md. Real story.json arrives with the pipeline.
 
 export const story = {
-  title: "la barchetta",
+  title: "the boat",
   beadColors: [
     "#E8B75A",
     "#D98B66",
@@ -72,17 +72,17 @@ export const story = {
     "#F2D8A7",
   ],
   choice: {
-    prompt: "Quale scegli?",
+    prompt: "Which do you choose?",
     options: [
-      { label: "la lanterna", wash: "wash-lanterna" },
-      { label: "la barchetta", wash: "wash-barchetta-notte" },
+      { label: "the lantern", wash: "wash-lanterna" },
+      { label: "the boat", wash: "wash-barchetta-notte" },
     ],
   },
 };
 
 export const shelf = [
-  { label: "la barchetta", wash: "wash-barchetta" },
-  { label: "panetteria", wash: "wash-panetteria" },
-  { label: "il bosco", wash: "wash-bosco" },
-  { label: "il guanto", wash: "wash-guanto" },
+  { label: "the boat", wash: "wash-barchetta" },
+  { label: "bakery", wash: "wash-panetteria" },
+  { label: "the forest", wash: "wash-bosco" },
+  { label: "the glove", wash: "wash-guanto" },
 ];
