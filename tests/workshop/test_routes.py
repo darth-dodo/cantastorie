@@ -183,6 +183,17 @@ def test_an_expired_session_falls_back_to_the_sign_in_page(tmp_path: Path, s3: S
     assert 'id="clerk-signin"' in page.text
 
 
+def test_every_workshop_page_loads_clerk_js(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+
+    page = harness.client.get("/workshop")
+
+    assert "clerk.browser.js" in page.text
+    assert 'name="clerk-publishable-key"' in page.text
+    assert "pk_test_xxx" in page.text  # the key from clerk_settings()
+
+
 def test_starting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
 
