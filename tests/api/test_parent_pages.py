@@ -195,3 +195,61 @@ def test_unauthenticated_pack_post_returns_401(monkeypatch: pytest.MonkeyPatch) 
         "/parent/packs", data={"theme": "the_sleepy_sea", "language": "it", "count": "1"}
     )
     assert response.status_code == 401
+
+
+def _store_with_runs(manager: _FakeManager, records: list[Any]) -> None:
+    class _FakeStore:
+        def list_runs(self, *, family_token: str | None = None, state: Any = None) -> list[Any]:
+            return [r for r in records if family_token is None or r.family_token == family_token]
+
+        def load(self, family_token: str, run_id: str) -> Any:
+            for r in records:
+                if r.family_token == family_token and r.id == run_id:
+                    return r
+            return None
+
+    manager.store = _FakeStore()  # type: ignore[attr-defined]
+
+
+def test_my_packs_lists_only_this_familys_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    other = new_run("f" * 32, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine, other])
+    client = _packs_client(monkeypatch, manager)
+    response = client.get("/parent")
+    assert response.status_code == 200
+    assert mine.id in response.text
+    assert other.id not in response.text
+
+
+def test_cross_tenant_progress_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    """THE tenancy test: family A cannot view family B's run — by URL guessing either."""
+    others = new_run("f" * 32, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [others])
+    client = _packs_client(monkeypatch, manager)  # session = VALID_TOKEN (family A)
+    assert client.get(f"/parent/packs/{others.id}/progress").status_code == 404
+
+
+def test_own_progress_fragment_polls_parent_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _packs_client(monkeypatch, manager)
+    response = client.get(f"/parent/packs/{mine.id}/progress")
+    assert response.status_code == 200
+    assert f"/parent/packs/{mine.id}/progress" in response.text  # hx-get, not /workshop
+    assert "/workshop" not in response.text  # no operator URLs leak to parents
+    assert "Delete run" not in response.text  # operator controls hidden
+
+
+def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:
+    """The parametrization must not alter the workshop's rendering defaults."""
+    from src.api.routes import workshop as workshop_module  # noqa: PLC0415
+
+    # smoke: the workshop progress route still renders with /workshop URLs.
+    # Covered fully by the existing tests/workshop/test_routes.py suite —
+    # this test just pins the default base_url in the template.
+    source = (workshop_module.TEMPLATES_DIR / "workshop" / "_progress.html").read_text()
+    assert 'base_url | default("/workshop/runs")' in source.replace("'", '"')

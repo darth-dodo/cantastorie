@@ -26,7 +26,10 @@ from pydantic import BaseModel, Field
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
-from src.api.routes.workshop import get_run_manager  # shared DI seam, overridable in tests
+from src.api.routes.workshop import (  # shared DI seam, overridable in tests
+    _checkpointed_steps,
+    get_run_manager,
+)
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Theme
 from src.workshop.manager import RunCapExceeded, RunManager
@@ -101,6 +104,7 @@ async def _page_identity(request: Request, settings: Settings) -> CandidateConte
 async def parent_home(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
 ) -> HTMLResponse:
     ctx = await _page_identity(request, settings)
     context: dict[str, object] = {
@@ -113,15 +117,17 @@ async def parent_home(
         # First sign-in: page JS POSTs /parent/api/provision then reloads.
         context["onboarding"] = True
         return templates.TemplateResponse(request, "parent/signin.html", context)
-    # Provisioned parents get the packs page — Task 4 fills in the run list;
-    # until then render it with an empty runs list.
+    # Provisioned parents get the packs page with their own runs, newest first.
+    runs = manager.store.list_runs(family_token=ctx.family_token)
+    runs.sort(key=lambda r: r.created_at, reverse=True)
     return templates.TemplateResponse(
         request,
         "parent/packs.html",
         {
             **context,
-            "runs": [],
+            "runs": runs,
             "cap_message": None,
+            "live": ["queued", "running"],
             "themes": THEMES,
             "languages": LANGUAGES,
         },
@@ -156,6 +162,31 @@ async def request_pack(
         return templates.TemplateResponse(request, "parent/packs.html", context)
     background.add_task(manager.execute, record)
     return RedirectResponse("/parent", status_code=303)
+
+
+@router.get("/packs/{run_id}/progress", response_class=HTMLResponse)
+async def pack_progress(
+    request: Request,
+    run_id: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> HTMLResponse:
+    record = manager.store.load(ctx.family_token, run_id)  # tenancy: load is family-scoped
+    if record is None:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse(
+        request,
+        "workshop/_progress.html",
+        {
+            "record": record,
+            "live": ["queued", "running"],
+            "steps": _checkpointed_steps(record, settings),
+            "staged_stories": [],
+            "base_url": "/parent/packs",
+            "is_operator": False,
+        },
+    )
 
 
 @router.post("/api/provision")

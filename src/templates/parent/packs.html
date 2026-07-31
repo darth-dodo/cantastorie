@@ -10,6 +10,13 @@
     </div>
   {% endif %}
 
+  {% for record in runs %}
+    <div class="ws-card" data-run-id="{{ record.id }}">
+      <div>{{ record.request.count }} × {{ record.request.theme }} · {{ record.request.language }}</div>
+      <div hx-get="/parent/packs/{{ record.id }}/progress" hx-trigger="load" hx-swap="outerHTML"></div>
+    </div>
+  {% endfor %}
+
   <form method="post" action="/parent/packs" class="ws-card">
     <label>Theme
       <select name="theme">
