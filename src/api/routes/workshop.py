@@ -39,13 +39,11 @@ from src.pipeline.publish import (
     publish_story,
     unpublish_story,
 )
-from src.workshop.manager import RunManager
+from src.workshop.manager import OPERATOR_TOKEN, RunManager
 from src.workshop.records import InvalidTransition, PackRequest, RunRecord, RunStore
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 SESSION_COOKIE = "workshop_session"
-
-OPERATOR_TOKEN = "operator"
 
 LIVE_STATES = frozenset({"queued", "running"})
 
