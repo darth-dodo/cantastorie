@@ -1,0 +1,43 @@
+{% extends "parent/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block head %}
+  <script defer crossorigin="anonymous"
+          src="https://{{ fapi_host }}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
+  <script defer crossorigin="anonymous"
+          data-clerk-publishable-key="{{ publishable_key }}"
+          src="https://{{ fapi_host }}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
+{% endblock %}
+{% block content %}
+  <div class="ws-card" {% if onboarding %}data-parent-onboarding{% endif %}>
+    <h1 class="ws-title">The parent area</h1>
+    {% if onboarding %}
+      <p>Setting up your family's shelf…</p>
+    {% else %}
+      <div id="clerk-sign-in"><p data-signin-fallback hidden>Can't sign in right now — the stories on the shelf still play. Try again in a little while.</p></div>
+    {% endif %}
+  </div>
+  <script>
+    window.addEventListener("load", async () => {
+      const onboarding = document.querySelector("[data-parent-onboarding]");
+      if (onboarding) {
+        // First sign-in: mint-or-link, then re-render as a provisioned parent.
+        // (The IndexedDB family token adoption arrives with connect-this-device;
+        // until then the body is empty and the server mints.)
+        const response = await fetch("/parent/api/provision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        if (response.ok) location.reload();
+        return;
+      }
+      try {
+        await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+        if (window.Clerk.isSignedIn) { location.reload(); return; }
+        window.Clerk.mountSignIn(document.getElementById("clerk-sign-in"));
+      } catch (error) {
+        document.querySelector("[data-signin-fallback]").hidden = false;
+      }
+    });
+  </script>
+{% endblock %}
