@@ -35,10 +35,11 @@ const LANGS = [
   { code: "it", label: "Italiano" },
   { code: "es", label: "Español" },
   { code: "en", label: "English" },
+  { code: "el", label: "Ελληνικά" },
 ];
 
-const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!" };
-const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?" };
+const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!", el: "Γεια σου!" };
+const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?", el: "Ποια ιστορία σήμερα;" };
 
 function pickTheme(params, hour) {
   const forced = params.get("theme");
