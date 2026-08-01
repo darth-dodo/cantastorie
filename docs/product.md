@@ -91,6 +91,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
 | **Parent dashboard** | ⏳ Planned | Language tabs, unpublish toggles, kill switch |
 | **Pack requests & review** | ⏳ Planned | Parents request 1–3 stories on a theme, preview everything, approve or reject (Phase 2) |
+| **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
 | **Authoring pipeline** | ⏳ Planned | Generates story text, narration, watercolor images, word timings, and glosses for approval |
 | **Live generation** | ⏳ Planned | Auto safety gate with unanimous-pass publishing, audit log, kill switch (Phase 3) |
 | **Export / import** | ⏳ Planned | The whole family state round-trips through a file; no child accounts anywhere |
