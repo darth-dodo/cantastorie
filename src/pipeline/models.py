@@ -69,6 +69,7 @@ class PageAudio(BaseModel):
 class ChoiceOption(BaseModel):
     label: str  # story text: counts toward every limit and the gloss map
     card_image: str | None = None
+    audio: PageAudio | None = None  # the spoken label; timings stay empty
     next_page: str
 
 
