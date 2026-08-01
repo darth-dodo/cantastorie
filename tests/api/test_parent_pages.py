@@ -253,3 +253,26 @@ def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:
     # this test just pins the default base_url in the template.
     source = (workshop_module.TEMPLATES_DIR / "workshop" / "_progress.html").read_text()
     assert 'base_url | default("/workshop/runs")' in source.replace("'", '"')
+
+
+def test_clerk_loads_nowhere_outside_parent_templates() -> None:
+    """Settled (ADR-003): the child player and workshop never load Clerk.
+
+    Scans every template outside src/templates/parent/ and every static JS
+    file for Clerk hostnames/script markers.
+    """
+    import re  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    root = Path(__file__).resolve().parent.parent.parent / "src"
+    pattern = re.compile(r"clerk", re.IGNORECASE)
+    offenders: list[str] = []
+    for path in (root / "templates").rglob("*.html"):
+        if "templates/parent" in str(path).replace("\\", "/"):
+            continue
+        if pattern.search(path.read_text()):
+            offenders.append(str(path))
+    for path in (root / "static" / "js").rglob("*.js"):
+        if pattern.search(path.read_text()):
+            offenders.append(str(path))
+    assert offenders == [], f"Clerk reference outside /parent templates: {offenders}"
