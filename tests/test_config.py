@@ -121,3 +121,7 @@ def test_same_family_writer_and_judge_is_refused_outright() -> None:
             write_model="anthropic/claude-sonnet-4.5",
             safety_model="anthropic/claude-haiku-4.5",
         )
+
+
+def test_settings_has_no_workshop_secret():
+    assert not hasattr(Settings(_env_file=None), "workshop_secret")

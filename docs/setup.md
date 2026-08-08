@@ -69,7 +69,7 @@ wrangler r2 bucket cors set cantastorie --file deploy/r2-cors.json -J eu
 wrangler r2 bucket cors list cantastorie -J eu
 ```
 
-Add your custom-domain and any production origins to `allowed.origins` before applying.
+Add your custom-domain and any production origins to `allowed.origins` before applying. CORS rules do not follow domain changes automatically: after attaching a custom domain later, add it to `deploy/r2-cors.json` and re-run the `cors set` command above.
 
 ---
 
@@ -91,17 +91,21 @@ published/prompts/it/…
 2. Set one environment variable on the service:
    - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
 3. Leave `autoDeploy` on: pushes to `main` redeploy. The Dockerfile compiles Tailwind and serves the shell; `/health` is the health check.
+4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
 
 ---
 
-## 4. Clerk (parent sign-in, ADR-003)
+## 4. Clerk (parent + workshop sign-in, ADR-003)
 
-The parent area authenticates through Clerk. The player never loads Clerk
-JS; the server verifies session JWTs locally via JWKS — the only REST call
-to Clerk in the whole codebase is the one-time family-token write at first
-sign-in (`src/api/clerk.py`).
+Both the parent area **and** the workshop (`/workshop`, AI-426) authenticate
+through Clerk — there is no separate operator secret anymore. The player never
+loads Clerk JS; the server verifies session JWTs locally via JWKS — the only
+REST call to Clerk in the whole codebase is the one-time family-token write at
+first sign-in (`src/api/clerk.py`). With `CLERK_PUBLISHABLE_KEY` or
+`CLERK_JWKS_URL` unset, both `/parent` and `/workshop` answer **404** and do
+not exist.
 
 ### 1. Create the application
 
@@ -119,6 +123,7 @@ Dashboard → **Sessions** → **Customize session token** → Claims editor:
 
 ```json
 {
+  "role": "{{user.public_metadata.role}}",
   "family_token": "{{user.public_metadata.family_token}}",
   "disabled": "{{user.public_metadata.disabled}}"
 }
@@ -127,7 +132,17 @@ Dashboard → **Sessions** → **Customize session token** → Claims editor:
 Save. Individual fields — not the whole `public_metadata` object — keep the
 session token under Clerk's 1.2 KB limit. Until a user is provisioned these
 claims resolve to null, which the server treats as "not provisioned yet"
-(and `disabled: null` as not disabled).
+(and `disabled: null` as not disabled). The `role` claim is what the workshop
+reads to decide operator vs. parent (see **Operators** below) — the server
+resolves scope straight from the verified JWT, with no per-request Clerk call.
+
+### Operators
+
+The workshop admits any signed-in user whose Clerk `public_metadata` contains
+`{ "role": "operator" }`. Set it on your own user in the Clerk dashboard
+(Users → your user → Metadata → Public). Everyone else is treated as a parent
+and sees a "coming soon" page until the parent workshop views ship. There is
+no allow-list and no env flag — the role claim is the whole operator model.
 
 ### 3. Bot protection
 
@@ -146,15 +161,20 @@ later build a custom sign-up form it must include the
 | `CLERK_JWKS_URL` | `https://<frontend-api>/.well-known/jwks.json` |
 | `CLERK_ISSUER` | `https://<frontend-api>` |
 
-Leaving `CLERK_JWKS_URL` unset disables the whole parent surface (routes
-404) — the safe default for deploys that don't want Clerk yet.
+Leaving `CLERK_PUBLISHABLE_KEY` or `CLERK_JWKS_URL` unset disables both the
+parent surface **and** the workshop (routes 404) — the safe default for
+deploys that don't want Clerk yet. The workshop also needs
+`CLERK_PUBLISHABLE_KEY` set because ClerkJS mounts in the browser to keep the
+`__session` JWT refreshed for HTMX polling.
 
 ### 5. Verify
 
 Sign in at `/parent` (once the pages land — until then, any Clerk-hosted
 account page works for template testing), then decode the `__session`
-cookie at jwt.io: it must carry `family_token` and `disabled` claims
-(null before first provision).
+cookie at jwt.io: it must carry `role`, `family_token`, and `disabled` claims
+(null before first provision). For the workshop, set your own user's
+`public_metadata.role` to `operator` and open `/workshop`: you should reach
+the dashboard rather than the "coming soon" page.
 
 ---
 

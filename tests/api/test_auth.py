@@ -11,13 +11,15 @@ Note: no `from __future__ import annotations` here — FastAPI resolves route
 handler annotations at decoration time and PEP 563 lazy strings break that.
 """
 
+import asyncio
 import inspect
 from typing import Annotated, Any
 
 import httpx
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 import src.api.auth as auth_module
 from src.api.auth import (
@@ -27,6 +29,7 @@ from src.api.auth import (
     _jwks_state,
     require_parent,
     require_parent_candidate,
+    verify_clerk_session,
 )
 from src.config import Settings, get_settings
 from tests.api.clerk_jwt import (
@@ -458,3 +461,65 @@ def test_candidate_unset_clerk_config_returns_404() -> None:
     app = _make_candidate_app(clerk_settings(jwks_url=""))
     response = TestClient(app).get("/candidate")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# verify_clerk_session — Task 1 (AI-426)
+# ---------------------------------------------------------------------------
+
+
+def _request_with_cookie(token: str | None) -> Request:
+    headers = []
+    if token is not None:
+        headers.append((b"cookie", f"{SESSION_COOKIE}={token}".encode()))
+    scope = {"type": "http", "headers": headers}
+    return Request(scope)
+
+
+def test_verify_returns_claims_for_a_valid_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    monkeypatch.setattr(_jwks_state, "keys", None)
+    monkeypatch.setattr(_jwks_state, "fetched_at", 0.0)
+    token = mint_token(key, valid_payload(sub="user_x", family_token="fam_1"))
+    claims = asyncio.run(verify_clerk_session(_request_with_cookie(token), clerk_settings()))
+    assert claims is not None
+    assert claims["sub"] == "user_x"
+    assert claims["family_token"] == "fam_1"
+
+
+def test_verify_returns_none_without_a_cookie(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    result = asyncio.run(verify_clerk_session(_request_with_cookie(None), clerk_settings()))
+    assert result is None
+
+
+def test_verify_returns_none_for_a_garbage_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    monkeypatch.setattr(_jwks_state, "keys", None)
+    monkeypatch.setattr(_jwks_state, "fetched_at", 0.0)
+    result = asyncio.run(verify_clerk_session(_request_with_cookie("not.a.jwt"), clerk_settings()))
+    assert result is None
+
+
+def test_verify_returns_none_for_empty_sub(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    monkeypatch.setattr(_jwks_state, "keys", None)
+    monkeypatch.setattr(_jwks_state, "fetched_at", 0.0)
+    token = mint_token(key, valid_payload(sub="", family_token="fam_1"))
+    result = asyncio.run(verify_clerk_session(_request_with_cookie(token), clerk_settings()))
+    assert result is None
+
+
+def test_verify_raises_403_for_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    monkeypatch.setattr(_jwks_state, "keys", None)
+    monkeypatch.setattr(_jwks_state, "fetched_at", 0.0)
+    token = mint_token(key, valid_payload(sub="user_x", disabled=True))
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(verify_clerk_session(_request_with_cookie(token), clerk_settings()))
+    assert exc.value.status_code == 403

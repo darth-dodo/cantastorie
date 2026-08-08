@@ -255,24 +255,32 @@ def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:
     assert 'base_url | default("/workshop/runs")' in source.replace("'", '"')
 
 
-def test_clerk_loads_nowhere_outside_parent_templates() -> None:
-    """Settled (ADR-003): the child player and workshop never load Clerk.
+def test_clerk_loads_nowhere_in_the_child_player() -> None:
+    """Settled (ADR-003): the child player never loads Clerk.
 
-    Scans every template outside src/templates/parent/ and every static JS
-    file for Clerk hostnames/script markers.
+    Both admin surfaces are Clerk-gated — the parent area (/parent, AI-411) and
+    the operator workshop (/workshop, AI-426) — so Clerk assets legitimately live
+    in their template dirs and in workshop.js. The invariant that still holds,
+    and that this guards, is that NO Clerk script, hostname, or cookie logic ever
+    reaches a child-player path. Scans every template outside
+    src/templates/parent|workshop and every static JS file except workshop.js.
     """
     import re  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
 
     root = Path(__file__).resolve().parent.parent.parent / "src"
     pattern = re.compile(r"clerk", re.IGNORECASE)
+    admin_template_dirs = ("templates/parent", "templates/workshop")
     offenders: list[str] = []
     for path in (root / "templates").rglob("*.html"):
-        if "templates/parent" in str(path).replace("\\", "/"):
+        norm = str(path).replace("\\", "/")
+        if any(admin_dir in norm for admin_dir in admin_template_dirs):
             continue
         if pattern.search(path.read_text()):
             offenders.append(str(path))
     for path in (root / "static" / "js").rglob("*.js"):
+        if path.name == "workshop.js":  # the operator surface's own admin JS
+            continue
         if pattern.search(path.read_text()):
             offenders.append(str(path))
-    assert offenders == [], f"Clerk reference outside /parent templates: {offenders}"
+    assert offenders == [], f"Clerk reference reached a child-player path: {offenders}"

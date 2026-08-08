@@ -132,14 +132,14 @@ describe("player shell", () => {
     // The clouds hold the boot: no shelf, no spinner, one big tap target.
     await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
     expect(document.querySelector(".offline .prompt").textContent).toBe(
-      "Le nuvole hanno preso le storie. Riprova tra poco!",
+      "The clouds took the stories. Try again soon!",
     );
     expect(document.querySelector(".cover")).toBeNull();
 
     // A tap while still offline speaks the line and retries — clouds remain.
     document.querySelector(".offline").click();
     await vi.waitFor(() =>
-      expect(promptUrls).toContain("/static/content/it/prompts/offline.wav"),
+      expect(promptUrls).toContain("/static/content/en/prompts/offline.wav"),
     );
     await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
 
@@ -288,7 +288,7 @@ describe("audio-error overlay (AI-367): the sleeping bird", () => {
     await vi.waitFor(() => expect(document.querySelector(".audio-error")).not.toBeNull());
     expect(document.querySelector(".audio-error .bird")).not.toBeNull();
     expect(document.querySelector(".audio-error .prompt").textContent).toBe(
-      "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
+      "Oh! The story is taking a nap. Tap the bird to wake it up.",
     );
 
     failNarration = false;
@@ -308,9 +308,9 @@ describe("shelf settings (language + theme)", () => {
     gear.click();
     const overlay = document.querySelector(".overlay.settings");
     expect(overlay).not.toBeNull();
-    expect([...overlay.querySelectorAll(".settings-pill")]).toHaveLength(7);
-    expect(overlay.textContent).toContain("Lingua");
-    expect(overlay.textContent).toContain("Tema");
+    expect([...overlay.querySelectorAll(".settings-pill")]).toHaveLength(8);
+    expect(overlay.textContent).toContain("Language");
+    expect(overlay.textContent).toContain("Theme");
   });
 
   it("picking a language persists it and keeps the overlay open on the new language", async () => {
@@ -338,7 +338,7 @@ describe("shelf settings (language + theme)", () => {
     document.querySelector(".settings-gear").click();
     const overlay = document.querySelector(".overlay.settings");
     const plum = [...overlay.querySelectorAll(".settings-pill")].find(
-      (p) => p.textContent === "Prugna",
+      (p) => p.textContent === "Plum",
     );
     plum.click();
     expect(plum.getAttribute("aria-current")).toBe("true");

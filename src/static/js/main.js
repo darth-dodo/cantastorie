@@ -23,10 +23,10 @@ import {
 } from "./screens.js";
 
 const PALETTE_LABELS = {
-  warm: "Caldo",
-  indigo: "Indaco",
-  seaglass: "Verdemare",
-  plum: "Prugna",
+  warm: "Warm",
+  indigo: "Indigo",
+  seaglass: "Seaglass",
+  plum: "Plum",
 };
 
 const PAGE_SECONDS = 3.8;
@@ -35,10 +35,11 @@ const LANGS = [
   { code: "it", label: "Italiano" },
   { code: "es", label: "Español" },
   { code: "en", label: "English" },
+  { code: "el", label: "Ελληνικά" },
 ];
 
-const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!" };
-const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?" };
+const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!", el: "Γεια σου!" };
+const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?", el: "Ποια ιστορία σήμερα;" };
 
 function pickTheme(params, hour) {
   const forced = params.get("theme");
@@ -48,7 +49,7 @@ function pickTheme(params, hour) {
 
 function pickLang(params, saved) {
   const lang = params.get("lang") ?? saved ?? "";
-  return /^[a-z]{2}$/.test(lang) ? lang : "it";
+  return /^[a-z]{2}$/.test(lang) ? lang : "en";
 }
 
 async function fetchManifest(assetBase, fetchFn, lang) {
@@ -215,8 +216,8 @@ export async function init(
         app.appendChild(
           buildShelf(
             store,
-            GREETINGS[lang] ?? "Ciao!",
-            SUBS[lang] ?? "Quale storia oggi?",
+            GREETINGS[lang] ?? "Hello!",
+            SUBS[lang] ?? "Which story today?",
             stories,
             () => openSettings(),
             (entry) => {

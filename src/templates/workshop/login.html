@@ -7,17 +7,8 @@
     <div class="ws-tagline">the room behind the piazza</div>
   </div>
   <div class="ws-card ws-login-card">
-    <form method="post" action="/workshop/login" id="login-form">
-      <div class="ws-field-block">
-        <span class="ws-field-label">Secret</span>
-        <input id="secret" name="secret" type="password" class="ws-field" autocomplete="current-password" autofocus placeholder="••••••••" />
-      </div>
-      {% if error %}
-      <p class="ws-login-error" data-testid="login-error">{{ error }}</p>
-      {% endif %}
-      <button type="submit" class="ws-pill ws-pill-primary">Enter</button>
-    </form>
+    <div id="clerk-signin"></div>
   </div>
-  <p class="ws-mono-note">no accounts — with no secret configured,<br>the workshop answers 404 and does not exist</p>
+  <p class="ws-mono-note">sign in with your account —<br>with Clerk unconfigured, the workshop answers 404</p>
 </div>
 {% endblock %}

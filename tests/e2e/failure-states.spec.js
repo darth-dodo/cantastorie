@@ -25,7 +25,7 @@ test.describe("When Things Go Wrong (product.md)", () => {
     await expect(page.locator(".audio-error")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(".audio-error .bird")).toBeVisible();
     await expect(page.locator(".audio-error .prompt")).toHaveText(
-      "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
+      "Oh! The story is taking a nap. Tap the bird to wake it up.",
     );
     expect(retryPromptRequests.length).toBeGreaterThan(0);
 
@@ -50,7 +50,7 @@ test.describe("When Things Go Wrong (product.md)", () => {
     // Clouds, the line, no covers, no spinner.
     await expect(page.locator(".offline")).toBeVisible();
     await expect(page.locator(".offline .prompt")).toHaveText(
-      "Le nuvole hanno preso le storie. Riprova tra poco!",
+      "The clouds took the stories. Try again soon!",
     );
     await expect(page.locator(".cover")).toHaveCount(0);
 

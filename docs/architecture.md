@@ -82,33 +82,48 @@ src/
 ├── config.py               Settings (R2 bucket, provider keys, model choices per step)
 ├── api/
 │   ├── main.py             FastAPI app factory, middleware
+│   ├── auth.py             require_parent — Clerk JWT verification via JWKS
+│   ├── clerk.py            Clerk REST client: family-token mint-or-link
 │   └── routes/
-│       ├── player.py       GET / — the child player page
-│       └── parent.py       Parent area: gate, settings, export/import
+│       ├── player.py       GET / — the child player shell
+│       ├── parent.py       /parent/api/provision — family token mint-or-link (parent pages arrive in Phase 2)
+│       ├── published.py    /published — R2 content proxy for dev/prod parity
+│       └── workshop.py     /workshop — operator screens: runs, staging, review, publish
+├── workshop/
+│   ├── manager.py          In-process run orchestration + stale-run reaping
+│   └── records.py          Durable run records in R2 (pending prefix)
 ├── pipeline/
-│   ├── cli.py              Typer CLI: generate, review, publish, audit
+│   ├── cli.py              Typer CLI: generate, publish, audit
+│   ├── generate.py         The linear pipeline: author → narrate → illustrate → assemble → stage
 │   ├── steps/
 │   │   ├── write.py        Native-language story authoring (strong model)
 │   │   ├── safety.py       Per-rule verdicts, different model family, temperature 0
 │   │   ├── revise.py       Bounded revise loop (two failed revisions → reject)
-│   │   ├── gloss.py        Word-to-English gloss maps (cheap model)
-│   │   ├── narrate.py      Gemini TTS via OpenRouter (timings via Deepgram STT at slice 6)
+│   │   ├── narrate.py      Gemini TTS via OpenRouter (pcm wrapped to WAV; timings stay empty until slice 6's Deepgram pass)
 │   │   ├── illustrate.py   Character sheet first, then pages against it
-│   │   └── assemble.py     story.json assembly + validation
+│   │   ├── assemble.py     story.json assembly + validation
+│   │   └── gloss.py        (slice 6, not yet built) Word-to-English gloss maps (cheap model)
 │   ├── cache.py            Content-addressed artifact cache
+│   ├── content_rules.py    The nine content rules, shared by write and safety prompts
 │   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, GlossMap
-│   └── publish.py          R2 upload, manifest update, immutable naming
-├── templates/              Jinja2 (parent area + player shell)
+│   ├── providers.py        OpenRouter transport (chat, images, TTS)
+│   └── publish.py          R2 staging + publish, manifest update, immutable naming
+├── observability.py        LangSmith tracing for pipeline and app
+├── templates/              Jinja2: index.html (player shell) + workshop/ screens
 └── static/
     ├── js/
     │   ├── fsm.js          Finite state machine (ported from hermano)
     │   ├── audio-engine.js AudioContext owner: unlock, play, crossfade, resume
-    │   ├── shelf.js        Cover grid, language chip, prompt playback
-    │   ├── player.js       Page display, turn logic, progress dots
-    │   ├── choice.js       Choice overlay, idle nudge, auto-continue timers
+    │   ├── main.js         Composition root: boot, manifest, wiring, render loop
+    │   ├── store.js        Player state + transitions
+    │   ├── playback.js     Narration drives pages; pause/resume
+    │   ├── screens.js      DOM for shelf, player, end + overlays (choice, resume, settings)
+    │   ├── story.js        story.json → playable; mock shelf for unpublished covers
     │   ├── prefetch.js     Whole-story prefetch on cover tap
-    │   └── storage.js      IndexedDB: progress, settings, lockout, token
-    └── css/                Player: hand-crafted watercolor CSS; parent: Tailwind
+    │   ├── palette-resolve.js  Theme + palette resolution (pure, shared with tests)
+    │   ├── workshop.js     Operator-screen behaviors (HTMX companion)
+    │   └── storage.js      Progress persistence: localStorage now, IndexedDB when real stories land
+    └── css/                Player: hand-crafted watercolor CSS; workshop: Tailwind
 
 content/                    Pipeline working folders (gitignored)
 tests/                      pytest + Vitest + Playwright
@@ -125,7 +140,7 @@ A batch job, not an agent: linear steps, one bounded loop, artifacts on disk. Ea
 graph TD
     O["outline<br/>theme + language + shape"] --> W["write<br/>native-language authoring"]
     W --> S{"safety gate<br/>9 rules, temperature 0,<br/>different model family"}
-    S -- "all pass" --> G["gloss<br/>word-to-English map"]
+    S -- "all pass" --> G["gloss (slice 6, not yet built)<br/>word-to-English map"]
     S -- "any fail" --> RV["revise<br/>targeted rewrite"]
     RV --> S2{"safety gate again"}
     S2 -- "pass" --> G
@@ -160,8 +175,8 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 |------|-------------|------|
 | Write / revise | Strong authoring model | Content rules embedded in the prompt; authored natively per language, never translated |
 | Safety gate | **Different family** than the writer, temperature 0 | A shared writer/judge blind spot is the failure mode that matters; cross-family judging is one config line |
-| Glosses | Cheap fast model | Mechanical contextual mapping |
-| Narrate | TTS model (Gemini 3.1 Flash TTS; exact OpenRouter id verified at T0 and pinned in env) | One house voice across all languages, pinned at the AI-366 bake-off; `mp3` output; no timestamps (see [Narration / Audio](#narration--audio)) |
+| Glosses (slice 6, not yet built) | Cheap fast model | Mechanical contextual mapping |
+| Narrate | TTS model (Gemini 3.1 Flash TTS via OpenRouter, `google/gemini-3.1-flash-tts-preview`) | One house voice across all languages, pinned at the AI-366 bake-off; `pcm` output wrapped to WAV (Gemini rejects `mp3`); no timestamps (see [Narration / Audio](#narration--audio)) |
 | Illustrate | Image-capable model | Character sheet fed as reference to every page — chaining page-to-page compounds drift |
 
 Exact model IDs live in `config.py`, chosen and re-benchmarked freely since OpenRouter makes them a string swap — narration included, now that it runs on the same gateway.
@@ -228,7 +243,7 @@ One module owns a single `AudioContext`. Everything else asks it to play things.
 
 - **Unlock on first gesture.** Browsers block sound before a user gesture. The first tap anywhere on the shelf resumes the AudioContext and plays the shelf greeting — the two-tap budget absorbs it (first tap wakes and greets, cover tap starts the story).
 - **Crossfades via gain nodes.** Two sources overlapping with gain ramps — works on iOS where media-element volume is read-only.
-- **Exact-position resume** from buffer offsets, persisted to IndexedDB on pause and page turn.
+- **Exact-position resume** from buffer offsets, persisted locally on pause and page turn (localStorage now, IndexedDB when real stories land).
 - **Priority ducking**: prompt playback (nudges, confirmations) and narration never overlap.
 
 ### Whole-story prefetch
@@ -248,10 +263,10 @@ Default narration for all shelf content is generated through **Gemini 3.1 Flash 
 | Aspect | Detail |
 |--------|--------|
 | Endpoint | OpenRouter `POST /api/v1/audio/speech`, OpenAI-compatible |
-| Request | `{ model, input, voice, response_format }` — `voice` is the single pinned house voice, `response_format` is `mp3` |
-| Response | Raw audio bytes — **no word or character timestamps** |
-| Model id | Lives in env; the exact OpenRouter id is **verified at T0** (speech models are absent from the public `/models` listing); any forced rename lands as a SPEC-DEVIATION note |
-| Delivery steering | Gemini's inline audio tags (e.g. `[whispers]`) — the writer emits them only when the target synthesis model is Gemini, stripped otherwise |
+| Request | `{ model, input, voice, response_format }` — `voice` is the single pinned house voice, `response_format` is `pcm` (Gemini rejects `mp3`) |
+| Response | Raw PCM, wrapped into a WAV container at the transport boundary and stored as `.wav` — **no word or character timestamps** |
+| Model id | `google/gemini-3.1-flash-tts-preview`, pinned in config (verified live; the earlier slug guess cost a debugging round — speech models are absent from the public `/models` listing) |
+| Delivery steering | *Planned:* Gemini's inline audio tags (e.g. `[whispers]`) — the writer will emit them only when the target synthesis model is Gemini, stripped otherwise; not yet enforced in the write prompt |
 | Provenance | Gemini TTS output carries SynthID watermarking |
 | Key | The existing `OPENROUTER_API_KEY` for defaults; `MISTRAL_API_KEY` only for cloning |
 
@@ -276,19 +291,20 @@ Four narration properties are **unproven** and are resolved at issue AI-366 (the
 
 ### Playback
 
-Playback mechanics live in [The Player → The audio engine](#the-audio-engine): a single `AudioContext`, decoded-buffer narration and prompt channels that never overlap, gain-node crossfades for gentle page turns, and exact-position resume. The narration provider produces `mp3`/`pcm` bytes; the audio engine decodes and schedules them. The two halves meet only at the audio file — swapping the narration provider does not touch the player.
+Playback mechanics live in [The Player → The audio engine](#the-audio-engine): a single `AudioContext`, decoded-buffer narration and prompt channels that never overlap, gain-node crossfades for gentle page turns, and exact-position resume. The narration provider produces WAV files (PCM wrapped at generation time); the audio engine decodes and schedules them. The two halves meet only at the audio file — swapping the narration provider does not touch the player.
 
 ---
 
 ## The Parent Area
 
-Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
+Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped so far:** the Clerk identity layer — `require_parent` JWT verification via JWKS and the `/parent/api/provision` mint-or-link endpoint. The gate, settings page, export/import, and the parent pages themselves are designed but not yet built; today language and theme settings live in the child-side settings overlay, ungated.
 
-- **The gate** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout live in IndexedDB, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
+- **The gate (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
 - **Settings**: language multi-select, reading mode toggle.
-- **Export/import**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
-- **Parent authentication (Phase 2)**: parents sign in via **Clerk** (magic link / OAuth) at `/parent` — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK). One parent account = one family; the family token lives in Clerk `public_metadata`. Approved packs publish to `published/families/{family_token}/…` + a family overlay manifest. The child player stays account-free — no Clerk script, no cookies on any child path.
-- **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
+- **Export/import (not yet built)**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
+- **Parent authentication**: parents sign in via **Clerk** (magic link / OAuth) — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted, implemented). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK, async fetch). One parent account = one family; the family token is minted or linked at first sign-in and lives in Clerk `public_metadata`. Approved packs will publish to `published/families/{family_token}/…` + a family overlay manifest. The child player stays account-free — no Clerk script, no cookies on any child path.
+- **The workshop is Clerk-gated, and the parent area is a scope of it (AI-426)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition and publishing to a family overlay. The parent area is therefore not a separate `/parent` surface but a scope of the one `/workshop` router and template set — `WorkshopScope` decides visibility and publish target. With Clerk unconfigured, `/workshop` answers 404. ClerkJS loads on every workshop page to keep the `__session` JWT refreshed for HTMX polling. Until the parent views ship, a signed-in non-operator gets a "coming soon" 403.
+- **Phase 2** adds the parent pages (sign-in, pack request form, my-packs), the dashboard (unpublish toggles, kill switch), and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
 
 ---
 
@@ -297,7 +313,6 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind.
 | Guarantee | Mechanism |
 |-----------|-----------|
 | Nothing about the child leaves the browser | Story-time traffic is bucket-direct asset fetches only; no cookies; no server-side state; R2 access logs disabled |
-| No child accounts | The child player is account-free; a parent signs in via Clerk (ADR-003) only to request and review stories — the child path carries no Clerk script or cookie |
 | No child accounts | The child player is account-free; a parent signs in via Clerk (ADR-003) only to request and review stories — the child path carries no Clerk script or cookie |
 | Zero unapproved assets reachable | Only the publish step writes to `published/`; the audit script (slice 5, then CI) verifies every manifest entry resolves to approved content and nothing else is listed |
 | Keys never reach the browser | The OpenRouter key (and the pipeline-only Deepgram and Mistral keys — timing pass and voice cloning respectively) exist only in pipeline/service environments |
