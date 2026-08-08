@@ -1,10 +1,11 @@
-"""The operator face at /workshop (AI-388, ADR-005): start, watch, review, publish.
+"""The operator face at /workshop (AI-388, ADR-005, AI-426): start, watch, review, publish.
 
-Server-rendered Jinja2 + HTMX, the settled non-child pattern. Access is one
-env-var secret: with none configured every route here answers 404 (the
-workshop does not exist); with one configured, a correct login sets a session
-cookie holding the secret's SHA-256 — never the secret itself. There are no
-accounts, matching the privacy architecture.
+Server-rendered Jinja2 + HTMX, the settled non-child pattern. Access is a
+Clerk session: with Clerk unconfigured every route here answers 404 (the
+workshop does not exist); a signed-in operator (Clerk `public_metadata.role ==
+"operator"`) works globally, while any other signed-in user sees a "coming
+soon" page. Every request resolves a WorkshopScope from the verified JWT, and
+store partitioning threads through `scope.store_token`.
 
 Runs execute through the RunManager as FastAPI background tasks — in-process,
 one at a time, durable in R2 before the first step (src/workshop/manager.py).
@@ -15,9 +16,7 @@ step, which remains the only writer to published/.
 
 from __future__ import annotations
 
-import hashlib
 import json as _json
-import secrets
 import shutil
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -28,6 +27,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from src.api.auth import verify_clerk_session
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
@@ -41,11 +41,9 @@ from src.pipeline.publish import (
 )
 from src.workshop.manager import RunManager
 from src.workshop.records import InvalidTransition, PackRequest, RunRecord, RunStore
+from src.workshop.scope import WorkshopScope, resolve_scope
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
-SESSION_COOKIE = "workshop_session"
-
-OPERATOR_TOKEN = "operator"
 
 LIVE_STATES = frozenset({"queued", "running"})
 
@@ -74,17 +72,9 @@ def get_publisher() -> Publisher:
     return publish
 
 
-def _session_token(settings: Settings) -> str:
-    return hashlib.sha256(settings.workshop_secret.get_secret_value().encode()).hexdigest()
-
-
-def _authed(request: Request, settings: Settings) -> bool:
-    cookie = request.cookies.get(SESSION_COOKIE, "")
-    return bool(cookie) and secrets.compare_digest(cookie, _session_token(settings))
-
-
 def _require_workshop(settings: Annotated[Settings, Depends(get_settings)]) -> Settings:
-    if not settings.workshop_secret.get_secret_value():
+    """404 unless Clerk is configured — the workshop's feature gate."""
+    if not settings.clerk_publishable_key.get_secret_value() or not settings.clerk_jwks_url:
         raise HTTPException(status_code=404)
     return settings
 
@@ -93,12 +83,43 @@ WorkshopSettings = Annotated[Settings, Depends(_require_workshop)]
 Manager = Annotated[RunManager, Depends(get_run_manager)]
 
 
+def _base_ctx(settings: Settings, **extra: object) -> dict[str, object]:
+    """Every workshop template needs the Clerk publishable key (ClerkJS init)."""
+    return {
+        "clerk_publishable_key": settings.clerk_publishable_key.get_secret_value(),
+        **extra,
+    }
+
+
+async def _scope(request: Request, settings: Settings) -> WorkshopScope | None:
+    """Resolve the caller's WorkshopScope, or None if unauthenticated.
+
+    Raises 403 (via verify_clerk_session) for a disabled account.
+    """
+    claims = await verify_clerk_session(request, settings)
+    if claims is None:
+        return None
+    return resolve_scope(claims)
+
+
+def _sign_in_page(request: Request, settings: Settings, status_code: int = 200) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "workshop/login.html", _base_ctx(settings), status_code=status_code
+    )
+
+
+def _coming_soon(request: Request, settings: Settings) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "workshop/coming_soon.html", _base_ctx(settings), status_code=403
+    )
+
+
 def _to_login() -> RedirectResponse:
     return RedirectResponse("/workshop", status_code=303)
 
 
-def _record_or_404(manager: RunManager, run_id: str) -> RunRecord:
-    record = manager.store.load(OPERATOR_TOKEN, run_id)
+def _record_or_404(manager: RunManager, scope: WorkshopScope, run_id: str) -> RunRecord:
+    record = manager.store.load(scope.store_token, run_id)
     if record is None:
         raise HTTPException(status_code=404)
     return record
@@ -165,8 +186,11 @@ def _rel_time(dt: datetime) -> str:
 
 @router.get("", response_class=HTMLResponse)
 async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> HTMLResponse:
-    if not _authed(request, settings):
-        return templates.TemplateResponse(request, "workshop/login.html", {})
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _sign_in_page(request, settings)
+    if not scope.is_operator:
+        return _coming_soon(request, settings)
     manager.reap_stale()  # retire zombie runs before the bench renders them (AI-417)
     runs = sorted(manager.store.list_runs(), key=lambda r: r.created_at, reverse=True)
     step_order = ["write", "revise", "safety", "narrate", "illustrate", "assemble"]
@@ -190,37 +214,15 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
     return templates.TemplateResponse(
         request,
         "workshop/dashboard.html",
-        {
-            "runs": runs,
-            "run_extras": run_extras,
-            "themes": get_args(Theme),
-            "languages": get_args(Language),
-            "live": LIVE_STATES,
-        },
+        _base_ctx(
+            settings,
+            runs=runs,
+            run_extras=run_extras,
+            themes=get_args(Theme),
+            languages=get_args(Language),
+            live=LIVE_STATES,
+        ),
     )
-
-
-@router.post("/login", response_class=HTMLResponse)
-async def login(
-    request: Request,
-    settings: WorkshopSettings,
-    secret: Annotated[str, Form()],
-) -> Response:
-    if not secrets.compare_digest(secret, settings.workshop_secret.get_secret_value()):
-        return templates.TemplateResponse(
-            request, "workshop/login.html", {"error": "Incorrect secret."}, status_code=401
-        )
-    response: Response = RedirectResponse("/workshop", status_code=303)
-    response.set_cookie(
-        SESSION_COOKIE,
-        _session_token(settings),
-        httponly=True,
-        samesite="strict",
-        secure=True,
-        max_age=86400,
-        path="/workshop",
-    )
-    return response
 
 
 @router.post("/runs")
@@ -234,10 +236,13 @@ async def start_run(
     count: Annotated[int, Form()] = 1,
     premise: Annotated[str, Form()] = "",
 ) -> RedirectResponse:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None:
         return _to_login()
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
     pack = PackRequest(theme=theme, language=language, count=count, premise=premise or None)  # type: ignore[arg-type]
-    record = await manager.submit(OPERATOR_TOKEN, pack)
+    record = await manager.submit(scope.store_token, pack)
     background.add_task(manager.execute, record)
     return RedirectResponse(f"/workshop/runs/{record.id}", status_code=303)
 
@@ -246,20 +251,24 @@ async def start_run(
 async def run_page(
     request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
 ) -> HTMLResponse:
-    if not _authed(request, settings):
-        return templates.TemplateResponse(request, "workshop/login.html", {})
-    record = _record_or_404(manager, run_id)
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _sign_in_page(request, settings)
+    if not scope.is_operator:
+        return _coming_soon(request, settings)
+    record = _record_or_404(manager, scope, run_id)
     staged_stories = _staged_story_summaries(record.story_ids, settings)
     return templates.TemplateResponse(
         request,
         "workshop/run.html",
-        {
-            "record": record,
-            "steps": _checkpointed_steps(record, settings),
-            "live": LIVE_STATES,
-            "staged_stories": staged_stories,
-            "rel_time": _rel_time,
-        },
+        _base_ctx(
+            settings,
+            record=record,
+            steps=_checkpointed_steps(record, settings),
+            live=LIVE_STATES,
+            staged_stories=staged_stories,
+            rel_time=_rel_time,
+        ),
     )
 
 
@@ -267,20 +276,22 @@ async def run_page(
 async def run_progress(
     request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
 ) -> HTMLResponse:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None or not scope.is_operator:
         raise HTTPException(status_code=404)
     manager.reap_stale()  # a stale run's own poll heals it, so it stops polling (AI-417)
-    record = _record_or_404(manager, run_id)
+    record = _record_or_404(manager, scope, run_id)
     staged_stories = _staged_story_summaries(record.story_ids, settings)
     return templates.TemplateResponse(
         request,
         "workshop/_progress.html",
-        {
-            "record": record,
-            "steps": _checkpointed_steps(record, settings),
-            "live": LIVE_STATES,
-            "staged_stories": staged_stories,
-        },
+        _base_ctx(
+            settings,
+            record=record,
+            steps=_checkpointed_steps(record, settings),
+            live=LIVE_STATES,
+            staged_stories=staged_stories,
+        ),
     )
 
 
@@ -292,9 +303,12 @@ async def approve_run(
     publisher: Annotated[Publisher, Depends(get_publisher)],
     run_id: str,
 ) -> RedirectResponse:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None:
         return _to_login()
-    record = _record_or_404(manager, run_id)
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
+    record = _record_or_404(manager, scope, run_id)
     if record.state != "staged":
         raise HTTPException(
             status_code=400,
@@ -310,9 +324,12 @@ async def approve_run(
 async def reject_run(
     request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
 ) -> RedirectResponse:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None:
         return _to_login()
-    record = _record_or_404(manager, run_id)
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
+    record = _record_or_404(manager, scope, run_id)
     try:
         manager.store.save(record.advance("rejected"))
     except InvalidTransition:
@@ -328,10 +345,13 @@ async def run_again(
     background: BackgroundTasks,
     run_id: str,
 ) -> RedirectResponse:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None:
         return _to_login()
-    record = _record_or_404(manager, run_id)
-    new_record = await manager.submit(OPERATOR_TOKEN, record.request)
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
+    record = _record_or_404(manager, scope, run_id)
+    new_record = await manager.submit(scope.store_token, record.request)
     background.add_task(manager.execute, new_record)
     return RedirectResponse(f"/workshop/runs/{new_record.id}", status_code=303)
 
@@ -340,9 +360,12 @@ async def run_again(
 async def delete_run(
     request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
 ) -> Response:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None:
         return _to_login()
-    record = _record_or_404(manager, run_id)
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
+    record = _record_or_404(manager, scope, run_id)
     if record.state in LIVE_STATES:
         raise HTTPException(status_code=400)
     runs = manager.store.list_runs()
@@ -357,7 +380,7 @@ async def delete_run(
             other.state == "approved" for other in other_records
         ):
             unpublish_story(story_id, settings)
-    manager.store.delete(OPERATOR_TOKEN, run_id)
+    manager.store.delete(scope.store_token, run_id)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return _to_login()
@@ -367,8 +390,11 @@ async def delete_run(
 async def delete_staged_story_route(
     request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
 ) -> Response:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None:
         return _to_login()
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
     record = _story_record_or_404(manager, story_id)
     if record.state in LIVE_STATES or record.state == "approved":
         raise HTTPException(status_code=400)
@@ -389,8 +415,11 @@ async def delete_staged_story_route(
 async def staged_story(
     request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
 ) -> HTMLResponse:
-    if not _authed(request, settings):
-        return templates.TemplateResponse(request, "workshop/login.html", {})
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _sign_in_page(request, settings)
+    if not scope.is_operator:
+        return _coming_soon(request, settings)
     client = _build_client(settings)
     bucket = settings.pending_bucket
     try:
@@ -402,7 +431,7 @@ async def staged_story(
     record = None
     run_id = request.query_params.get("run")
     if run_id:
-        record = manager.store.load(OPERATOR_TOKEN, run_id)
+        record = manager.store.load(scope.store_token, run_id)
     if record is None:
         for candidate in manager.store.list_runs():
             if story_id in candidate.story_ids:
@@ -411,7 +440,13 @@ async def staged_story(
     return templates.TemplateResponse(
         request,
         "workshop/story.html",
-        {"story": story, "record": record, "live": LIVE_STATES, "rel_time": _rel_time},
+        _base_ctx(
+            settings,
+            story=story,
+            record=record,
+            live=LIVE_STATES,
+            rel_time=_rel_time,
+        ),
     )
 
 
@@ -419,7 +454,8 @@ async def staged_story(
 async def staged_asset(
     request: Request, settings: WorkshopSettings, story_id: str, name: str
 ) -> Response:
-    if not _authed(request, settings):
+    scope = await _scope(request, settings)
+    if scope is None or not scope.is_operator:
         raise HTTPException(status_code=404)
     if "/" in name or ".." in name:
         raise HTTPException(status_code=404)

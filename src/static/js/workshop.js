@@ -158,3 +158,40 @@
     initAll(e.detail.elt);
   });
 })();
+
+// Clerk: load once, keep the __session cookie fresh (HTMX polling depends on
+// it), mount <SignIn> on the sign-in page, and wire the sign-out button.
+async function initClerk() {
+  if (!window.Clerk) return; // script still loading; the 'load' retry below covers it
+  await window.Clerk.load();
+  const mount = document.getElementById("clerk-signin");
+  if (mount) {
+    window.Clerk.mountSignIn(mount, { afterSignInUrl: "/workshop", afterSignUpUrl: "/workshop" });
+  }
+  const signout = document.getElementById("ws-signout");
+  if (signout && window.Clerk.user) {
+    signout.hidden = false;
+    signout.addEventListener("click", () => window.Clerk.signOut({ redirectUrl: "/workshop" }));
+  }
+}
+
+if (window.Clerk) {
+  initClerk();
+} else {
+  // clerk.browser.js is async; it dispatches nothing standard, so poll briefly.
+  const t = setInterval(() => {
+    if (window.Clerk) {
+      clearInterval(t);
+      initClerk();
+    }
+  }, 50);
+  setTimeout(() => clearInterval(t), 10000);
+}
+
+// A Clerk session can lapse in the gap between refreshes; an HTMX request then
+// 401s. Full-page reload drops the user back onto the sign-in flow.
+document.body.addEventListener("htmx:responseError", (e) => {
+  if (e.detail && e.detail.xhr && e.detail.xhr.status === 401) {
+    window.location.reload();
+  }
+});

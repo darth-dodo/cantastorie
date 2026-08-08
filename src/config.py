@@ -55,11 +55,6 @@ class Settings(BaseSettings):
     # (text, audio, images together) before publish reads it back.
     staging_dir: Path = Path("staging")
 
-    # The operator face at /workshop (AI-388, ADR-005). Empty means the
-    # workshop does not exist: every /workshop route answers 404. There are
-    # no accounts — this one secret is the whole operator access model.
-    workshop_secret: SecretStr = SecretStr("")
-
     # Stale-run reaper (AI-417): a run whose process dies mid-generation (deploy,
     # crash, OOM) is left live with no heartbeat. The bench sweeps queued/running
     # records older than this many seconds to failed. Generous by default —

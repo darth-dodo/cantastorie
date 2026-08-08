@@ -91,7 +91,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
 | **Parent dashboard** | ⏳ Planned | Language tabs, unpublish toggles, kill switch |
 | **Pack requests & review** | ⏳ Planned | Parents request 1–3 stories on a theme, preview everything, approve or reject (Phase 2) |
-| **Operator workshop** | ✅ Shipped | Secret-gated screens to run the pipeline, watch progress, review staged stories, and publish ([ADR-005](adr/ADR-005-workshop-area.md)) |
+| **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
 | **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
 | **Authoring pipeline** | 🔄 In progress | Generates story text, narration, watercolor images, word timings, and glosses for approval — all steps ship except word timings (Deepgram pass) and glosses |
 | **Live generation** | ⏳ Planned | Auto safety gate with unanimous-pass publishing, audit log, kill switch (Phase 3) |
