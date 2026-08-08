@@ -20,7 +20,9 @@ from src.pipeline.providers import build_model
 from src.pipeline.steps.safety import safety_gate
 from src.pipeline.steps.write import (
     WRITE_INSTRUCTIONS,
+    BranchingStoryDraft,
     StoryDraft,
+    branching_story_from_draft,
     story_from_draft,
     write_story,
 )
@@ -57,6 +59,10 @@ def build_revise_agent(model: Model) -> Agent[None, StoryDraft]:
     return Agent(model=model, output_type=StoryDraft, instructions=REVISE_INSTRUCTIONS)
 
 
+def build_branching_revise_agent(model: Model) -> Agent[None, BranchingStoryDraft]:
+    return Agent(model=model, output_type=BranchingStoryDraft, instructions=REVISE_INSTRUCTIONS)
+
+
 def revise_story(
     story: Story,
     failures: Sequence[str],
@@ -80,10 +86,16 @@ def revise_story(
             f"This story failed review:\n{story.model_dump_json()}\n\n"
             f"Failures to fix:\n{failure_lines}"
         )
-        draft = build_revise_agent(llm).run_sync(prompt).output
-        revised = story_from_draft(
-            draft, story_id=story.id, theme=story.theme, language=story.language
-        )
+        if story.shape == "branching":
+            branching_draft = build_branching_revise_agent(llm).run_sync(prompt).output
+            revised = branching_story_from_draft(
+                branching_draft, story_id=story.id, theme=story.theme, language=story.language
+            )
+        else:
+            draft = build_revise_agent(llm).run_sync(prompt).output
+            revised = story_from_draft(
+                draft, story_id=story.id, theme=story.theme, language=story.language
+            )
         return revised.model_dump_json().encode()
 
     return Story.model_validate_json(run_step(cache, "revise", inputs, produce))
