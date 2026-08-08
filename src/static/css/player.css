@@ -272,6 +272,39 @@ button.presses:active {
   transform: scale(0.96);
 }
 
+.cover.loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.cover.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(245, 223, 174, 0.15) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover.loading::after {
+    animation: none;
+  }
+}
+
 /* Watercolor washes: 2–3 radial gradients of accents over a warm base */
 .wash-barchetta {
   background:
@@ -379,6 +412,24 @@ button.presses:active {
   flex-direction: column;
   gap: 20px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  animation: slide-up 0.3s ease-out;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-panel {
+    animation: none;
+  }
 }
 
 [data-theme="dusk"] .settings-panel {
@@ -555,6 +606,7 @@ button.presses:active {
 
 .bead.current {
   opacity: 1;
+  box-shadow: 0 0 8px 2px rgba(245, 223, 174, 0.6);
 }
 
 .exit {
@@ -1004,4 +1056,22 @@ button.presses:active {
   margin: 0;
   font: 700 28px var(--font-app);
   color: #f5dfae;
+  animation: fade-in-up 0.8s ease-out;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .end h2 {
+    animation: none;
+  }
 }
