@@ -30,7 +30,7 @@ Small, local, easily-reversed choices do not need an ADR. When in doubt, prefer 
 | [ADR-001](ADR-001-technology-stack.md) | Foundational Technology Stack | Accepted | 2026-07-07 |
 | [ADR-002](ADR-002-narration-provider.md) | Narration Provider — Voxtral via OpenRouter to Start | Superseded by ADR-004 | 2026-07-07 |
 | [ADR-003](ADR-003-parent-authentication-clerk.md) | Parent Authentication via Clerk | Accepted | 2026-07-11 |
-| [ADR-004](ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram, ElevenLabs Retired | Accepted, amended by ADR-008 | 2026-07-11 |
+| [ADR-004](ADR-004-narration-deepgram-voxtral.md) | Narration — Deepgram + Voxtral, ElevenLabs Retired (default TTS since moved to Gemini) | Accepted, amended by ADR-008 | 2026-07-11 |
 | [ADR-005](ADR-005-workshop-area.md) | The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs | Accepted | 2026-07-11 |
 | [ADR-006](ADR-006-family-voice-narration.md) | Nonna Narrates (family voice narration) | Proposed | 2026-07-11 |
 | [ADR-007](ADR-007-langsmith-observability.md) | LangSmith App-Wide Observability | Accepted | 2026-07-12 |

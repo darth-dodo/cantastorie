@@ -1,6 +1,11 @@
 {# Polled progress fragment. While live it polls; once settled it stops.
    Beads use monotone fill: a step is done when its checkpoint dir exists OR
-   any later step's does (revise only runs when safety demands a rewrite). #}
+   any later step's does (revise only runs when safety demands a rewrite).
+   Parametrized (AI-411): the parent surface reuses this fragment with a
+   different poll base_url and operator controls hidden. Defaults preserve the
+   workshop's rendering byte-for-byte. #}
+{% set base_url = base_url | default("/workshop/runs") %}
+{% set is_operator = is_operator | default(true) %}
 {% set step_names = ["write", "revise", "safety", "narrate", "illustrate", "assemble"] %}
 {% set headlines = {
      "write": "Writing the story…",
@@ -15,7 +20,7 @@
 {% set current_idx = ns.last + 1 %}
 {% set current_step = step_names[current_idx] if current_idx < 6 else "assemble" %}
 <div id="run-progress" data-state="{{ record.state }}"
-     {% if record.state in live %}hx-get="/workshop/runs/{{ record.id }}/progress"
+     {% if record.state in live %}hx-get="{{ base_url }}/{{ record.id }}/progress"
      hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   <div class="ws-card ws-progress-card{% if record.state == 'staged' %} ws-progress-card--staged{% endif %}">
     <div class="ws-beads">
@@ -57,19 +62,23 @@
       <div class="ws-progress-sub">Nothing was published. The full note is below.</div>
     {% endif %}
 
-    {% if record.state == "staged" and staged_stories %}
-      <div class="ws-review-pills">
-        {% for story in staged_stories %}
-          <a href="/workshop/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
-        {% endfor %}
-      </div>
+    {% if is_operator %}
+      {% if record.state == "staged" and staged_stories %}
+        <div class="ws-review-pills">
+          {% for story in staged_stories %}
+            <a href="/workshop/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% elif record.state == "staged" %}
+      <div class="ws-progress-sub">Your stories are made — they'll appear on the shelf after review.</div>
     {% endif %}
 
     {% if record.state == "failed" and record.error %}
       <pre class="ws-error-box">{{ record.error }}</pre>
     {% endif %}
 
-    {% if record.state == "failed" %}
+    {% if is_operator and record.state == "failed" %}
       <form method="post" action="/workshop/runs/{{ record.id }}/again">
         <button type="submit" class="ws-pill ws-pill-primary">Run it again</button>
       </form>
@@ -83,7 +92,7 @@
     </div>
   {% endif %}
 
-  {% if record.state not in live %}
+  {% if is_operator and record.state not in live %}
     <form method="post" action="/workshop/runs/{{ record.id }}/delete" class="ws-progress-actions">
       <button type="submit" class="ws-delete-btn ws-delete-btn--wide" data-delete-btn>× Delete run</button>
     </form>

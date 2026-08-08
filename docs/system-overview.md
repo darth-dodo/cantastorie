@@ -24,7 +24,7 @@ flowchart LR
     subgraph App["FastAPI app (Render)"]
         T["/ — Jinja2 player shell"]
         PUB["/published/* — R2 proxy"]
-        WS["/workshop — operator UI<br/>(secret login, HTMX)"]
+        WS["/workshop — operator UI<br/>(Clerk sign-in, HTMX)"]
         PA["/parent/api/provision<br/>(Clerk-verified)"]
         S["/static — js, css"]
         RM["RunManager<br/>in-process, one run at a time"]
@@ -55,13 +55,13 @@ flowchart LR
 
 The shell's `<meta name="asset-base">` tag is the only place the asset base URL lives. Its default is the `/static/content/` dev fixture; deployed configuration points it at `/published`, the app route that proxies the R2 bucket so dev and prod read the same published content ([`src/api/routes/published.py`](../src/api/routes/published.py)).
 
-**Trust boundary:** every provider secret — the OpenRouter key, the Clerk secret key, the workshop secret, the LangSmith key — exists only in the server/pipeline environment as `SecretStr`, unwrapped at its transport boundary. The browser never sees a key; a played story costs zero API calls.
+**Trust boundary:** every provider secret — the OpenRouter key, the Clerk secret key, the LangSmith key, the R2 access keys — exists only in the server/pipeline environment as `SecretStr`, unwrapped at its transport boundary. The browser never sees a key; a played story costs zero API calls.
 
 ---
 
 ## The Player (`src/static/js/`)
 
-Nine ES modules, no framework, no bundler. `main.js` is the composition root; everything else is a factory function with injected dependencies (`fetchFn`, `engine`, `storage`), which is what makes the Vitest + jsdom suites possible. Alongside them live `palette.js` — a synchronous head script (deliberately *not* a module, so it can set `data-palette`/`data-theme` on `<html>` before first paint) — and its testable twin `palette-resolve.js`, which holds the same resolution logic as an importable module. `workshop.js` also lives in this directory but belongs to the workshop UI, not the player.
+Ten ES modules, no framework, no bundler. `main.js` is the composition root; everything else is a factory function with injected dependencies (`fetchFn`, `engine`, `storage`), which is what makes the Vitest + jsdom suites possible. The tenth, `palette-resolve.js`, holds theme/palette resolution as the importable twin of `palette.js` — a synchronous head script (deliberately *not* a module, so it can set `data-palette`/`data-theme` on `<html>` before first paint). `workshop.js` also lives in this directory but belongs to the workshop UI, not the player.
 
 ```mermaid
 flowchart TD
@@ -72,10 +72,11 @@ flowchart TD
     fsm["fsm.js<br/>generic FSM (from hermano)"]
     prefetch["prefetch.js<br/>whole-story banking"]
     story["story.js<br/>story.json → playable"]
-    screens["screens.js<br/>DOM for 3 screens + 2 overlays"]
+    screens["screens.js<br/>DOM for 3 screens + overlays"]
     storage["storage.js<br/>persist progress locally"]
+    palette["palette-resolve.js<br/>theme + palette resolution"]
 
-    main --> store & playback & engine & prefetch & story & screens & storage
+    main --> store & playback & engine & prefetch & story & screens & storage & palette
     playback --> store & engine & prefetch
     engine --> fsm
     screens --> story & store
@@ -92,8 +93,9 @@ flowchart TD
 | `fsm.js` | Tiny generic FSM: frozen machine, warn-and-ignore invalid transitions | `createMachine`, `interpret` |
 | `prefetch.js` | On cover tap, bank every page's audio (decoded buffers) and image (HTTP cache), both branch arms included; failures counted, never fatal | `createPrefetcher` |
 | `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `shelf`, `story` |
-| `screens.js` | Detached-element builders for shelf, player, end screen, choice + resume overlays; `playerView()` derives captions/beads/images from a loaded story | `buildShelf`, `buildPlayer`, `updatePlayer`, … |
+| `screens.js` | Detached-element builders for shelf, player, end screen, the choice/resume/settings overlays, and the failure states (audio-retry bird, offline clouds); `playerView()` derives captions/beads/images from a loaded story | `buildShelf`, `buildPlayer`, `updatePlayer`, … |
 | `storage.js` | Progress persistence under one key; localStorage now, IndexedDB when real stories land; failures are silent by design | `load`, `save` |
+| `palette-resolve.js` | Theme (light/dusk by hour, `?theme=` override) and palette resolution; pure logic shared with the `palette.js` head script and the test suites | `VALID_PALETTES`, `resolvePalette`, `resolveTheme` |
 
 ### Player state (`store.js`)
 
@@ -179,11 +181,11 @@ While no published `story.json` backs a cover, a page timer (3.8 s, `?speed=` ov
 
 ## The Pipeline (`src/pipeline/`)
 
-Plain Python, typed end to end. `generate.py` runs the whole authoring pass — write through stage — against the story's working folder; the CLI and the workshop's `RunManager` are two front doors to the same function. The gloss step is slice 6 and does not run yet; spoken prompts are staged only for Italian until slice 4.
+Plain Python, typed end to end. The full run is live: `generate` walks write → safety (→ revise, bounded) → narrate → illustrate → assemble and stages the result; `publish` promotes a staged story to the public bucket and updates the manifest. `generate.py` is the one authoring function — the CLI and the workshop's `RunManager` are two front doors to it. Glosses and word timings are the two steps that do not exist yet (slice 6).
 
 ```mermaid
 flowchart LR
-    G["generate_story()<br/>(CLI or RunManager)"] --> W["write"]
+    G["generate<br/>(CLI or workshop)"] --> W["write"]
     W --> SG{"safety gate<br/>9 rules, judge ≠ writer family"}
     SG -- pass --> N["narrate<br/>Gemini TTS (no timings)"]
     SG -- fail --> RV["revise (bounded)"]
@@ -205,9 +207,9 @@ flowchart LR
 |--------|------|--------------------------------------|
 | `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `ChoicePoint` is exactly two options; `SafetyReport` must contain each of the nine rules exactly once |
 | `cache.py` | Content-addressed artifact store; the filesystem **is** the checkpoint | `cache_key()` = sha256 of canonical-JSON inputs; writes are tmp-then-rename atomic; `run_step()` makes unchanged inputs a pure lookup — zero API calls |
-| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration returns raw audio bytes with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
+| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration requests `pcm` (Gemini rejects `mp3`) and wraps it into a WAV container, with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
 | `generate.py` | The whole authoring run, write through stage, as one function — the seam shared by the CLI and the workshop's `RunManager` | Provider seams (models, narration client, image transport) are injectable, so the full run is exercised with zero network |
-| `cli.py` | `generate` / `publish` / `audit` entry points — all live | `audit` verifies every reachable asset in the published bucket via `audit_published_bucket` |
+| `cli.py` | `generate` / `publish` / `audit` entry points — all live | All three run the real machinery; `audit` verifies every reachable published asset (`audit_published_bucket`) and also runs in CI (AI-378) |
 | `steps/illustrate.py` | Character sheet first, then every page and the cover generated **against that sheet** — never page-to-page chaining (drift compounds) | `STYLE_PROMPT` is a module constant participating verbatim in every cache key: edit it and every image knowingly regenerates. Uses httpx against OpenRouter chat completions directly because pydantic-ai 2.5.0 can't parse image *outputs*; the ban is on direct vendor SDKs, and OpenRouter remains the only gateway |
 | `src/config.py` | Settings for both halves (shared with the API) | A model validator **refuses config where the safety judge and writer share a model family** — the shared-blind-spot failure mode |
 
@@ -224,7 +226,7 @@ Every step's inputs — text, style prompt, sheet hash, model ID — hash into t
 
 The operator face (AI-388, [ADR-005](adr/)): start pack runs, watch progress, review staged stories, publish. Server-rendered Jinja2 + HTMX — the settled non-child pattern — with a vanilla-JS `workshop.js` for widgets.
 
-**Access is one env-var secret, not accounts.** With no `workshop_secret` configured, every `/workshop` route answers 404 — the workshop does not exist. A correct login sets a session cookie holding the secret's SHA-256 (never the secret itself), compared with `secrets.compare_digest`.
+**Access is Clerk sign-in, not a shared secret (AI-426, [ADR-005](adr/)).** With Clerk unconfigured, every `/workshop` route answers 404 — the workshop does not exist. Each request resolves a `WorkshopScope` from the verified Clerk session JWT (`src/workshop/scope.py`): an **operator** (`public_metadata.role == "operator"`) works globally across all families; any other signed-in user is a **parent** scoped to their own `family_token` and, until the parent workshop views ship, sees a "coming soon" 403. ClerkJS loads on every workshop page to keep the short-lived `__session` JWT refreshed so HTMX polling does not 401 a minute after sign-in.
 
 **Runs execute in-process.** `RunManager` runs `generate_story` as an asyncio background task in the same FastAPI process — `asyncio.to_thread` for the sync pipeline code, an `asyncio.Lock` for one-run-at-a-time. There is no queue framework.
 
@@ -255,16 +257,18 @@ Progress shown in the UI is read from the run record plus the working folder's c
 
 ## The App (`src/api/`)
 
-An app factory (`create_app`) that initializes observability, adds LangSmith's `TracingMiddleware`, mounts `/static`, and includes four routers plus `/health` (which the Dockerfile healthcheck and Render both poll):
+An app factory (`create_app`) that initializes observability, adds LangSmith's `TracingMiddleware` (`src/observability.py`), mounts `/static`, and includes `/health` (which the Dockerfile healthcheck and Render both poll) plus four routers:
 
-| Router | Routes | What it does |
-|--------|--------|--------------|
-| `player.py` | `GET /` | Renders `templates/index.html` with `asset_base` injected |
-| `published.py` | `GET /published/*` | Proxies the R2 bucket so dev and prod read the same published content; the player's `ASSET_BASE` points here |
-| `workshop.py` | `/workshop/**` | The operator UI (see [The Workshop](#the-workshop-srcworkshop-workshop)) |
-| `parent.py` | `POST /parent/api/provision` | Mint-or-link the family token at first parent sign-in (AI-410) |
+| Router | Path | What it does |
+|--------|------|--------------|
+| `player.py` | `/` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
+| `published.py` | `/published` | R2 content proxy for dev/prod parity |
+| `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, and the my-packs list with progress polling — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
+| `workshop.py` | `/workshop` | Clerk-gated operator screens, operator role (Jinja2 + HTMX): start a run, watch step progress, review the staged story, publish. `src/workshop/manager.py` orchestrates runs in-process and reaps stale ones; `records.py` persists run records to the R2 pending bucket, surviving Render's ephemeral disk |
 
-The template carries the three things the player boot needs: the design-system stylesheets (`tokens.css`, `player.css`), the `asset-base` meta tag, and the `#app` mount that `main.js` looks for.
+Unset Clerk config means the `/workshop` and `/parent` routers answer 404 — each area simply does not exist until configured.
+
+The player template carries the three things the player boot needs: the design-system stylesheets (`tokens.css`, `player.css`), the `asset-base` meta tag, and the `#app` mount that `main.js` looks for.
 
 ### Parent identity (Clerk, [ADR-003](adr/ADR-003-parent-authentication-clerk.md))
 
@@ -272,7 +276,7 @@ The template carries the three things the player boot needs: the design-system s
 - **`clerk.py`** — the only module that calls Clerk's REST API, for one operation: a deep-merge `PATCH` writing `family_token` into the user's `public_metadata` at provision time. Everything else verifies locally via JWKS.
 - **`parent.py`** — the provision endpoint is idempotent (a provisioned account gets its existing token back; rotation is a manual procedure). It links the browser's existing IndexedDB token when offered, otherwise mints 128 bits. The token pattern `^[0-9a-f]{32}$` is enforced strictly because the token becomes an R2 key prefix (`pending/{family_token}/…`) — posted strings must never smuggle path separators into bucket keys.
 
-The `/parent` pages themselves (sign-in, pack request, my-packs) are not built yet; only the provision API exists.
+The `/parent` pages — sign-in, the pack request form, and the my-packs list with HTMX progress polling and per-family run caps — ship in AI-411; the provision API mints the family token at first sign-in.
 
 ### Observability (`src/observability.py`)
 
@@ -286,8 +290,8 @@ LangSmith, off by default and inert when off. `init_observability` (called from 
 |-------|--------|-------------------|
 | `tests/js/*.test.js` | Vitest + jsdom | Store transitions, audio-engine FSM + hold/resume math (mock AudioContext), playback loop ordering, prefetch dedupe/failure counting, `story.json` parsing and page ordering, palette resolution, shell boot |
 | `tests/test_app.py`, `test_config.py`, `test_observability.py` | pytest | Routes, static mount, dev manifest fixture, settings (including the judge≠writer refusal), observability wiring |
-| `tests/api/*` | pytest | Clerk JWT verification (`test_auth.py`), the Clerk metadata client against mocked transports (`test_clerk_client.py`), provision mint/link/idempotency (`test_parent_provision.py`) |
-| `tests/workshop/*` | pytest | Run-record lifecycle and transitions (`test_records.py`), manager execution/resume/reaper (`test_manager.py`), workshop routes and auth (`test_routes.py`) |
+| `tests/api/*` | pytest | Clerk JWT verification (`test_auth.py`), the Clerk metadata client against mocked transports (`test_clerk_client.py`), provision mint/link/idempotency (`test_parent_provision.py`), and the `/parent` pages, tenancy scoping, and Clerk-containment guard (`test_parent_pages.py`) |
+| `tests/workshop/*` | pytest | Run-record lifecycle and transitions (`test_records.py`), manager execution/resume/reaper and per-family run caps (`test_manager.py`), workshop routes and Clerk auth (`test_routes.py`), `WorkshopScope` resolution (`test_scope.py`) |
 | `tests/pipeline/*` | pytest | Model contract (nine-rule completeness, choice arity), cache atomicity and hit/miss, provider transports against mocked httpx, authoring/narrate/illustrate/assemble steps, content rules, generate end to end, publish and audit |
 | `tests/e2e/*.spec.js` | Playwright | The two-tap start, the full playback loop, failure states, and shelf-layout regressions in a real browser |
 
@@ -303,7 +307,7 @@ The provider and Clerk tests mock at the httpx-transport seam, so logic is teste
 | `/static/content/` as the *default* `asset_base` | The `/published` R2 proxy (live) — deployed config points there; the fixture remains the dev default | dev config catching up |
 | `localStorage` progress | IndexedDB (progress, settings, lockout, family token) | slice 2 |
 | Choice pages halt the ordered walk | Choice overlay drives branch following | AI-370 |
-| No gloss step in `generate_story` | Word-to-English gloss maps + Deepgram word timings | slice 6 |
+| Empty word timings in `story.json` | Deepgram STT transcription pass | slice 6 (reading mode) |
+| No gloss step in the pipeline | Word-to-English gloss maps (cheap model) | slice 6 (reading mode) |
 | Spoken prompts staged for Italian only | All ten prompts per enabled language | slice 4 |
-| Provision API without `/parent` pages | Sign-in, pack request form, my-packs UI | next parent-area step |
 | Mock shelf covers + captions | Manifest + published `story.json` per cover | pipeline output |

@@ -55,11 +55,6 @@ class Settings(BaseSettings):
     # (text, audio, images together) before publish reads it back.
     staging_dir: Path = Path("staging")
 
-    # The operator face at /workshop (AI-388, ADR-005). Empty means the
-    # workshop does not exist: every /workshop route answers 404. There are
-    # no accounts — this one secret is the whole operator access model.
-    workshop_secret: SecretStr = SecretStr("")
-
     # Stale-run reaper (AI-417): a run whose process dies mid-generation (deploy,
     # crash, OOM) is left live with no heartbeat. The bench sweeps queued/running
     # records older than this many seconds to failed. Generous by default —
@@ -79,6 +74,11 @@ class Settings(BaseSettings):
     # Clerk instance issuer (the Frontend API / `iss` claim); when set,
     # require_parent pins it. Unset ⇒ issuer not enforced, mirroring the azp deferral.
     clerk_issuer: str = ""
+
+    # Per-family run caps for the /parent surface (AI-411). One active run per
+    # family is always enforced; this bounds how many runs a family may start
+    # per UTC day. Operator submissions from /workshop are exempt.
+    parent_daily_run_cap: int = 3
 
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
     # access keys follow the SecretStr pattern above — never logged, never

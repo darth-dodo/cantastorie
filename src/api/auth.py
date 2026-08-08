@@ -147,6 +147,54 @@ class CandidateContext:
 
 
 # ---------------------------------------------------------------------------
+# Shared Clerk session verifier
+# ---------------------------------------------------------------------------
+
+
+async def verify_clerk_session(
+    request: Request,
+    settings: Settings,
+) -> dict[str, Any] | None:
+    """Verify the Clerk `__session` cookie and return its claims.
+
+    Returns the decoded payload for a valid, identified session; returns None
+    when there is no usable identity (missing cookie, bad/expired signature,
+    empty `sub`); raises HTTPException(403) when the account is disabled.
+
+    The feature guard (404 when Clerk is unconfigured) stays with each caller —
+    this function assumes `settings.clerk_jwks_url` is set.
+    """
+    raw_token = request.cookies.get(SESSION_COOKIE)
+    if not raw_token:
+        return None
+
+    try:
+        header = jwt.get_unverified_header(raw_token)
+        kid: str = header.get("kid", "")
+        keys = await _get_keys(settings.clerk_jwks_url)
+        if kid not in keys:
+            return None
+        payload: dict[str, Any] = jwt.decode(
+            raw_token,
+            keys[kid],
+            algorithms=["RS256"],
+            issuer=settings.clerk_issuer or None,
+            options={"verify_exp": True, "verify_nbf": True},
+        )
+    except Exception:
+        return None
+
+    # Kill switch — checked before any downstream scoping, so a disabled
+    # account can never act (mirrors the pre-refactor ordering).
+    if bool(payload.get("disabled", False)):
+        raise HTTPException(status_code=403)
+
+    if not str(payload.get("sub", "")):
+        return None
+    return payload
+
+
+# ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
 
@@ -165,50 +213,11 @@ async def require_parent_candidate(
     # 1. Feature guard — unset jwks_url means /parent does not exist.
     if not settings.clerk_jwks_url:
         raise HTTPException(status_code=404)
-
-    # 2. Read cookie — missing cookie is unauthenticated.
-    raw_token = request.cookies.get(SESSION_COOKIE)
-    if not raw_token:
+    # 2-5. Shared verification (None => unauthenticated; 403 => disabled).
+    payload = await verify_clerk_session(request, settings)
+    if payload is None:
         raise HTTPException(status_code=401)
-
-    # 3. Verify JWT signature and standard claims via PyJWT + JWKS.
-    try:
-        header = jwt.get_unverified_header(raw_token)
-        kid: str = header.get("kid", "")
-        keys = await _get_keys(settings.clerk_jwks_url)
-        if kid not in keys:
-            raise HTTPException(status_code=401)
-        public_key = keys[kid]
-        payload: dict[str, Any] = jwt.decode(
-            raw_token,
-            public_key,
-            algorithms=["RS256"],
-            issuer=settings.clerk_issuer or None,
-            options={
-                "verify_exp": True,
-                "verify_nbf": True,
-            },
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401) from None
-
-    # 4. azp accepted as-is — hard-fail enforcement deferred (design spec §2).
-
-    # 5. Kill switch — disabled=true propagates within ~60 s via Clerk's
-    #    short-lived session JWT refresh cycle. Checked before any
-    #    family_token logic so a disabled account cannot provision.
-    if bool(payload.get("disabled", False)):
-        raise HTTPException(status_code=403)
-
-    # 6. Require a non-empty sub — an absent or empty sub cannot be scoped
-    #    to a family and is treated as unauthenticated.
-    user_id = str(payload.get("sub", ""))
-    if not user_id:
-        raise HTTPException(status_code=401)
-
-    # 7. family_token is optional here — None means "not provisioned yet".
+    user_id = str(payload["sub"])
     raw_family = payload.get("family_token")
     family_token = raw_family if isinstance(raw_family, str) and raw_family else None
     return CandidateContext(user_id=user_id, family_token=family_token)

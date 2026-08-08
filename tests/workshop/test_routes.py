@@ -1,13 +1,14 @@
-"""Behavior specs for the operator face at /workshop (AI-388, ADR-005).
+"""Behavior specs for the operator face at /workshop (AI-388, ADR-005, AI-426).
 
 The operator retires the terminal: start a run, watch progress, inspect the
-staged story, publish — all in the browser. Access is a single env-var secret
-held as a session cookie; with no secret configured the routes do not exist.
-The tests drive the real RunManager against a moto bucket with an injected
-generation seam — zero network, no mocking of the code under test.
+staged story, publish — all in the browser. Access is a Clerk session (the
+`__session` cookie holding a verified JWT); with Clerk unconfigured the routes
+do not exist. A signed-in non-operator sees a "coming soon" page. The tests
+drive the real RunManager against a moto bucket with an injected generation
+seam and mint JWTs locally against a mock JWKS — zero network, no mocking of
+the code under test.
 """
 
-import hashlib
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -18,6 +19,8 @@ from fastapi.testclient import TestClient
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
+from src.api import auth as auth_mod
+from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
 from src.api.routes.workshop import get_publisher, get_run_manager
 from src.config import Settings, get_settings
@@ -25,9 +28,17 @@ from src.pipeline.models import Page, PageAudio, Story
 from src.pipeline.publish import STAGED_PREFIX
 from src.workshop.manager import RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
+from tests.api.clerk_jwt import (
+    clerk_settings,
+    generate_rsa_keypair,
+    make_mock_fetch,
+    mint_token,
+    now,
+)
 
 BUCKET = "cantastorie-published"
-SECRET = "correct-horse-battery"
+
+OPERATOR_CLAIMS = {"sub": "user_op", "role": "operator"}
 
 SENTENCE = "The water sings shh shh."
 PAGE_TEXT = " ".join([SENTENCE] * 8)
@@ -41,13 +52,9 @@ def s3() -> Iterator[S3Client]:
         yield client
 
 
-def _settings(tmp_path: Path, secret: str = SECRET) -> Settings:
-    return Settings(
-        _env_file=None,
-        workshop_secret=secret,
-        r2_bucket=BUCKET,
-        content_dir=tmp_path / "content",
-    )
+def _settings(tmp_path: Path) -> Settings:
+    s = clerk_settings()  # sets publishable_key + jwks_url + secret_key
+    return s.model_copy(update={"r2_bucket": BUCKET, "content_dir": tmp_path / "content"})
 
 
 def _stage_fake_story(
@@ -82,10 +89,26 @@ def _staged_keys(s3: S3Client, story_id: str) -> list[str]:
 
 
 class _Harness:
-    """One workshop app over a moto bucket, with login helpers."""
+    """One workshop app over a moto bucket, minting Clerk sessions locally."""
 
-    def __init__(self, tmp_path: Path, s3: S3Client, secret: str = SECRET) -> None:
-        self.settings = _settings(tmp_path, secret)
+    def __init__(
+        self,
+        tmp_path: Path,
+        s3: S3Client,
+        *,
+        configured: bool = True,
+    ) -> None:
+        self.key = generate_rsa_keypair()
+        # Route auth.py's JWKS fetch at our local key; reset the module cache.
+        auth_mod._fetch_jwks = make_mock_fetch(self.key)  # type: ignore[assignment]
+        auth_mod._jwks_state.keys = None
+        auth_mod._jwks_state.fetched_at = 0.0
+
+        self.settings = (
+            _settings(tmp_path)
+            if configured
+            else Settings(_env_file=None, r2_bucket=BUCKET, content_dir=tmp_path / "content")
+        )
         self.store = RunStore(self.settings, client=s3)
         self.s3 = s3
         self.published: list[str] = []
@@ -102,72 +125,73 @@ class _Harness:
         app.dependency_overrides[get_publisher] = lambda: self.published.append
         self.client = TestClient(app, base_url="https://testserver")
 
-    def login(self) -> None:
-        response = self.client.post(
-            "/workshop/login", data={"secret": SECRET}, follow_redirects=False
-        )
-        assert response.status_code == 303
+    def sign_in(self, claims: dict | None = None) -> None:
+        payload = {**(claims or OPERATOR_CLAIMS)}
+        payload.setdefault("iat", now())
+        payload.setdefault("nbf", now())
+        payload.setdefault("exp", now() + 3600)
+        token = mint_token(self.key, payload)
+        self.client.cookies.set(SESSION_COOKIE, token)
 
 
-def test_workshop_does_not_exist_without_a_configured_secret(tmp_path: Path, s3: S3Client) -> None:
-    harness = _Harness(tmp_path, s3, secret="")
+def test_workshop_does_not_exist_without_clerk_configured(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3, configured=False)
 
     assert harness.client.get("/workshop").status_code == 404
 
 
-def test_unauthenticated_workshop_shows_the_login_form_and_no_runs(
-    tmp_path: Path, s3: S3Client
-) -> None:
+def test_unauthenticated_workshop_shows_the_sign_in_page(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.store.save(new_run("operator", PackRequest(theme="first_snow", language="it", count=1)))
 
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'action="/workshop/login"' in page.text
+    assert 'id="clerk-signin"' in page.text
+    assert "workshop/login" not in page.text  # no secret form anymore
     assert "first_snow" not in page.text
 
 
-def test_a_wrong_secret_is_rejected(tmp_path: Path, s3: S3Client) -> None:
+def test_operator_session_sees_the_dashboard(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
+    harness.sign_in()
 
-    response = harness.client.post("/workshop/login", data={"secret": "guess"})
-
-    assert response.status_code == 401
-
-
-def test_login_sets_a_session_and_shows_the_dashboard(tmp_path: Path, s3: S3Client) -> None:
-    harness = _Harness(tmp_path, s3)
-
-    harness.login()
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
+    assert 'id="clerk-signin"' not in page.text  # not the sign-in page
     assert 'action="/workshop/runs"' in page.text
 
 
-def test_the_session_cookie_is_not_the_secret_itself(tmp_path: Path, s3: S3Client) -> None:
+def test_signed_in_non_operator_gets_coming_soon_403(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
+    harness.sign_in({"sub": "user_parent", "family_token": "fam_1"})
 
-    harness.login()
+    page = harness.client.get("/workshop")
 
-    cookie = harness.client.cookies.get("workshop_session")
-    assert cookie
-    assert SECRET not in cookie
-    assert cookie == hashlib.sha256(SECRET.encode()).hexdigest()
+    assert page.status_code == 403
+    assert "coming soon" in page.text.lower()
 
 
-def test_login_sets_a_secure_expiring_workshop_scoped_cookie(tmp_path: Path, s3: S3Client) -> None:
+def test_an_expired_session_falls_back_to_the_sign_in_page(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
+    harness.sign_in({"sub": "user_op", "role": "operator", "exp": now() - 10})
 
-    response = harness.client.post(
-        "/workshop/login", data={"secret": SECRET}, follow_redirects=False
-    )
+    page = harness.client.get("/workshop")
 
-    cookie = response.headers["set-cookie"]
-    assert "Max-Age=86400" in cookie
-    assert "Path=/workshop" in cookie
-    assert "Secure" in cookie
+    assert page.status_code == 200
+    assert 'id="clerk-signin"' in page.text
+
+
+def test_every_workshop_page_loads_clerk_js(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+
+    page = harness.client.get("/workshop")
+
+    assert "clerk.browser.js" in page.text
+    assert 'name="clerk-publishable-key"' in page.text
+    assert "pk_test_xxx" in page.text  # the key from clerk_settings()
 
 
 def test_starting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
@@ -188,7 +212,7 @@ def test_starting_a_run_executes_it_in_the_background_to_staged(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post(
         "/workshop/runs",
@@ -205,7 +229,7 @@ def test_starting_a_run_executes_it_in_the_background_to_staged(
 
 def test_the_progress_fragment_reports_the_run_state(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
     harness.store.save(record.advance("running"))
 
@@ -229,7 +253,7 @@ def test_the_bench_reaps_a_stale_running_run_on_render(tmp_path: Path, s3: S3Cli
     harness = _Harness(tmp_path, s3)
     zombie = _aged_running()
     harness.store.save(zombie)
-    harness.login()
+    harness.sign_in()
 
     harness.client.get("/workshop")
 
@@ -243,7 +267,7 @@ def test_a_stale_runs_progress_poll_self_heals_and_stops_polling(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     zombie = _aged_running()
     harness.store.save(zombie)
 
@@ -256,7 +280,7 @@ def test_a_stale_runs_progress_poll_self_heals_and_stops_polling(
 
 def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
@@ -269,7 +293,7 @@ def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S
 
 def test_the_staged_story_page_shows_text_audio_and_images(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
 
     page = harness.client.get(f"/workshop/staged/{story_id}")
@@ -284,7 +308,7 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
@@ -299,7 +323,7 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
 
 def test_staged_assets_are_served_and_traversal_is_blocked(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
 
     assert harness.client.get(f"/workshop/staged/{story_id}/assets/p1.mp3").content == b"mp3:p1"
@@ -311,7 +335,7 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
@@ -329,7 +353,7 @@ def test_approving_a_non_staged_run_is_rejected_without_publishing(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     failed = record.advance("running").advance("failed", story_ids=[story_id])
@@ -359,7 +383,7 @@ def test_deleting_a_staged_story_removes_its_artifacts_and_updates_its_run(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     content_dir = harness.settings.content_dir / story_id
     content_dir.mkdir(parents=True)
@@ -387,7 +411,7 @@ def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     staged = record.advance("running").advance("staged", story_ids=[story_id])
@@ -406,7 +430,7 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
     tmp_path: Path, s3: S3Client, state: str
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     if state == "queued":
@@ -428,7 +452,7 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
 
 def test_deleting_an_unknown_staged_story_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post("/workshop/staged/no-such-story/delete", follow_redirects=False)
 
@@ -439,7 +463,7 @@ def test_deleting_a_failed_story_redirects_for_non_htmx_requests(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     failed = record.advance("running").advance("failed", story_ids=[story_id])
@@ -456,7 +480,7 @@ def test_deleting_a_failed_story_redirects_for_non_htmx_requests(
 
 def test_deleting_an_unknown_run_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post("/workshop/runs/no-such-run/delete", follow_redirects=False)
 
@@ -465,7 +489,7 @@ def test_deleting_an_unknown_run_returns_not_found(tmp_path: Path, s3: S3Client)
 
 def test_deleting_a_live_run_is_rejected(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
         "running"
     )
@@ -481,7 +505,7 @@ def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
     tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     content_dir = harness.settings.content_dir / story_id
     content_dir.mkdir(parents=True)
@@ -513,7 +537,7 @@ def test_deleting_a_run_does_not_remove_shared_story_artifacts(
     tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     content_dir = harness.settings.content_dir / story_id
     content_dir.mkdir(parents=True)
@@ -561,7 +585,7 @@ def test_settled_runs_show_armed_delete_controls_on_dashboard_and_progress(
     hx-confirm dialog): inline HTMX removal on the bench, a plain form
     post (303 back to the bench) on the run page."""
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
     settled = record.advance("running").advance("staged")
     harness.store.save(settled)
@@ -582,7 +606,7 @@ def test_settled_runs_show_armed_delete_controls_on_dashboard_and_progress(
 
 def test_live_runs_hide_the_delete_control_from_progress(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
         "running"
     )
@@ -595,7 +619,7 @@ def test_live_runs_hide_the_delete_control_from_progress(tmp_path: Path, s3: S3C
 
 def test_live_runs_hide_the_delete_control_on_dashboard(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
         "running"
     )
@@ -608,7 +632,7 @@ def test_live_runs_hide_the_delete_control_on_dashboard(tmp_path: Path, s3: S3Cl
 
 def test_delete_route_returns_empty_for_htmx_requests(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = (
         new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
         .advance("running")
@@ -628,7 +652,7 @@ def test_delete_route_returns_empty_for_htmx_requests(tmp_path: Path, s3: S3Clie
 
 def test_delete_route_redirects_for_non_htmx_requests(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = (
         new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
         .advance("running")
@@ -649,7 +673,7 @@ def test_delete_route_redirects_for_non_htmx_requests(tmp_path: Path, s3: S3Clie
 
 def test_rejecting_a_staged_run_settles_it_to_rejected(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
     staged = record.advance("running").advance("staged")
     harness.store.save(staged)
@@ -665,7 +689,7 @@ def test_rejecting_a_staged_run_settles_it_to_rejected(tmp_path: Path, s3: S3Cli
 
 def test_rejecting_a_non_staged_run_returns_400(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1)).advance(
         "running"
     )
@@ -696,7 +720,7 @@ def test_reject_route_requires_the_session(tmp_path: Path, s3: S3Client) -> None
 
 def test_reject_route_returns_404_for_unknown_run(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post("/workshop/runs/no-such-run/reject", follow_redirects=False)
 
@@ -712,7 +736,7 @@ def test_run_again_creates_a_new_run_with_the_same_request_and_executes_it(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
     record = new_run("operator", request)
     failed = record.advance("running").advance("failed")
@@ -733,7 +757,7 @@ def test_run_again_creates_a_new_run_with_the_same_request_and_executes_it(
 
 def test_run_again_works_on_any_settled_state(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
@@ -763,29 +787,11 @@ def test_again_route_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
 
 def test_again_route_returns_404_for_unknown_run(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post("/workshop/runs/no-such-run/again", follow_redirects=False)
 
     assert response.status_code == 404
-
-
-def test_wrong_secret_renders_login_template_with_error_not_json(
-    tmp_path: Path, s3: S3Client
-) -> None:
-    """A wrong secret must re-render the login template with a 401 status, not return JSON."""
-    harness = _Harness(tmp_path, s3)
-
-    response = harness.client.post("/workshop/login", data={"secret": "wrong-guess"})
-
-    assert response.status_code == 401
-    assert 'action="/workshop/login"' in response.text  # login form rendered
-    assert (
-        "wrong" in response.text.lower()
-        or "incorrect" in response.text.lower()
-        or "secret" in response.text.lower()
-    )
-    assert response.headers.get("content-type", "").startswith("text/html")
 
 
 def test_run_page_includes_staged_story_review_links_with_page_count(
@@ -793,7 +799,7 @@ def test_run_page_includes_staged_story_review_links_with_page_count(
 ) -> None:
     """The run page progress fragment shows 'Review N pages' for staged stories."""
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)  # has 1 page
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
@@ -813,7 +819,7 @@ def test_story_page_shows_approve_reject_only_when_run_is_staged(
 ) -> None:
     """Approve+reject forms only visible when run is staged (not approved/rejected)."""
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
@@ -832,7 +838,7 @@ def test_story_page_shows_approve_reject_only_when_run_is_staged(
 def test_dashboard_hides_delete_for_live_runs_via_data_testid(tmp_path: Path, s3: S3Client) -> None:
     """Live (queued/running) runs must not have the delete button in the dashboard."""
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     record = new_run("operator", PackRequest(theme="first_snow", language="it", count=1))
     running = record.advance("running")
     harness.store.save(running)
@@ -852,7 +858,7 @@ def test_dashboard_hides_delete_for_live_runs_via_data_testid(tmp_path: Path, s3
 def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3Client) -> None:
     """Run page context must carry staged_stories with id, title, page_count."""
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)  # title="La barchetta", 1 page
     record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
     harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
