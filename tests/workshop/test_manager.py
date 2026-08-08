@@ -19,7 +19,7 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
-from src.workshop.manager import RunManager
+from src.workshop.manager import OPERATOR_TOKEN, RunCapExceeded, RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
 
 BUCKET = "cantastorie-published"
@@ -138,8 +138,11 @@ def test_runs_execute_one_at_a_time(s3: S3Client) -> None:
     manager = RunManager(store, settings, generate_pack=slow_generate)
 
     async def run() -> None:
-        first = await manager.submit("family-abc", REQUEST)
-        second = await manager.submit("family-abc", REQUEST)
+        # The operator is cap-exempt, so it can hold two runs at once — exactly
+        # what the execute-lock must serialize (AI-411 caps block two live
+        # family runs, which is a submit rule orthogonal to this lock test).
+        first = await manager.submit(OPERATOR_TOKEN, REQUEST)
+        second = await manager.submit(OPERATOR_TOKEN, REQUEST)
         await asyncio.gather(manager.execute(first), manager.execute(second))
 
     asyncio.run(run())
@@ -226,3 +229,53 @@ def test_resume_on_boot_reenters_queued_and_running_runs_only(s3: S3Client) -> N
     reloaded = store.load("family-xyz", settled.id)
     assert reloaded is not None
     assert reloaded.updated_at == settled.updated_at
+
+
+# ---------------------------------------------------------------------------
+# Per-family run caps (AI-411)
+# ---------------------------------------------------------------------------
+
+
+def test_second_active_run_is_rejected(s3: S3Client) -> None:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+
+    first = asyncio.run(manager.submit("a" * 32, REQUEST))
+    assert first.state == "queued"
+    with pytest.raises(RunCapExceeded) as excinfo:
+        asyncio.run(manager.submit("a" * 32, REQUEST))
+    assert excinfo.value.active is not None
+    assert excinfo.value.active.id == first.id
+
+
+def test_daily_cap_rejects_fourth_submit(s3: S3Client) -> None:
+    settings = _settings()  # default parent_daily_run_cap = 3
+    store = RunStore(settings, client=s3)
+    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    token = "b" * 32
+    for _ in range(3):
+        record = asyncio.run(manager.submit(token, REQUEST))
+        # settle it so the active-run rule doesn't fire first
+        store.save(record.advance("running").advance("failed", error="x"))
+    with pytest.raises(RunCapExceeded) as excinfo:
+        asyncio.run(manager.submit(token, REQUEST))
+    assert excinfo.value.active is None  # daily cap, not active-run
+
+
+def test_operator_is_exempt_from_caps(s3: S3Client) -> None:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    for _ in range(5):
+        asyncio.run(manager.submit(OPERATOR_TOKEN, REQUEST))
+    # five concurrent queued operator runs, no exception
+
+
+def test_other_family_runs_do_not_count(s3: S3Client) -> None:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    asyncio.run(manager.submit("a" * 32, REQUEST))
+    record = asyncio.run(manager.submit("c" * 32, REQUEST))
+    assert record.state == "queued"

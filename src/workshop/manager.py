@@ -33,6 +33,20 @@ from src.workshop.records import new_run
 # rested screen can tell "the workshop restarted" apart from "narrate exploded".
 INTERRUPTED_NOTE = "run interrupted — the workshop restarted while this was generating"
 
+# The operator face submits under this pseudo-family token; it is exempt from
+# the per-family caps below. Moved here from routes/workshop.py (AI-411) so the
+# exemption lives beside the enforcement.
+OPERATOR_TOKEN = "operator"
+
+
+class RunCapExceeded(Exception):
+    """A non-operator family hit a run cap. `active` is the blocking run when
+    the one-active-run rule fired, None when the daily cap fired."""
+
+    def __init__(self, message: str, *, active: RunRecord | None = None) -> None:
+        super().__init__(message)
+        self.active = active
+
 
 def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
     """Default generation seam: one generate_story pass per requested story.
@@ -69,9 +83,30 @@ class RunManager:
         return self._store
 
     async def submit(self, family_token: str, request: PackRequest) -> RunRecord:
+        if family_token != OPERATOR_TOKEN:
+            self._enforce_caps(family_token)
         record = new_run(family_token, request)
         self._store.save(record)
         return record
+
+    def _enforce_caps(self, family_token: str) -> None:
+        runs = self._store.list_runs(family_token=family_token)
+        for run in runs:
+            if run.state in ("queued", "running"):
+                raise RunCapExceeded(
+                    "a story pack is already being made for this family",
+                    active=run,
+                )
+        today = datetime.now(UTC).date()
+        started_today = 0
+        for run in runs:
+            created = run.created_at
+            if created.tzinfo is None:  # records persisted before tz-aware writes
+                created = created.replace(tzinfo=UTC)
+            if created.date() == today:
+                started_today += 1
+        if started_today >= self._settings.parent_daily_run_cap:
+            raise RunCapExceeded("that's all the story packs for today — tomorrow brings more")
 
     async def execute(self, record: RunRecord) -> RunRecord:
         async with self._lock:

@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     # require_parent pins it. Unset ⇒ issuer not enforced, mirroring the azp deferral.
     clerk_issuer: str = ""
 
+    # Per-family run caps for the /parent surface (AI-411). One active run per
+    # family is always enforced; this bounds how many runs a family may start
+    # per UTC day. Operator submissions from /workshop are exempt.
+    parent_daily_run_cap: int = 3
+
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
     # access keys follow the SecretStr pattern above — never logged, never
     # repr'd. r2_public_base is the URL the published/ prefix is served at,
