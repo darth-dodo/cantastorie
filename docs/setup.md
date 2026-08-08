@@ -69,7 +69,7 @@ wrangler r2 bucket cors set cantastorie --file deploy/r2-cors.json -J eu
 wrangler r2 bucket cors list cantastorie -J eu
 ```
 
-Add your custom-domain and any production origins to `allowed.origins` before applying.
+Add your custom-domain and any production origins to `allowed.origins` before applying. CORS rules do not follow domain changes automatically: after attaching a custom domain later, add it to `deploy/r2-cors.json` and re-run the `cors set` command above.
 
 ---
 
@@ -91,6 +91,7 @@ published/prompts/it/…
 2. Set one environment variable on the service:
    - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
 3. Leave `autoDeploy` on: pushes to `main` redeploy. The Dockerfile compiles Tailwind and serves the shell; `/health` is the health check.
+4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
 

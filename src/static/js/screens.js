@@ -104,7 +104,7 @@ export function buildShelf(
     });
   }
 
-  const gear = el("button", "settings-gear", { "aria-label": "Impostazioni" });
+  const gear = el("button", "settings-gear", { "aria-label": "Settings" });
   gear.innerHTML = GEAR_SVG;
   gear.addEventListener("click", onOpenSettings);
 
@@ -138,7 +138,7 @@ export function buildSettingsOverlay({
 
   const langSection = el("div", "settings-section");
   const langLabel = el("div", "settings-label");
-  langLabel.textContent = "Lingua";
+  langLabel.textContent = "Language";
   const langRow = el("div", "settings-row");
   langs.forEach((lang) => {
     const pill = el("button", "settings-pill", {
@@ -152,7 +152,7 @@ export function buildSettingsOverlay({
 
   const themeSection = el("div", "settings-section");
   const themeLabel = el("div", "settings-label");
-  themeLabel.textContent = "Tema";
+  themeLabel.textContent = "Theme";
   const themeRow = el("div", "settings-row");
   palettes.forEach((name) => {
     const pill = el("button", "settings-pill", {
@@ -171,7 +171,7 @@ export function buildSettingsOverlay({
   themeSection.append(themeLabel, themeRow);
 
   const done = el("button", "settings-done");
-  done.textContent = "Fatto";
+  done.textContent = "Done";
   done.addEventListener("click", onClose);
 
   panel.append(langSection, themeSection, done);
@@ -209,7 +209,7 @@ export function buildPlayer(store, view = mockView) {
   });
   screen.appendChild(beads);
 
-  const exit = el("button", "exit", { "aria-label": "torna alle storie" });
+  const exit = el("button", "exit", { "aria-label": "back to stories" });
   const grid = el("div", "grid");
   for (let i = 0; i < 4; i++) grid.appendChild(el("div"));
   exit.appendChild(grid);
@@ -243,7 +243,7 @@ export function updatePlayer(screen, state, view = mockView) {
       return pause;
     })() : iconPlay(),
   );
-  playPause.setAttribute("aria-label", state.playing ? "pausa" : "play");
+  playPause.setAttribute("aria-label", state.playing ? "pause" : "play");
 }
 
 export function buildChoiceOverlay(store) {
@@ -271,15 +271,15 @@ export function buildResumeOverlay(store) {
   const overlay = el("div", "overlay");
   const prompt = el("div", "prompt");
   const title = el("strong");
-  title.textContent = "Rieccoci!";
+  title.textContent = "Welcome back!";
   const sub = el("small");
-  sub.textContent = "Continuiamo o ricominciamo?";
+  sub.textContent = "Continue or start over?";
   prompt.append(title, sub);
 
   const options = el("div", "options");
   options.append(
-    blobOption({ label: "Continuiamo", icon: iconPlay(), onTap: () => store.resumeContinue() }),
-    blobOption({ label: "Ricominciamo", icon: iconReplay(), onTap: () => store.resumeRestart() }),
+    blobOption({ label: "Continue", icon: iconPlay(), onTap: () => store.resumeContinue() }),
+    blobOption({ label: "Start over", icon: iconReplay(), onTap: () => store.resumeRestart() }),
   );
   overlay.append(prompt, options);
   return overlay;
@@ -288,11 +288,11 @@ export function buildResumeOverlay(store) {
 // The offline state (AI-367): the shelf manifest failed on cold load.
 // The whole screen is the retry button; each tap speaks the line again.
 export function buildOffline(onRetry) {
-  const screen = el("button", "screen offline", { "aria-label": "riprova" });
+  const screen = el("button", "screen offline", { "aria-label": "try again" });
   const clouds = el("div", "clouds");
   for (let i = 0; i < 3; i++) clouds.appendChild(el("div", "puff"));
   const prompt = el("div", "prompt");
-  prompt.textContent = "Le nuvole hanno preso le storie. Riprova tra poco!";
+  prompt.textContent = "The clouds took the stories. Try again soon!";
   screen.append(clouds, prompt);
   screen.addEventListener("click", onRetry, { once: true });
   return screen;
@@ -301,13 +301,13 @@ export function buildOffline(onRetry) {
 // The audio-retry state (AI-367): narration failed to load. The whole
 // overlay is one big tap target — never a small button for small hands.
 export function buildAudioError(store) {
-  const overlay = el("button", "overlay audio-error", { "aria-label": "riprova" });
+  const overlay = el("button", "overlay audio-error", { "aria-label": "try again" });
   // A hand-painted sleeping bird (illustrate pipeline, locked watercolor
   // style), bundled same-origin so the overlay never depends on the network
   // it is reacting to. Decorative — the overlay's aria-label carries meaning.
   const bird = el("img", "bird", { src: "/static/img/sleeping-bird.webp", alt: "" });
   const prompt = el("div", "prompt");
-  prompt.textContent = "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.";
+  prompt.textContent = "Oh! The story is taking a nap. Tap the bird to wake it up.";
   overlay.append(bird, prompt);
   overlay.addEventListener("click", () => store.retryAudio());
   return overlay;
@@ -322,12 +322,12 @@ export function buildEnd(store) {
   screen.appendChild(stars);
 
   const title = el("h2");
-  title.textContent = "Fine!";
+  title.textContent = "The End!";
 
   const options = el("div", "options");
   options.append(
-    blobOption({ label: "Ancora!", icon: iconReplay(), onTap: () => store.replay() }),
-    blobOption({ label: "Un'altra storia", icon: iconShelf(), onTap: () => store.toShelf() }),
+    blobOption({ label: "Again!", icon: iconReplay(), onTap: () => store.replay() }),
+    blobOption({ label: "Another story", icon: iconShelf(), onTap: () => store.toShelf() }),
   );
 
   screen.append(title, options);
