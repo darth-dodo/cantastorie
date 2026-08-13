@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.config import Settings
 from src.observability import typed_traceable
@@ -41,6 +41,16 @@ STYLE_PROMPT = (
     "Characters should be diverse in appearance — vary hair, features, and body shapes across the cast."
 )
 
+# Choice-card style (docs/product.md → "Branching stories"): a pre-reader
+# picks a branch by picture, so each option needs a single, unmistakable
+# subject. A module-level constant so it is diffable and participates verbatim
+# in every card cache key — edit it and every card is knowingly regenerated.
+CARD_PROMPT = (
+    "A single choice card for a pre-reader: one clear subject only — {label} — "
+    "centered, filling the frame, instantly recognizable at a glance. "
+    "No text anywhere."
+)
+
 STEP_NAME = "illustrate"
 
 # Images are stored as raw PNG bytes; store and load MUST use this same
@@ -55,6 +65,7 @@ class IllustrationSet(BaseModel):
     character_sheet_hash: str
     page_images: dict[str, Path]  # keyed by page id
     cover: Path
+    card_images: dict[str, Path] = Field(default_factory=dict)  # keyed f"{page_id}:{index}"
 
 
 class ImageClient:
@@ -136,12 +147,24 @@ def _cover_prompt(title: str) -> str:
     )
 
 
+def _card_prompt(label: str) -> str:
+    return (
+        f"{STYLE_PROMPT} Using the attached character reference sheet, keep "
+        "every character exactly as drawn there. "
+        f"{CARD_PROMPT.format(label=label)}"
+    )
+
+
 def _artifact_path(cache: ArtifactCache, inputs: dict[str, str]) -> Path:
     return cache.story_dir / STEP_NAME / f"{cache_key(inputs)}{IMAGE_SUFFIX}"
 
 
 def _generate_page(client: ImageClient, page_text: str, sheet: bytes) -> bytes:
     return client.generate(_page_prompt(page_text), reference_png=sheet)
+
+
+def _generate_card(client: ImageClient, label: str, sheet: bytes) -> bytes:
+    return client.generate(_card_prompt(label), reference_png=sheet)
 
 
 def illustrate_story(
@@ -194,7 +217,30 @@ def illustrate_story(
             )
             page_images[page.id] = _artifact_path(cache, page_inputs)
 
-        # 3. The cover derives from the same sheet.
+        # 3. Every choice option gets a card, drawn against the same sheet.
+        #    Keyed f"{page_id}:{index}" so Task 7 can address each option.
+        card_images: dict[str, Path] = {}
+        for page in story.pages:
+            if page.choice is None:
+                continue
+            for index, option in enumerate(page.choice.options):
+                card_inputs = {
+                    "label": option.label,
+                    "character_sheet_hash": sheet_hash,
+                    "style_prompt": STYLE_PROMPT,
+                    "card_prompt": CARD_PROMPT,
+                    "model": settings.image_model,
+                }
+                run_step(
+                    cache,
+                    STEP_NAME,
+                    card_inputs,
+                    functools.partial(_generate_card, client, option.label, sheet),
+                    suffix=IMAGE_SUFFIX,
+                )
+                card_images[f"{page.id}:{index}"] = _artifact_path(cache, card_inputs)
+
+        # 4. The cover derives from the same sheet.
         cover_inputs = {
             "cover_title": story.title,
             "character_sheet_hash": sheet_hash,
@@ -216,4 +262,5 @@ def illustrate_story(
         character_sheet_hash=sheet_hash,
         page_images=page_images,
         cover=_artifact_path(cache, cover_inputs),
+        card_images=card_images,
     )
