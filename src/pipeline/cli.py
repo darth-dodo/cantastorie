@@ -29,7 +29,7 @@ def _not_yet(issue: str) -> None:
 @app.command()
 def generate(
     theme: str = typer.Option(..., help="One of the locked launch themes"),
-    language: str = typer.Option(..., help="Story language: it, es, en, el, de"),
+    language: str = typer.Option(..., help="Story language: it, es, en, el, de, bg"),
     shape: str = typer.Option("linear", help="linear or branching"),
     premise: str = typer.Option(
         "", help="Optional plot brief; steers the story beyond the theme seed"
