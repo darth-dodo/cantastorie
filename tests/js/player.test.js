@@ -308,7 +308,7 @@ describe("shelf settings (language + theme)", () => {
     gear.click();
     const overlay = document.querySelector(".overlay.settings");
     expect(overlay).not.toBeNull();
-    expect([...overlay.querySelectorAll(".settings-pill")]).toHaveLength(8);
+    expect([...overlay.querySelectorAll(".settings-pill")]).toHaveLength(9);
     expect(overlay.textContent).toContain("Language");
     expect(overlay.textContent).toContain("Theme");
   });
