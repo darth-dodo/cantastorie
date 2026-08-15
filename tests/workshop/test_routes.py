@@ -22,7 +22,7 @@ from mypy_boto3_s3 import S3Client
 from src.api import auth as auth_mod
 from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
-from src.api.routes.workshop import get_publisher, get_run_manager
+from src.api.routes.workshop import TEMPLATES_DIR, get_publisher, get_run_manager
 from src.config import Settings, get_settings
 from src.pipeline.models import Page, PageAudio, Story
 from src.pipeline.publish import STAGED_PREFIX
@@ -163,14 +163,16 @@ def test_operator_session_sees_the_dashboard(tmp_path: Path, s3: S3Client) -> No
     assert 'action="/workshop/runs"' in page.text
 
 
-def test_signed_in_non_operator_gets_coming_soon_403(tmp_path: Path, s3: S3Client) -> None:
+def test_signed_in_non_operator_is_redirected_to_parent(tmp_path, s3):
     harness = _Harness(tmp_path, s3)
     harness.sign_in({"sub": "user_parent", "family_token": "fam_1"})
+    resp = harness.client.get("/workshop", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/parent"
 
-    page = harness.client.get("/workshop")
 
-    assert page.status_code == 403
-    assert "coming soon" in page.text.lower()
+def test_the_coming_soon_template_is_gone(tmp_path, s3):
+    assert not (TEMPLATES_DIR / "workshop" / "coming_soon.html").exists()
 
 
 def test_an_expired_session_falls_back_to_the_sign_in_page(tmp_path: Path, s3: S3Client) -> None:
