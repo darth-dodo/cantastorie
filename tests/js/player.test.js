@@ -300,7 +300,7 @@ describe("audio-error overlay (AI-367): the sleeping bird", () => {
 });
 
 describe("shelf settings (language + theme)", () => {
-  it("the gear opens a settings overlay with language and palette pills", async () => {
+  it("the gear opens a settings overlay with language and palette selects", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     const gear = document.querySelector(".settings-gear");
@@ -308,7 +308,7 @@ describe("shelf settings (language + theme)", () => {
     gear.click();
     const overlay = document.querySelector(".overlay.settings");
     expect(overlay).not.toBeNull();
-    expect([...overlay.querySelectorAll(".settings-pill")]).toHaveLength(10);
+    expect([...overlay.querySelectorAll(".settings-select")]).toHaveLength(2);
     expect(overlay.textContent).toContain("Language");
     expect(overlay.textContent).toContain("Theme");
   });
@@ -318,17 +318,16 @@ describe("shelf settings (language + theme)", () => {
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     document.querySelector(".settings-gear").click();
     const overlay = document.querySelector(".overlay.settings");
-    const esPill = [...overlay.querySelectorAll(".settings-pill")].find(
+    overlay.querySelector(".settings-select-current").click();
+    const esItem = [...overlay.querySelectorAll(".settings-menu-item")].find(
       (p) => p.textContent === "Español",
     );
-    esPill.click();
+    esItem.click();
     await vi.waitFor(() => {
       expect(localStorage.getItem("cantastorie-lang")).toBe("es");
       const overlay2 = document.querySelector(".overlay.settings");
-      const active = [...overlay2.querySelectorAll(".settings-pill")].find(
-        (p) => p.getAttribute("aria-current") === "true",
-      );
-      expect(active.textContent).toBe("Español");
+      const label = overlay2.querySelector(".settings-select-label");
+      expect(label.textContent).toBe("Español");
     });
   });
 
@@ -337,7 +336,9 @@ describe("shelf settings (language + theme)", () => {
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     document.querySelector(".settings-gear").click();
     const overlay = document.querySelector(".overlay.settings");
-    const plum = [...overlay.querySelectorAll(".settings-pill")].find(
+    const selects = [...overlay.querySelectorAll(".settings-select-current")];
+    selects[1].click();
+    const plum = [...overlay.querySelectorAll(".settings-menu-item")].find(
       (p) => p.textContent === "Plum",
     );
     plum.click();

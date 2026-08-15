@@ -453,18 +453,18 @@ button.presses:active {
   color: #f3e9da;
 }
 
-.settings-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.settings-select {
+  position: relative;
 }
 
-.settings-pill {
-  flex: 1 1 auto;
-  min-width: 72px;
-  padding: 12px 14px;
-  border-radius: 999px;
-  text-align: center;
+.settings-select-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 18px;
   font: 700 15px var(--font-app);
   color: var(--ink);
   background: var(--sticker);
@@ -472,21 +472,64 @@ button.presses:active {
   cursor: pointer;
 }
 
-[data-theme="dusk"] .settings-pill {
+[data-theme="dusk"] .settings-select-current {
   color: #f3e9da;
   background: rgba(243, 233, 218, 0.08);
   box-shadow: inset 0 0 0 1.5px rgba(245, 223, 174, 0.25);
 }
 
-.settings-pill[aria-current="true"] {
-  box-shadow: inset 0 0 0 2.5px var(--sage);
+.settings-select-chevron {
+  opacity: 0.55;
+  transition: transform 0.2s ease;
+}
+
+.settings-select-current[aria-expanded="true"] .settings-select-chevron {
+  transform: rotate(180deg);
+}
+
+.settings-menu {
+  position: fixed;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+[data-theme="dusk"] .settings-menu {
+  background: #2a2119;
+}
+
+.settings-menu[aria-hidden="true"] {
+  display: none;
+}
+
+.settings-menu-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-align: left;
+  font: 700 15px var(--font-app);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+[data-theme="dusk"] .settings-menu-item {
+  color: #f3e9da;
+}
+
+.settings-menu-item[aria-current="true"] {
+  box-shadow: inset 0 0 0 2px var(--sage);
   background: rgba(127, 166, 168, 0.22);
 }
 
 @media (hover: hover) {
-  .settings-pill:hover {
+  .settings-menu-item:hover {
     background: rgba(127, 166, 168, 0.14);
-  box-shadow: inset 0 0 0 1.5px rgba(74, 59, 46, 0.28);
   }
 }
 
