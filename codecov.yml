@@ -1,0 +1,14 @@
+ignore:
+  - "playwright.config.js"
+  - "src/static/js/workshop.js"
+  - "src/static/js/vendor"
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 80%

@@ -140,7 +140,7 @@ make help           # list every target
 
 Copy `.env.example` to `.env` for pipeline work. **Only `OPENROUTER_API_KEY` is needed to run the default pipeline end to end** — story, safety, glosses, images, and narration all run through OpenRouter. ElevenLabs is retired ([ADR-004](docs/adr/ADR-004-narration-deepgram-voxtral.md)). Two pipeline-only keys are the bounded exceptions: `DEEPGRAM_API_KEY` for the word-timing pass (OpenRouter does not carry the Deepgram models) and `MISTRAL_API_KEY` for voice cloning only ([ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)). The player needs no keys at story time.
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit. Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Deployment targets Render via [render.yaml](render.yaml); the Cloudflare R2 bucket and Render setup are documented in [docs/setup.md](docs/setup.md).
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit. Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Test coverage — Python **92%**, JS **76%** — uploads to [Codecov](https://codecov.io/gh/darth-dodo/cantastorie) on every run. Deployment targets Render via [render.yaml](render.yaml); the Cloudflare R2 bucket and Render setup are documented in [docs/setup.md](docs/setup.md).
 
 ### Status
 
