@@ -29,7 +29,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from src.pipeline.content_rules import ContentViolation, check_story
-from src.pipeline.models import Page, PageAudio, Story
+from src.pipeline.models import ChoiceOption, ChoicePoint, Page, PageAudio, Story
 from src.pipeline.steps.illustrate import IllustrationSet
 
 # Enough of the SHA-256 to make collisions a non-worry while keeping filenames
@@ -83,6 +83,47 @@ def _hashed_name(page_id: str, data: bytes, suffix: str) -> str:
     return f"{page_id}.{digest}{suffix}"
 
 
+def _assemble_choice(
+    page: Page, illustrations: IllustrationSet, assets: dict[str, Path]
+) -> ChoicePoint:
+    """Hash a choice page's per-option card and label audio into the story.
+
+    Each option's ``card_image`` and ``audio.file`` become immutable hashed
+    names; the source files are registered in ``assets``. A missing card or
+    label raises ``MissingAssetError`` naming the page and asset kind.
+    """
+    assert page.choice is not None  # guarded by the caller
+    assembled_options: list[ChoiceOption] = []
+    for index, option in enumerate(page.choice.options):
+        card_src = illustrations.card_images.get(f"{page.id}:{index}")
+        if card_src is None or not card_src.exists():
+            raise MissingAssetError(page.id, "card_image", card_src)
+
+        if option.audio is None:
+            raise MissingAssetError(page.id, "label_audio", None)
+        label_src = Path(option.audio.file)
+        if not label_src.exists():
+            raise MissingAssetError(page.id, "label_audio", label_src)
+
+        card_bytes = card_src.read_bytes()
+        label_bytes = label_src.read_bytes()
+        card_name = _hashed_name(f"{page.id}.opt{index}", card_bytes, IMAGE_SUFFIX)
+        label_name = _hashed_name(f"{page.id}.opt{index}", label_bytes, AUDIO_SUFFIX)
+        assets[card_name] = card_src
+        assets[label_name] = label_src
+
+        assembled_options.append(
+            option.model_copy(
+                update={
+                    "card_image": card_name,
+                    "audio": PageAudio(file=label_name, timings=option.audio.timings),
+                }
+            )
+        )
+
+    return ChoicePoint(options=(assembled_options[0], assembled_options[1]))
+
+
 def assemble_story(story: Story, illustrations: IllustrationSet) -> AssembledStory:
     """Braid narration and illustration into the final, validated story.json.
 
@@ -114,13 +155,18 @@ def assemble_story(story: Story, illustrations: IllustrationSet) -> AssembledSto
         assets[audio_name] = audio_src
         assets[image_name] = image_src
 
-        assembled_pages.append(
-            page.model_copy(
-                update={
-                    "audio": PageAudio(file=audio_name, timings=page.audio.timings),
-                    "image": image_name,
-                }
-            )
-        )
+        update: dict[str, object] = {
+            "audio": PageAudio(file=audio_name, timings=page.audio.timings),
+            "image": image_name,
+        }
+
+        # A choice page carries two more asset kinds per option: the picture
+        # card (illustrations.card_images, keyed f"{page_id}:{index}") and the
+        # spoken label (option.audio). Hash both into the story.json the same
+        # way page audio/image are hashed, so nothing half-assembled ships.
+        if page.choice is not None:
+            update["choice"] = _assemble_choice(page, illustrations, assets)
+
+        assembled_pages.append(page.model_copy(update=update))
 
     return AssembledStory(story=story.model_copy(update={"pages": assembled_pages}), assets=assets)
