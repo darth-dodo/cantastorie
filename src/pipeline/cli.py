@@ -5,7 +5,7 @@ uploads a staged story to R2. audit verifies every reachable asset in the
 published bucket is approved and listed — the provable-safety gate (AI-378).
 """
 
-from typing import cast, get_args
+from typing import Literal, cast, get_args
 
 import typer
 
@@ -52,6 +52,7 @@ def generate(
         cast("Theme", theme),
         cast("Language", language),
         settings,
+        shape=cast('Literal["linear", "branching"]', shape),
         premise=premise or None,
     )
     typer.echo(f"Staged {staged} for review")

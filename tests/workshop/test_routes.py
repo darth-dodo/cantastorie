@@ -229,6 +229,51 @@ def test_starting_a_run_executes_it_in_the_background_to_staged(
     assert response.headers["location"] == f"/workshop/runs/{record.id}"
 
 
+def test_starting_a_branching_run_threads_the_shape_to_the_manager(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post(
+        "/workshop/runs",
+        data={"theme": "the_sleepy_sea", "language": "it", "count": "1", "shape": "branching"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    [record] = harness.store.list_runs()
+    assert record.request.shape == "branching"
+
+
+def test_starting_a_run_defaults_to_a_linear_shape(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    harness.client.post(
+        "/workshop/runs",
+        data={"theme": "the_sleepy_sea", "language": "it", "count": "1"},
+        follow_redirects=False,
+    )
+
+    [record] = harness.store.list_runs()
+    assert record.request.shape == "linear"
+
+
+def test_starting_a_run_with_an_unknown_shape_is_rejected(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.login()
+
+    response = harness.client.post(
+        "/workshop/runs",
+        data={"theme": "the_sleepy_sea", "language": "it", "count": "1", "shape": "zigzag"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert harness.store.list_runs() == []
+
+
 def test_the_progress_fragment_reports_the_run_state(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.sign_in()

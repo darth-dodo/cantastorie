@@ -17,14 +17,18 @@ so the whole run is exercised with zero network.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from src.observability import typed_traceable
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.publish import _build_client, stage_story
 from src.pipeline.steps.assemble import assemble_story
 from src.pipeline.steps.illustrate import illustrate_story
-from src.pipeline.steps.narrate import narrate_pages, synthesize_utterances
+from src.pipeline.steps.narrate import (
+    narrate_choice_labels,
+    narrate_pages,
+    synthesize_utterances,
+)
 from src.pipeline.steps.revise import author_story
 from src.pipeline.steps.write import derive_story_id
 
@@ -43,6 +47,7 @@ def generate_story(
     language: Language,
     settings: Settings,
     *,
+    shape: Literal["linear", "branching"] = "linear",
     write_model: Model | None = None,
     safety_model: Model | None = None,
     revise_model: Model | None = None,
@@ -63,12 +68,14 @@ def generate_story(
         language,
         settings,
         cache,
+        shape=shape,
         write_model=write_model,
         safety_model=safety_model,
         revise_model=revise_model,
         premise=premise,
     )
     narrated = narrate_pages(story.pages, language, settings, cache, narration_client)
+    narrated = narrate_choice_labels(narrated, language, settings, cache, client=narration_client)
     story = story.model_copy(update={"pages": narrated})
     illustrations = illustrate_story(story, settings, cache, transport=image_transport)
     assembled = assemble_story(story, illustrations)

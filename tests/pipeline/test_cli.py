@@ -31,9 +31,13 @@ def test_generate_validates_then_runs_the_pass_and_reports_the_staging_folder(
     seen: dict[str, object] = {}
 
     def fake_generate(
-        theme: str, language: str, settings: object, premise: str | None = None
+        theme: str,
+        language: str,
+        settings: object,
+        shape: str = "linear",
+        premise: str | None = None,
     ) -> Path:
-        seen.update(theme=theme, language=language)
+        seen.update(theme=theme, language=language, shape=shape)
         return tmp_path / "staging" / "the-sleepy-sea-it-abc12345"
 
     monkeypatch.setattr(cli, "generate_story", fake_generate)
@@ -41,8 +45,51 @@ def test_generate_validates_then_runs_the_pass_and_reports_the_staging_folder(
     result = runner.invoke(app, ["generate", "--theme", "the_sleepy_sea", "--language", "it"])
 
     assert result.exit_code == 0
-    assert seen == {"theme": "the_sleepy_sea", "language": "it"}
+    assert seen == {"theme": "the_sleepy_sea", "language": "it", "shape": "linear"}
     assert "the-sleepy-sea-it-abc12345" in result.output
+
+
+def test_generate_forwards_the_branching_shape(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Given --shape branching,
+    When generate is invoked,
+    Then the shape reaches the authoring run."""
+    seen: dict[str, object] = {}
+
+    def fake_generate(
+        theme: str,
+        language: str,
+        settings: object,
+        shape: str = "linear",
+        premise: str | None = None,
+    ) -> Path:
+        seen["shape"] = shape
+        return tmp_path / "staging" / "the-sleepy-sea-it-abc12345"
+
+    monkeypatch.setattr(cli, "generate_story", fake_generate)
+
+    result = runner.invoke(
+        app,
+        ["generate", "--theme", "the_sleepy_sea", "--language", "it", "--shape", "branching"],
+    )
+
+    assert result.exit_code == 0
+    assert seen["shape"] == "branching"
+
+
+def test_generate_rejects_a_shape_outside_the_locked_set() -> None:
+    """Given the shapes linear/branching,
+    When generate is invoked with an unknown shape,
+    Then the command fails and the message names the rejected shape.
+    """
+    result = runner.invoke(
+        app,
+        ["generate", "--theme", "the_sleepy_sea", "--language", "it", "--shape", "zigzag"],
+    )
+    assert result.exit_code != 0
+    assert "zigzag" in result.output
 
 
 def test_generate_rejects_a_language_outside_the_locked_set() -> None:
@@ -75,7 +122,11 @@ def test_generate_forwards_an_optional_premise(
     seen: dict[str, object] = {}
 
     def fake_generate(
-        theme: str, language: str, settings: object, premise: str | None = None
+        theme: str,
+        language: str,
+        settings: object,
+        shape: str = "linear",
+        premise: str | None = None,
     ) -> Path:
         seen.update(theme=theme, language=language, premise=premise)
         return tmp_path / "staging" / "gentle-forest-friends-en-abc12345"

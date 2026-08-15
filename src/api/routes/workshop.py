@@ -231,13 +231,22 @@ async def start_run(
     language: Annotated[str, Form()],
     count: Annotated[int, Form()] = 1,
     premise: Annotated[str, Form()] = "",
+    shape: Annotated[str, Form()] = "linear",
 ) -> RedirectResponse:
     scope = await _scope(request, settings)
     if scope is None:
         return _to_login()
     if not scope.is_operator:
         raise HTTPException(status_code=403)
-    pack = PackRequest(theme=theme, language=language, count=count, premise=premise or None)  # type: ignore[arg-type]
+    if shape not in ("linear", "branching"):
+        raise HTTPException(status_code=400, detail=f"Unknown shape {shape!r}")
+    pack = PackRequest(
+        theme=theme,  # type: ignore[arg-type]
+        language=language,  # type: ignore[arg-type]
+        count=count,
+        premise=premise or None,
+        shape=shape,  # type: ignore[arg-type]
+    )
     record = await manager.submit(scope.store_token, pack)
     background.add_task(manager.execute, record)
     return RedirectResponse(f"/workshop/runs/{record.id}", status_code=303)

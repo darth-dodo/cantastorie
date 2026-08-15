@@ -8,6 +8,7 @@ cross-family safety judge.
 """
 
 from collections.abc import Sequence
+from typing import Literal
 
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
@@ -120,6 +121,7 @@ def author_story(
     settings: Settings,
     cache: ArtifactCache,
     *,
+    shape: Literal["linear", "branching"] = "linear",
     write_model: Model | None = None,
     safety_model: Model | None = None,
     revise_model: Model | None = None,
@@ -129,9 +131,12 @@ def author_story(
 
     Every candidate — the original and each revision — must clear both the
     content limits (as code) and all nine safety verdicts. Two failed
-    revisions reject the story.
+    revisions reject the story. The shape selects a linear or branching
+    writer; revise infers it from the story it is correcting.
     """
-    story = write_story(theme, language, settings, cache, model=write_model, premise=premise)
+    story = write_story(
+        theme, language, settings, cache, model=write_model, premise=premise, shape=shape
+    )
     report = safety_gate(story, settings, cache, model=safety_model)
     failures = _gate_failures(story, report)
 
