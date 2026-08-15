@@ -160,6 +160,28 @@ describe("player shell", () => {
     expect(document.querySelector(".play-pause")).not.toBeNull();
     expect(document.querySelector(".page-wash.current").dataset.page).toBe("0");
   });
+
+  it("prev/next buttons turn pages on tap; prev hides on page 0", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: routedFetch, engine: fakeEngine() });
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
+
+    const prev = document.querySelector(".nav-prev");
+    const next = document.querySelector(".nav-next");
+    expect(prev).not.toBeNull();
+    expect(next).not.toBeNull();
+    expect(prev.classList.contains("disabled")).toBe(true); // page 0: nothing behind
+
+    next.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector(".page-wash.current").dataset.page).toBe("1"),
+    );
+    expect(prev.classList.contains("disabled")).toBe(false);
+
+    prev.click();
+    expect(document.querySelector(".page-wash.current").dataset.page).toBe("0");
+  });
 });
 
 describe("the wired playback loop (cover tap -> prompt -> narration turns the pages)", () => {

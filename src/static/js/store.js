@@ -84,6 +84,30 @@ export function createStore(saved = null) {
       }
     },
 
+    // Manual next-page tap: like advance(), but works while paused — an
+    // explicit tap is intent, the auto-turn is not. The branch is never
+    // skippable: next on the choice page opens the overlay, it does not pass.
+    nextPage() {
+      if (state.screen !== "player") return;
+      if (state.choiceOpen || state.resumeOpen || state.audioError) return;
+      if (state.choicePage !== null && state.page === state.choicePage) {
+        set({ choiceOpen: true });
+      } else if (state.page >= state.pageCount - 1) {
+        set({ screen: "end" });
+      } else {
+        set({ page: state.page + 1 });
+      }
+    },
+
+    // Manual previous-page tap. Page 0 has nothing to go back to — a
+    // deliberate no-op; the UI hides the button there.
+    prevPage() {
+      if (state.page <= 0) return;
+      if (state.screen !== "player") return;
+      if (state.choiceOpen || state.resumeOpen || state.audioError) return;
+      set({ page: state.page - 1 });
+    },
+
     choose() {
       set({ choiceOpen: false, page: state.choicePage + 1 });
     },
