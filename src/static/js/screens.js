@@ -119,6 +119,71 @@ export function buildShelf(
 const GEAR_SVG =
   '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>';
 
+function buildSelect({ options, current, onChange, menuDir = "down" }) {
+  const wrap = el("div", "settings-select", { "data-menu-dir": menuDir });
+  const button = el("button", "settings-select-current", {
+    "aria-haspopup": "listbox",
+    "aria-expanded": "false",
+  });
+  const label = el("span", "settings-select-label");
+  const chevron = el("span", "settings-select-chevron", { "aria-hidden": "true" });
+  chevron.textContent = "▾";
+  button.append(label, chevron);
+
+  const menu = el("div", "settings-menu", { role: "listbox", "aria-hidden": "true" });
+  const items = options.map((opt) => {
+    const item = el("button", "settings-menu-item", {
+      role: "option",
+      "aria-current": String(opt.value === current),
+    });
+    item.textContent = opt.label;
+    item.addEventListener("click", () => {
+      onChange(opt.value);
+      label.textContent = opt.label;
+      items.forEach((it) => it.setAttribute("aria-current", String(it === item)));
+      setOpen(false);
+    });
+    menu.appendChild(item);
+    return item;
+  });
+
+  label.textContent = options.find((opt) => opt.value === current)?.label ?? "";
+
+  function positionMenu() {
+    const rect = button.getBoundingClientRect();
+    menu.style.inset = "auto";
+    menu.style.width = `${rect.width}px`;
+    menu.style.left = `${rect.left}px`;
+    menu.style.top =
+      wrap.dataset.menuDir === "up"
+        ? `${rect.top - menu.offsetHeight - 6}px`
+        : `${rect.bottom + 6}px`;
+  }
+
+  function setOpen(open) {
+    document.querySelectorAll(".settings-menu").forEach((m) => {
+      if (m !== menu) m.setAttribute("aria-hidden", "true");
+    });
+    if (open) {
+      menu.style.visibility = "hidden";
+      menu.setAttribute("aria-hidden", "false");
+      positionMenu();
+      menu.style.visibility = "";
+    } else {
+      menu.setAttribute("aria-hidden", "true");
+    }
+    button.setAttribute("aria-expanded", String(open));
+  }
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(menu.getAttribute("aria-hidden") === "true");
+  });
+
+  wrap.append(button, menu);
+  return wrap;
+}
+
 export function buildSettingsOverlay({
   langs = [],
   currentLang = "it",
@@ -139,36 +204,27 @@ export function buildSettingsOverlay({
   const langSection = el("div", "settings-section");
   const langLabel = el("div", "settings-label");
   langLabel.textContent = "Language";
-  const langRow = el("div", "settings-row");
-  langs.forEach((lang) => {
-    const pill = el("button", "settings-pill", {
-      "aria-current": String(lang.code === currentLang),
-    });
-    pill.textContent = lang.label;
-    pill.addEventListener("click", () => onLangChange(lang.code));
-    langRow.appendChild(pill);
-  });
-  langSection.append(langLabel, langRow);
+  langSection.append(
+    langLabel,
+    buildSelect({
+      options: langs.map((l) => ({ value: l.code, label: l.label })),
+      current: currentLang,
+      onChange: onLangChange,
+    }),
+  );
 
   const themeSection = el("div", "settings-section");
   const themeLabel = el("div", "settings-label");
   themeLabel.textContent = "Theme";
-  const themeRow = el("div", "settings-row");
-  palettes.forEach((name) => {
-    const pill = el("button", "settings-pill", {
-      "aria-current": String(name === currentPalette),
-    });
-    pill.textContent = paletteLabels[name] ?? name;
-    pill.addEventListener("click", () => {
-      onPaletteChange(name);
-      themeRow
-        .querySelectorAll(".settings-pill")
-        .forEach((p) => p.setAttribute("aria-current", "false"));
-      pill.setAttribute("aria-current", "true");
-    });
-    themeRow.appendChild(pill);
-  });
-  themeSection.append(themeLabel, themeRow);
+  themeSection.append(
+    themeLabel,
+    buildSelect({
+      options: palettes.map((p) => ({ value: p, label: paletteLabels[p] ?? p })),
+      current: currentPalette,
+      onChange: onPaletteChange,
+      menuDir: "up",
+    }),
+  );
 
   const done = el("button", "settings-done");
   done.textContent = "Done";

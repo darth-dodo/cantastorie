@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-Language = Literal["it", "es", "en", "el", "de", "bg"]
+Language = Literal["it", "es", "en", "el", "de", "bg", "ru"]
 
 Theme = Literal[
     "animals_helping_each_other",
