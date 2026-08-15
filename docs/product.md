@@ -83,7 +83,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published packs |
-| **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, one play-pause control, auto page turns, exact-position resume |
+| **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, play-pause plus prev/next page buttons, auto page turns, exact-position resume |
 | **Picture choices** | ✅ Shipped | Two picture options with spoken labels at fixed branch points |
 | **Reading mode** | ⏳ Planned | Parent-enabled story text with karaoke word highlighting and tap-word English glosses |
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
@@ -103,7 +103,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 
 1. **Open the app.** The first tap anywhere on the shelf wakes the sound and the shelf greets the child aloud: *"Ciao! Quale storia ascoltiamo oggi?"* (Browsers allow no audio before a touch — the two-tap budget includes this one.)
 2. **Tap a cover.** *"Si parte!"* — and page 1 narration begins. At most **two taps** stand between opening the app and hearing a story, and no more than 4 seconds.
-3. **Listen.** Pages turn themselves within 500 ms of the audio ending, with a gentle crossfade. One 120 px play-pause button is the only control; pausing and resuming continues from the exact position.
+3. **Listen.** Pages turn themselves within 500 ms of the audio ending, with a gentle crossfade. The 120 px play-pause button is the main control, flanked by prev/next page buttons for re-hearing or skipping ahead; pausing and resuming continues from the exact position. The branch is never skippable — next on a choice page shows the two cards, it does not pass.
 4. **Choose.** On a choice page, the choice overlay opens instead of a page turn (see [The Picture-Choice Pattern](#the-picture-choice-pattern)).
 5. **Drift off.** The final page lands on comfort or sleepiness. The end screen offers replay and shelf pictures with *"Fine! Ancora, o un'altra storia?"* — and if nothing is tapped for 20 seconds, a soft *"Buonanotte, tesoro."* plays once and the screen stays as it is.
 
@@ -327,7 +327,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Screen | Contents & States |
 |--------|-------------------|
 | **Shelf** | Cover grid, 2 columns in portrait, small low-contrast parent corner, language chip when 2+ languages enabled. States: loaded · empty (meadow illustration + empty-shelf prompt) · error (clouds + offline prompt) |
-| **Player** | Full-bleed page, 120 px play-pause, progress dots. States: playing · paused · audio-error (sleeping bird + retry prompt). Reading mode adds the text panel in the lower third. |
+| **Player** | Full-bleed page, 120 px play-pause flanked by prev/next buttons, progress dots. States: playing · paused · audio-error (sleeping bird + retry prompt). Reading mode adds the text panel in the lower third. |
 | **Choice overlay** | Page dims 30 percent behind two picture cards, each 40 percent of screen width |
 | **Story end** | Final scene, replay and shelf pictures, end prompt; goodnight sign-off after 20 seconds idle |
 | **Parent gate** | Hold circle fills over 3 seconds, then addition on a keypad; lockout shows the teapot |

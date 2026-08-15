@@ -276,6 +276,16 @@ export function buildPlayer(store, view = mockView) {
   playPause.addEventListener("click", () => store.togglePlay());
   screen.appendChild(playPause);
 
+  const prev = el("button", "nav nav-prev", { "aria-label": "previous page" });
+  prev.appendChild(el("div", "chevron-left"));
+  prev.addEventListener("click", () => store.prevPage());
+  screen.appendChild(prev);
+
+  const next = el("button", "nav nav-next", { "aria-label": "next page" });
+  next.appendChild(el("div", "chevron-right"));
+  next.addEventListener("click", () => store.nextPage());
+  screen.appendChild(next);
+
   return screen;
 }
 
@@ -300,6 +310,8 @@ export function updatePlayer(screen, state, view = mockView) {
     })() : iconPlay(),
   );
   playPause.setAttribute("aria-label", state.playing ? "pause" : "play");
+
+  screen.querySelector(".nav-prev").classList.toggle("disabled", state.page === 0);
 }
 
 export function buildChoiceOverlay(store) {

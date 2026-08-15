@@ -29,7 +29,7 @@ Cantastorie is built on one belief: **a bedtime app should wind a child down.** 
 
 ### Two Taps to a Story
 
-A tap wakes the shelf, which greets the child aloud — *"Ciao! Quale storia ascoltiamo oggi?"* Tap a cover, *"Si parte!"*, and page one begins. At most two taps and four seconds stand between opening the app and hearing a story. Watercolor pages turn themselves when the narration ends; one large play-pause button is the only control, and pausing resumes from the exact position.
+A tap wakes the shelf, which greets the child aloud — *"Ciao! Quale storia ascoltiamo oggi?"* Tap a cover, *"Si parte!"*, and page one begins. At most two taps and four seconds stand between opening the app and hearing a story. Watercolor pages turn themselves when the narration ends; a large play-pause button is flanked by prev/next page buttons, and pausing resumes from the exact position.
 
 ### Child-Steered Branches
 

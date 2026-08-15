@@ -115,6 +115,65 @@ describe("story-configured playback (a loaded story.json sets the shape)", () =>
   });
 });
 
+describe("manual page navigation (next/prev)", () => {
+  it("next turns the page and keeps playing", () => {
+    const store = createStore({ screen: "player", page: 3, playing: true });
+    store.nextPage();
+    expect(store.state).toMatchObject({ page: 4, playing: true });
+  });
+
+  it("next works while paused, staying paused", () => {
+    const store = createStore({ screen: "player", page: 3, playing: false });
+    store.nextPage();
+    expect(store.state).toMatchObject({ page: 4, playing: false });
+  });
+
+  it("next on the choice page opens the choice instead of passing it", () => {
+    const store = createStore({ screen: "player", page: CHOICE_PAGE, choiceOpen: false });
+    store.nextPage();
+    expect(store.state).toMatchObject({ page: CHOICE_PAGE, choiceOpen: true });
+  });
+
+  it("next on the last page ends the story", () => {
+    const store = createStore({ screen: "player", page: PAGE_COUNT - 1 });
+    store.nextPage();
+    expect(store.state.screen).toBe("end");
+  });
+
+  it("prev turns back, and page 0 is its floor", () => {
+    const store = createStore({ screen: "player", page: 5 });
+    store.prevPage();
+    expect(store.state.page).toBe(4);
+    store.prevPage();
+    store.prevPage();
+    store.prevPage();
+    store.prevPage();
+    expect(store.state.page).toBe(0);
+    store.prevPage();
+    expect(store.state.page).toBe(0); // the no-op: nothing to go back to
+  });
+
+  it("navigation is inert off the player and under overlays or an audio error", () => {
+    const onShelf = createStore({ screen: "shelf", page: 4 });
+    onShelf.nextPage();
+    expect(onShelf.state.page).toBe(4);
+
+    const choosing = createStore({ screen: "player", page: CHOICE_PAGE, choiceOpen: true });
+    choosing.prevPage();
+    expect(choosing.state.page).toBe(CHOICE_PAGE);
+    choosing.nextPage();
+    expect(choosing.state.choiceOpen).toBe(true);
+
+    const resuming = createStore({ screen: "player", page: 4, resumeOpen: true });
+    resuming.nextPage();
+    expect(resuming.state.page).toBe(4);
+
+    const errored = createStore({ screen: "player", page: 4, audioError: true });
+    errored.nextPage();
+    expect(errored.state.page).toBe(4);
+  });
+});
+
 describe("audio-error state (AI-367)", () => {
   it("audioError() marks the player errored; it is a no-op off the player", () => {
     const store = createStore();

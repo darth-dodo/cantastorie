@@ -746,6 +746,64 @@ button.presses:active {
   background: var(--moonlight, #f2d8a7);
 }
 
+/* Prev/next page — quiet sidekicks to the play-pause, hidden only where
+   there is nothing to go back to. The branch is never skippable: next on
+   the choice page hands the child the two cards instead of turning. */
+.nav {
+  position: absolute;
+  bottom: calc(max(50px, env(safe-area-inset-bottom)) + 22px);
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(243, 233, 218, 0.09);
+  box-shadow: inset 0 0 0 1.5px rgba(243, 233, 218, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--settle);
+}
+
+.nav:active {
+  transform: scale(0.92);
+}
+
+.nav.disabled {
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .nav:hover {
+    background: rgba(243, 233, 218, 0.16);
+    box-shadow: inset 0 0 0 1.5px rgba(243, 233, 218, 0.3);
+  }
+}
+
+.nav-prev {
+  left: calc(50% - 184px);
+}
+
+.nav-next {
+  left: calc(50% + 88px);
+}
+
+.chevron-left {
+  width: 0;
+  height: 0;
+  border-top: 22px solid transparent;
+  border-bottom: 22px solid transparent;
+  border-right: 30px solid var(--moonlight, #f2d8a7);
+  margin-left: -6px;
+}
+
+.chevron-right {
+  width: 0;
+  height: 0;
+  border-top: 22px solid transparent;
+  border-bottom: 22px solid transparent;
+  border-left: 30px solid var(--moonlight, #f2d8a7);
+  margin-right: -6px;
+}
+
 /* Page washes — one watercolor night per page of "La barchetta e la luna" */
 .wash-p0 {
   background:
