@@ -31,6 +31,7 @@ LANGUAGE_NAMES: dict[Language, str] = {
     "en": "English",
     "el": "Greek",
     "de": "German",
+    "bg": "Bulgarian",
 }
 
 # The content rules from docs/product.md "Content Rules", verbatim as limits.
