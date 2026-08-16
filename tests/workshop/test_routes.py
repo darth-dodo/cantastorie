@@ -3,7 +3,7 @@
 The operator retires the terminal: start a run, watch progress, inspect the
 staged story, publish — all in the browser. Access is a Clerk session (the
 `__session` cookie holding a verified JWT); with Clerk unconfigured the routes
-do not exist. A signed-in non-operator sees a "coming soon" page. The tests
+do not exist. A signed-in non-operator is redirected to /parent. The tests
 drive the real RunManager against a moto bucket with an injected generation
 seam and mint JWTs locally against a mock JWKS — zero network, no mocking of
 the code under test.
@@ -163,7 +163,7 @@ def test_operator_session_sees_the_dashboard(tmp_path: Path, s3: S3Client) -> No
     assert 'action="/workshop/runs"' in page.text
 
 
-def test_signed_in_non_operator_is_redirected_to_parent(tmp_path, s3):
+def test_signed_in_non_operator_is_redirected_to_parent(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.sign_in({"sub": "user_parent", "family_token": "fam_1"})
     resp = harness.client.get("/workshop", follow_redirects=False)
@@ -171,7 +171,7 @@ def test_signed_in_non_operator_is_redirected_to_parent(tmp_path, s3):
     assert resp.headers["location"] == "/parent"
 
 
-def test_the_coming_soon_template_is_gone(tmp_path, s3):
+def test_the_coming_soon_template_is_gone(tmp_path: Path, s3: S3Client) -> None:
     assert not (TEMPLATES_DIR / "workshop" / "coming_soon.html").exists()
 
 
