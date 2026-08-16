@@ -523,3 +523,35 @@ def test_verify_raises_403_for_disabled(monkeypatch: pytest.MonkeyPatch) -> None
     with pytest.raises(HTTPException) as exc:
         asyncio.run(verify_clerk_session(_request_with_cookie(token), clerk_settings()))
     assert exc.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# require_parent_candidate — operator flag (AI-430)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_candidate_carries_operator_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    monkeypatch.setattr(_jwks_state, "keys", None)
+    monkeypatch.setattr(_jwks_state, "fetched_at", 0.0)
+    # valid_payload does not accept role; inject it into the payload dict directly.
+    payload = valid_payload(sub="user_op")
+    payload["role"] = "operator"
+    token = mint_token(key, payload)
+    ctx = await require_parent_candidate(_request_with_cookie(token), clerk_settings())
+    assert ctx.is_operator is True
+
+
+@pytest.mark.anyio
+async def test_candidate_without_operator_role_is_not_operator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(key))
+    monkeypatch.setattr(_jwks_state, "keys", None)
+    monkeypatch.setattr(_jwks_state, "fetched_at", 0.0)
+    token = mint_token(key, valid_payload(sub="user_p", family_token="fam_1"))
+    ctx = await require_parent_candidate(_request_with_cookie(token), clerk_settings())
+    assert ctx.is_operator is False
