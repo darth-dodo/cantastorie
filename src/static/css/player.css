@@ -751,9 +751,9 @@ button.presses:active {
    the choice page hands the child the two cards instead of turning. */
 .nav {
   position: absolute;
-  bottom: calc(max(50px, env(safe-area-inset-bottom)) + 22px);
-  width: 96px;
-  height: 96px;
+  bottom: calc(max(50px, env(safe-area-inset-bottom)) + 30px);
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   background: rgba(243, 233, 218, 0.09);
   box-shadow: inset 0 0 0 1.5px rgba(243, 233, 218, 0.18);
@@ -779,7 +779,7 @@ button.presses:active {
 }
 
 .nav-prev {
-  left: calc(50% - 184px);
+  left: calc(50% - 168px);
 }
 
 .nav-next {
@@ -789,19 +789,19 @@ button.presses:active {
 .chevron-left {
   width: 0;
   height: 0;
-  border-top: 22px solid transparent;
-  border-bottom: 22px solid transparent;
-  border-right: 30px solid var(--moonlight, #f2d8a7);
-  margin-left: -6px;
+  border-top: 18px solid transparent;
+  border-bottom: 18px solid transparent;
+  border-right: 25px solid var(--moonlight, #f2d8a7);
+  margin-left: -5px;
 }
 
 .chevron-right {
   width: 0;
   height: 0;
-  border-top: 22px solid transparent;
-  border-bottom: 22px solid transparent;
-  border-left: 30px solid var(--moonlight, #f2d8a7);
-  margin-right: -6px;
+  border-top: 18px solid transparent;
+  border-bottom: 18px solid transparent;
+  border-left: 25px solid var(--moonlight, #f2d8a7);
+  margin-right: -5px;
 }
 
 /* Page washes — one watercolor night per page of "La barchetta e la luna" */
