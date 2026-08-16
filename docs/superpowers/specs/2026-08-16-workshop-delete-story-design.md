@@ -38,7 +38,7 @@ Two gaps remain:
   - `approved`: label **"× Remove from shelf"** (posting to the same `/workshop/staged/{id}/delete` route).
   - all other settled states: existing "× Delete this story".
   - Keeps the armed two-tap `data-delete-btn` pattern — no one-tap destructive buttons.
-- `src/templates/workshop/_progress.html` — for `approved` runs, render story links (the same story pills as the staged review pills, but linking to `/workshop/staged/{story_id}?run={id}`) so operatored approved stories are reachable. Currently approved runs show no story links.
+- `src/templates/workshop/_progress.html` — for `approved` runs, render story links (the same story pills as the staged review pills, `data-testid="review-link"`, but linking to `/workshop/staged/{story_id}?run={id}`) so approved stories are reachable. Currently approved runs show no story links.
 
 ### Assets deleted for an approved story
 
