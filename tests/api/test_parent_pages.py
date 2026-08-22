@@ -42,11 +42,16 @@ def _make_app(settings: Settings) -> FastAPI:
 def _signed_in_client(
     monkeypatch: pytest.MonkeyPatch,
     settings: Settings,
+    role: str | None = None,
     **payload_kwargs: Any,
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
-    token = mint_token(private_key, valid_payload(**payload_kwargs))
+    payload = valid_payload(**payload_kwargs)
+    # valid_payload does not accept role; inject it here if provided.
+    if role is not None:
+        payload["role"] = role
+    token = mint_token(private_key, payload)
     client = TestClient(_make_app(settings))
     client.cookies.set(SESSION_COOKIE, token)
     return client
@@ -253,6 +258,15 @@ def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:
     # this test just pins the default base_url in the template.
     source = (workshop_module.TEMPLATES_DIR / "workshop" / "_progress.html").read_text()
     assert 'base_url | default("/workshop/runs")' in source.replace("'", '"')
+
+
+def test_operator_is_redirected_from_parent_to_workshop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _signed_in_client(monkeypatch, clerk_settings(), role="operator")
+    resp = client.get("/parent", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/workshop"
 
 
 def test_clerk_loads_nowhere_in_the_child_player() -> None:

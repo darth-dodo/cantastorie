@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
+from src.api.routes._nav import home_path
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
     get_run_manager,
@@ -105,8 +106,11 @@ async def parent_home(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
     manager: Manager,
-) -> HTMLResponse:
+) -> Response:
     ctx = await _page_identity(request, settings)
+    if ctx is not None and ctx.is_operator:
+        # Superusers author in the workshop — they have no parent view here.
+        return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
         "fapi_host": _fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),

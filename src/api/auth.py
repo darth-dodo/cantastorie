@@ -23,6 +23,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request
 
 from src.config import Settings, get_settings
+from src.workshop.scope import OPERATOR_ROLE
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -144,6 +145,7 @@ class CandidateContext:
 
     user_id: str
     family_token: str | None
+    is_operator: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +222,8 @@ async def require_parent_candidate(
     user_id = str(payload["sub"])
     raw_family = payload.get("family_token")
     family_token = raw_family if isinstance(raw_family, str) and raw_family else None
-    return CandidateContext(user_id=user_id, family_token=family_token)
+    is_operator = payload.get("role") == OPERATOR_ROLE
+    return CandidateContext(user_id=user_id, family_token=family_token, is_operator=is_operator)
 
 
 async def require_parent(

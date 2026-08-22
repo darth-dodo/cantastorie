@@ -28,6 +28,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.api.auth import verify_clerk_session
+from src.api.routes._nav import home_path
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
@@ -108,12 +109,6 @@ def _sign_in_page(request: Request, settings: Settings, status_code: int = 200) 
     )
 
 
-def _coming_soon(request: Request, settings: Settings) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request, "workshop/coming_soon.html", _base_ctx(settings), status_code=403
-    )
-
-
 def _to_login() -> RedirectResponse:
     return RedirectResponse("/workshop", status_code=303)
 
@@ -185,12 +180,13 @@ def _rel_time(dt: datetime) -> str:
 
 
 @router.get("", response_class=HTMLResponse)
-async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> HTMLResponse:
+async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> Response:
     scope = await _scope(request, settings)
     if scope is None:
         return _sign_in_page(request, settings)
     if not scope.is_operator:
-        return _coming_soon(request, settings)
+        # No dead-end: a signed-in parent belongs in the parent area.
+        return RedirectResponse(home_path(scope.is_operator), status_code=303)
     manager.reap_stale()  # retire zombie runs before the bench renders them (AI-417)
     runs = sorted(manager.store.list_runs(), key=lambda r: r.created_at, reverse=True)
     step_order = ["write", "revise", "safety", "narrate", "illustrate", "assemble"]
@@ -250,12 +246,12 @@ async def start_run(
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
 async def run_page(
     request: Request, settings: WorkshopSettings, manager: Manager, run_id: str
-) -> HTMLResponse:
+) -> Response:
     scope = await _scope(request, settings)
     if scope is None:
         return _sign_in_page(request, settings)
     if not scope.is_operator:
-        return _coming_soon(request, settings)
+        return RedirectResponse(home_path(scope.is_operator), status_code=303)
     record = _record_or_404(manager, scope, run_id)
     staged_stories = _staged_story_summaries(record.story_ids, settings)
     return templates.TemplateResponse(
@@ -414,12 +410,12 @@ async def delete_staged_story_route(
 @router.get("/staged/{story_id}", response_class=HTMLResponse)
 async def staged_story(
     request: Request, settings: WorkshopSettings, manager: Manager, story_id: str
-) -> HTMLResponse:
+) -> Response:
     scope = await _scope(request, settings)
     if scope is None:
         return _sign_in_page(request, settings)
     if not scope.is_operator:
-        return _coming_soon(request, settings)
+        return RedirectResponse(home_path(scope.is_operator), status_code=303)
     client = _build_client(settings)
     bucket = settings.pending_bucket
     try:
