@@ -57,9 +57,9 @@
     </div>
   {% endif %}
 
-  {% if record and record.state not in live and record.state not in ["approved"] %}
+  {% if record and record.state not in live %}
     <form method="post" action="/workshop/staged/{{ story.id }}/delete" class="ws-delete-story-row">
-      <button type="submit" class="ws-delete-story-link" data-delete-btn>× Delete this story</button>
+      <button type="submit" class="ws-delete-story-link" data-delete-btn>{% if record.state == "approved" %}× Remove from shelf{% else %}× Delete this story{% endif %}</button>
     </form>
   {% endif %}
 </div>

@@ -392,10 +392,12 @@ async def delete_staged_story_route(
     if not scope.is_operator:
         raise HTTPException(status_code=403)
     record = _story_record_or_404(manager, story_id)
-    if record.state in LIVE_STATES or record.state == "approved":
+    if record.state in LIVE_STATES:
         raise HTTPException(status_code=400)
-    if record.state not in {"staged", "failed"}:
+    if record.state not in {"staged", "failed", "rejected", "approved"}:
         raise HTTPException(status_code=400)
+    if record.state == "approved":
+        unpublish_story(story_id, settings)
     delete_staged_story(story_id, settings)
     shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
     updated = record.model_copy(

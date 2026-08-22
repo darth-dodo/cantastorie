@@ -63,10 +63,10 @@
     {% endif %}
 
     {% if is_operator %}
-      {% if record.state == "staged" and staged_stories %}
+      {% if staged_stories %}
         <div class="ws-review-pills">
           {% for story in staged_stories %}
-            <a href="/workshop/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
+            <a href="/workshop/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">{% if record.state == "approved" %}On the shelf — {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}{% else %}Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}{% endif %}</a>
           {% endfor %}
         </div>
       {% endif %}
