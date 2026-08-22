@@ -320,6 +320,87 @@ describe("Choice pages stay possible (playback ignores them; AI-370 owns the ove
   });
 });
 
+describe("Branch following — the tapped option extends the played path (AI-428)", () => {
+  // A branching fixture: p1 -> p2 -> p3 (choice: arm A begins at a1, arm B
+  // at b1). Each arm is two linear pages. Mirrors loadStory's playable shape
+  // (id/next_page/choice ride along) and its pagesFrom walk.
+  function branchingStory() {
+    const page = (id, next_page, choice = null) => ({
+      id,
+      text: id,
+      audioUrl: `/s/${id}.wav`,
+      imageUrl: `/s/${id}.webp`,
+      next_page,
+      choice,
+    });
+    const allPages = [
+      page("p1", "p2"),
+      page("p2", "p3"),
+      page("p3", null, { options: [{ next_page: "a1" }, { next_page: "b1" }] }),
+      page("a1", "a2"),
+      page("a2", null),
+      page("b1", "b2"),
+      page("b2", null),
+    ];
+    const byId = new Map(allPages.map((p) => [p.id, p]));
+    const pagesFrom = (pageId) => {
+      const ordered = [];
+      const seen = new Set();
+      let current = byId.get(pageId);
+      while (current && !seen.has(current.id)) {
+        ordered.push(current);
+        seen.add(current.id);
+        current = current.next_page ? byId.get(current.next_page) : null;
+      }
+      return ordered;
+    };
+    // The heard path halts at the choice page (p3.next_page is null).
+    return { id: "branchy", title: "Branchy", pages: pagesFrom("p1"), allPages, pagesFrom };
+  }
+
+  it("extendPath appends the arm and narration turns into it", async () => {
+    const loaded = branchingStory();
+    await playback.openStory(loaded);
+    engine.endPrompt();
+
+    engine.endNarration(); // p1 -> p2
+    engine.endNarration(); // p2 -> p3 (the choice page)
+    engine.endNarration(); // p3 audio ends -> the choice opens, no turn
+    expect(store.state).toMatchObject({ page: 2, choiceOpen: true });
+
+    // The main.js wiring order: extend the played path, THEN choose. choose()
+    // advances page to choicePage + 1, which must already be the arm's first page.
+    playback.extendPath(loaded.pagesFrom("a1"));
+    store.choose(0);
+
+    // The next narrated page is the arm's first page, and it carries on.
+    expect(narrations().at(-1)).toBe("/s/a1.wav");
+    engine.endNarration();
+    expect(narrations().at(-1)).toBe("/s/a2.wav");
+  });
+
+  it("extending recomputes the next choicePage for a later branch", async () => {
+    const loaded = branchingStory();
+    // Make arm A itself branch again: a2 -> choice.
+    const a2 = loaded.allPages.find((p) => p.id === "a2");
+    a2.next_page = null;
+    a2.choice = { options: [{ next_page: "b1" }, { next_page: "b2" }] };
+    await playback.openStory(loaded);
+    engine.endPrompt();
+
+    engine.endNarration(); // p1 -> p2
+    engine.endNarration(); // p2 -> p3
+    engine.endNarration(); // p3 -> choice opens
+    playback.extendPath(loaded.pagesFrom("a1"));
+    store.choose(0); // narrates a1 (index 3)
+    expect(store.state.choicePage).toBe(4); // a2 is now the next choice page
+
+    engine.endNarration(); // a1 -> a2 (the new choice page narrates)
+    engine.endNarration(); // a2 audio ends -> the choice opens again, no turn
+    expect(store.state).toMatchObject({ page: 4, choiceOpen: true });
+  });
+});
+
 describe("Race interleavings (PR #8 review)", () => {
   it("a double-tapped cover speaks one start prompt sequence and starts page 1 exactly once", async () => {
     // Given an excited double-tap: both openStory calls run...

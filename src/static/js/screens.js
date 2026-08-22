@@ -314,12 +314,12 @@ export function updatePlayer(screen, state, view = mockView) {
   screen.querySelector(".nav-prev").classList.toggle("disabled", state.page === 0);
 }
 
-export function buildChoiceOverlay(store) {
+export function buildChoiceOverlay(store, onChoose) {
   const overlay = el("div", "overlay");
   const prompt = el("div", "prompt");
   prompt.textContent = story.choice.prompt;
   const options = el("div", "options");
-  story.choice.options.forEach(({ label, wash }) => {
+  story.choice.options.forEach(({ label, wash }, index) => {
     const option = el("button", "option", { "aria-label": label });
     const card = el("div", `choice-card ${wash}`);
     const caption = el("span");
@@ -328,7 +328,9 @@ export function buildChoiceOverlay(store) {
     const pill = el("div", "pill");
     pill.textContent = label;
     option.append(card, pill);
-    option.addEventListener("click", () => store.choose());
+    // The tapped option follows its branch: main.js's onChoose extends the
+    // played path, then advances. Without it, the store still turns the page.
+    option.addEventListener("click", () => (onChoose ? onChoose(index) : store.choose(index)));
     options.appendChild(option);
   });
   overlay.append(prompt, options);

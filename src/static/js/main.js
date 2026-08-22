@@ -200,6 +200,21 @@ export async function init(
     render(store.state);
   }
 
+  // The next_page the tapped branch option leads to. The choice sits on the
+  // current choicePage of the (possibly already-extended) played path.
+  function optionTarget(i) {
+    return activeStory.pages[store.state.choicePage].choice.options[i].next_page;
+  }
+
+  // A branch option was tapped: extend the played path with the chosen arm,
+  // THEN advance. Order matters — store.choose() moves page to choicePage + 1,
+  // which must already be the arm's first page. A story-less cover (the page
+  // timer's mock choice) just records the pick.
+  function onChoose(i) {
+    if (activeStory) playback.extendPath(activeStory.pagesFrom(optionTarget(i)));
+    store.choose(i);
+  }
+
   function render(state) {
     save(state);
 
@@ -248,7 +263,7 @@ export async function init(
       } else if (state.screen === "player") {
         playerScreen = buildPlayer(store, view);
         app.appendChild(playerScreen);
-        if (state.choiceOpen) playerScreen.appendChild(buildChoiceOverlay(store));
+        if (state.choiceOpen) playerScreen.appendChild(buildChoiceOverlay(store, onChoose));
         if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store));
         if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {

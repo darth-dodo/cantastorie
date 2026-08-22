@@ -100,6 +100,23 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
   return {
     hasStory: () => story !== null,
 
+    // A branch option was tapped (AI-428): append the chosen arm's pages to
+    // the played path and recompute the next choicePage. main.js calls this
+    // BEFORE store.choose() — choose() advances page to choicePage + 1, which
+    // must already be the arm's first page.
+    extendPath(pages) {
+      if (!story) return;
+      const start = story.pages.length; // the arm's first page lands here
+      story.pages = [...story.pages, ...pages];
+      // The next branch on the extended path: the first choice page at or
+      // after the arm's start — same findIndex shape as the initial load.
+      const relative = story.pages.slice(start).findIndex((page) => page.choice);
+      store.extendShape({
+        pageCount: story.pages.length,
+        choicePage: relative === -1 ? null : start + relative,
+      });
+    },
+
     // A cover without a published story.json: the page timer stands in.
     clearStory() {
       story = null;
