@@ -425,7 +425,7 @@ def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
     assert reloaded.story_ids == []
 
 
-@pytest.mark.parametrize("state", ["queued", "running", "approved"])
+@pytest.mark.parametrize("state", ["queued", "running"])
 def test_deleting_a_story_from_a_protected_run_is_rejected(
     tmp_path: Path, s3: S3Client, state: str
 ) -> None:
@@ -448,6 +448,75 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
     assert response.status_code == 400
     assert _staged_keys(s3, story_id)
     assert harness.store.load("operator", record.id) == protected
+
+
+def test_deleting_an_approved_story_unpublishes_cleans_artifacts_and_updates_run(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    content_dir = harness.settings.content_dir / story_id
+    content_dir.mkdir(parents=True)
+    (content_dir / "checkpoint.json").write_text("checkpoint")
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+    unpublished: list[str] = []
+    monkeypatch.setattr(
+        "src.api.routes.workshop.unpublish_story",
+        lambda story_id, settings: unpublished.append(story_id),
+    )
+
+    response = harness.client.post(
+        f"/workshop/staged/{story_id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert unpublished == [story_id]
+    assert _staged_keys(s3, story_id) == []
+    assert not content_dir.exists()
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "approved"
+    assert reloaded.story_ids == []
+
+
+def test_deleting_a_rejected_story_cleans_artifacts_without_unpublish(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    content_dir = harness.settings.content_dir / story_id
+    content_dir.mkdir(parents=True)
+    (content_dir / "checkpoint.json").write_text("checkpoint")
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    rejected = record.advance("running").advance("staged", story_ids=[story_id]).advance("rejected")
+    harness.store.save(rejected)
+    unpublished: list[str] = []
+    monkeypatch.setattr(
+        "src.api.routes.workshop.unpublish_story",
+        lambda story_id, settings: unpublished.append(story_id),
+    )
+
+    response = harness.client.post(
+        f"/workshop/staged/{story_id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert unpublished == []
+    assert _staged_keys(s3, story_id) == []
+    assert not content_dir.exists()
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.story_ids == []
 
 
 def test_deleting_an_unknown_staged_story_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
