@@ -321,6 +321,23 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
     assert "Delete this story" in page.text
 
 
+def test_the_staged_story_page_shows_remove_from_shelf_when_approved(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+
+    page = harness.client.get(f"/workshop/staged/{story_id}?run={record.id}")
+
+    assert f'action="/workshop/staged/{story_id}/delete"' in page.text
+    assert "data-delete-btn" in page.text
+    assert "Remove from shelf" in page.text
+
+
 def test_staged_assets_are_served_and_traversal_is_blocked(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.sign_in()
