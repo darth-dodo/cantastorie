@@ -41,7 +41,29 @@ export async function loadStory(url, fetchFn) {
     imageUrl: page.image ? base + page.image : null,
     timings: page.audio?.timings ?? [],
     choice: page.choice ?? null,
+    // next_page rides along so pagesFrom can follow the graph without the raw JSON.
+    next_page: page.next_page ?? null,
   });
+
+  // Every page, on- and off-path — the whole-story prefetch banks both
+  // branch options before a choice, because children tap instantly.
+  const allPages = data.pages.map(toPlayable);
+  const byId = new Map(allPages.map((page) => [page.id, page]));
+
+  // The ordered heard path walking next_page from any page, halting at a
+  // choice page (whose next_page is null) — mirrors orderPages' loop shape.
+  // Tasks 10-12 call this to play a chosen branch arm.
+  const pagesFrom = (pageId) => {
+    const ordered = [];
+    const seen = new Set();
+    let current = byId.get(pageId);
+    while (current && !seen.has(current.id)) {
+      ordered.push(current);
+      seen.add(current.id);
+      current = current.next_page ? byId.get(current.next_page) : null;
+    }
+    return ordered;
+  };
 
   return {
     id: data.id,
@@ -50,9 +72,8 @@ export async function loadStory(url, fetchFn) {
     shape: data.shape,
     gloss: data.gloss ?? null,
     pages: orderPages(data).map(toPlayable),
-    // Every page, on- and off-path — the whole-story prefetch banks both
-    // branch options before a choice, because children tap instantly.
-    allPages: data.pages.map(toPlayable),
+    allPages,
+    pagesFrom,
   };
 }
 

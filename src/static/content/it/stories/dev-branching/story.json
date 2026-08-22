@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "id": "dev-branching",
+  "language": "it",
+  "title": "Il bivio della luna",
+  "theme": "the_sleepy_sea",
+  "shape": "branching",
+  "pages": [
+    {
+      "id": "p1",
+      "text": "la barchetta Nina esce dal porto della sera",
+      "audio": {
+        "file": "p1.2cbfac47.wav",
+        "timings": [
+          { "word": "la", "start_s": 0.0, "end_s": 0.15 },
+          { "word": "barchetta", "start_s": 0.15, "end_s": 0.3 },
+          { "word": "Nina", "start_s": 0.3, "end_s": 0.45 },
+          { "word": "esce", "start_s": 0.45, "end_s": 0.6 },
+          { "word": "dal", "start_s": 0.6, "end_s": 0.75 },
+          { "word": "porto", "start_s": 0.75, "end_s": 0.9 },
+          { "word": "della", "start_s": 0.9, "end_s": 1.05 },
+          { "word": "sera", "start_s": 1.05, "end_s": 1.2 }
+        ]
+      },
+      "image": "p1.c90cff65.webp",
+      "next_page": "p2",
+      "choice": null
+    },
+    {
+      "id": "p2",
+      "text": "l'acqua fa shh, shh",
+      "audio": {
+        "file": "p2.58aac2bb.wav",
+        "timings": [
+          { "word": "l'acqua", "start_s": 0.0, "end_s": 0.3 },
+          { "word": "fa", "start_s": 0.3, "end_s": 0.6 },
+          { "word": "shh,", "start_s": 0.6, "end_s": 0.9 },
+          { "word": "shh", "start_s": 0.9, "end_s": 1.2 }
+        ]
+      },
+      "image": "p2.c90cff65.webp",
+      "next_page": "p3",
+      "choice": null
+    },
+    {
+      "id": "p3",
+      "text": "un gabbiano assonnato si posa sulla prua",
+      "audio": {
+        "file": "p3.6342aa9b.wav",
+        "timings": [
+          { "word": "un", "start_s": 0.0, "end_s": 0.171 },
+          { "word": "gabbiano", "start_s": 0.171, "end_s": 0.343 },
+          { "word": "assonnato", "start_s": 0.343, "end_s": 0.514 },
+          { "word": "si", "start_s": 0.514, "end_s": 0.686 },
+          { "word": "posa", "start_s": 0.686, "end_s": 0.857 },
+          { "word": "sulla", "start_s": 0.857, "end_s": 1.029 },
+          { "word": "prua", "start_s": 1.029, "end_s": 1.2 }
+        ]
+      },
+      "image": "p3.c90cff65.webp",
+      "next_page": "p4",
+      "choice": null
+    },
+    {
+      "id": "p4",
+      "text": "il faro fa buonanotte: uno, due",
+      "audio": {
+        "file": "p4.5e5dada1.wav",
+        "timings": [
+          { "word": "il", "start_s": 0.0, "end_s": 0.2 },
+          { "word": "faro", "start_s": 0.2, "end_s": 0.4 },
+          { "word": "fa", "start_s": 0.4, "end_s": 0.6 },
+          { "word": "buonanotte:", "start_s": 0.6, "end_s": 0.8 },
+          { "word": "uno,", "start_s": 0.8, "end_s": 1.0 },
+          { "word": "due", "start_s": 1.0, "end_s": 1.2 }
+        ]
+      },
+      "image": "p4.c90cff65.webp",
+      "next_page": "p5",
+      "choice": null
+    },
+    {
+      "id": "p5",
+      "text": "Nina arriva dove il mare si divide in due",
+      "audio": {
+        "file": "p5.f166c374.wav",
+        "timings": [
+          { "word": "Nina", "start_s": 0.0, "end_s": 0.24 },
+          { "word": "arriva", "start_s": 0.24, "end_s": 0.48 },
+          { "word": "dove", "start_s": 0.48, "end_s": 0.72 },
+          { "word": "il", "start_s": 0.72, "end_s": 0.84 },
+          { "word": "mare", "start_s": 0.84, "end_s": 0.96 },
+          { "word": "si", "start_s": 0.96, "end_s": 1.08 },
+          { "word": "divide", "start_s": 1.08, "end_s": 1.2 }
+        ]
+      },
+      "image": "p5.c90cff65.webp",
+      "next_page": "p6",
+      "choice": null
+    },
+    {
+      "id": "p6",
+      "text": "quale strada prende Nina?",
+      "audio": {
+        "file": "p6.121edc38.wav",
+        "timings": [
+          { "word": "quale", "start_s": 0.0, "end_s": 0.3 },
+          { "word": "strada", "start_s": 0.3, "end_s": 0.6 },
+          { "word": "prende", "start_s": 0.6, "end_s": 0.9 },
+          { "word": "Nina?", "start_s": 0.9, "end_s": 1.2 }
+        ]
+      },
+      "image": "p6.c90cff65.webp",
+      "next_page": null,
+      "choice": {
+        "prompt": "quale strada prende Nina?",
+        "options": [
+          {
+            "label": "il sentiero d'argento della luna",
+            "card_image": null,
+            "audio": null,
+            "next_page": "a1"
+          },
+          {
+            "label": "la baia buia dei gabbiani",
+            "card_image": null,
+            "audio": null,
+            "next_page": "b1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "a1",
+      "text": "la luna posa un sentiero d'argento sul mare",
+      "audio": {
+        "file": "p7.6015e6d9.wav",
+        "timings": [
+          { "word": "la", "start_s": 0.0, "end_s": 0.2 },
+          { "word": "luna", "start_s": 0.2, "end_s": 0.4 },
+          { "word": "posa", "start_s": 0.4, "end_s": 0.6 },
+          { "word": "un", "start_s": 0.6, "end_s": 0.8 },
+          { "word": "sentiero", "start_s": 0.8, "end_s": 1.0 },
+          { "word": "d'argento", "start_s": 1.0, "end_s": 1.2 }
+        ]
+      },
+      "image": "p7.c90cff65.webp",
+      "next_page": "a2",
+      "choice": null
+    },
+    {
+      "id": "a2",
+      "text": "Nina lo percorre, piano piano",
+      "audio": {
+        "file": "p8.8ebb418c.wav",
+        "timings": [
+          { "word": "Nina", "start_s": 0.0, "end_s": 0.3 },
+          { "word": "lo", "start_s": 0.3, "end_s": 0.6 },
+          { "word": "percorre,", "start_s": 0.6, "end_s": 0.9 },
+          { "word": "piano", "start_s": 0.9, "end_s": 1.05 },
+          { "word": "piano", "start_s": 1.05, "end_s": 1.2 }
+        ]
+      },
+      "image": "p8.c90cff65.webp",
+      "next_page": "a3",
+      "choice": null
+    },
+    {
+      "id": "a3",
+      "text": "le stelle contano fino a tre",
+      "audio": {
+        "file": "p1.2cbfac47.wav",
+        "timings": [
+          { "word": "le", "start_s": 0.0, "end_s": 0.24 },
+          { "word": "stelle", "start_s": 0.24, "end_s": 0.48 },
+          { "word": "contano", "start_s": 0.48, "end_s": 0.72 },
+          { "word": "fino", "start_s": 0.72, "end_s": 0.96 },
+          { "word": "a", "start_s": 0.96, "end_s": 1.08 },
+          { "word": "tre", "start_s": 1.08, "end_s": 1.2 }
+        ]
+      },
+      "image": "p1.c90cff65.webp",
+      "next_page": "a4",
+      "choice": null
+    },
+    {
+      "id": "a4",
+      "text": "Nina chiude gli occhi sull'argento; l'acqua dice shh",
+      "audio": {
+        "file": "p2.58aac2bb.wav",
+        "timings": [
+          { "word": "Nina", "start_s": 0.0, "end_s": 0.24 },
+          { "word": "chiude", "start_s": 0.24, "end_s": 0.48 },
+          { "word": "gli", "start_s": 0.48, "end_s": 0.6 },
+          { "word": "occhi", "start_s": 0.6, "end_s": 0.84 },
+          { "word": "l'acqua", "start_s": 0.84, "end_s": 1.02 },
+          { "word": "dice", "start_s": 1.02, "end_s": 1.1 },
+          { "word": "shh", "start_s": 1.1, "end_s": 1.2 }
+        ]
+      },
+      "image": "p2.c90cff65.webp",
+      "next_page": null,
+      "choice": null
+    },
+    {
+      "id": "b1",
+      "text": "la baia buia culla i gabbiani addormentati",
+      "audio": {
+        "file": "p3.6342aa9b.wav",
+        "timings": [
+          { "word": "la", "start_s": 0.0, "end_s": 0.2 },
+          { "word": "baia", "start_s": 0.2, "end_s": 0.4 },
+          { "word": "buia", "start_s": 0.4, "end_s": 0.6 },
+          { "word": "culla", "start_s": 0.6, "end_s": 0.8 },
+          { "word": "i", "start_s": 0.8, "end_s": 0.9 },
+          { "word": "gabbiani", "start_s": 0.9, "end_s": 1.2 }
+        ]
+      },
+      "image": "p3.c90cff65.webp",
+      "next_page": "b2",
+      "choice": null
+    },
+    {
+      "id": "b2",
+      "text": "Nina entra piano nell'ombra tranquilla",
+      "audio": {
+        "file": "p4.5e5dada1.wav",
+        "timings": [
+          { "word": "Nina", "start_s": 0.0, "end_s": 0.24 },
+          { "word": "entra", "start_s": 0.24, "end_s": 0.48 },
+          { "word": "piano", "start_s": 0.48, "end_s": 0.72 },
+          { "word": "nell'ombra", "start_s": 0.72, "end_s": 0.96 },
+          { "word": "tranquilla", "start_s": 0.96, "end_s": 1.2 }
+        ]
+      },
+      "image": "p4.c90cff65.webp",
+      "next_page": "b3",
+      "choice": null
+    },
+    {
+      "id": "b3",
+      "text": "le onde contano fino a tre",
+      "audio": {
+        "file": "p5.f166c374.wav",
+        "timings": [
+          { "word": "le", "start_s": 0.0, "end_s": 0.24 },
+          { "word": "onde", "start_s": 0.24, "end_s": 0.48 },
+          { "word": "contano", "start_s": 0.48, "end_s": 0.72 },
+          { "word": "fino", "start_s": 0.72, "end_s": 0.96 },
+          { "word": "a", "start_s": 0.96, "end_s": 1.08 },
+          { "word": "tre", "start_s": 1.08, "end_s": 1.2 }
+        ]
+      },
+      "image": "p5.c90cff65.webp",
+      "next_page": "b4",
+      "choice": null
+    },
+    {
+      "id": "b4",
+      "text": "Nina si addormenta nella baia; l'acqua dice shh",
+      "audio": {
+        "file": "p6.121edc38.wav",
+        "timings": [
+          { "word": "Nina", "start_s": 0.0, "end_s": 0.2 },
+          { "word": "si", "start_s": 0.2, "end_s": 0.35 },
+          { "word": "addormenta", "start_s": 0.35, "end_s": 0.6 },
+          { "word": "nella", "start_s": 0.6, "end_s": 0.8 },
+          { "word": "baia", "start_s": 0.8, "end_s": 1.0 },
+          { "word": "shh", "start_s": 1.0, "end_s": 1.2 }
+        ]
+      },
+      "image": "p6.c90cff65.webp",
+      "next_page": null,
+      "choice": null
+    }
+  ],
+  "gloss": {
+    "bivio": "fork in the road",
+    "sentiero": "path",
+    "baia": "bay"
+  }
+}

@@ -10,6 +10,39 @@ const FIXTURE_URL = "/static/content/it/stories/la-barchetta-e-la-luna/story.jso
 
 const fetchFixture = async () => ({ ok: true, json: async () => fixture });
 
+// A tiny branching graph: shared prefix p1..p2, a choice on p2, and two arms
+// a1..a2 / b1..b2. The player does not enforce PAGE_COUNT, so short graphs
+// keep the path-walker tests readable.
+const branchingJson = {
+  schema_version: 1,
+  id: "dev-branching",
+  language: "it",
+  title: "dev branching",
+  shape: "branching",
+  pages: [
+    { id: "p1", text: "p1", audio: null, image: null, next_page: "p2", choice: null },
+    {
+      id: "p2",
+      text: "p2",
+      audio: null,
+      image: null,
+      next_page: null,
+      choice: {
+        prompt: "which way?",
+        options: [
+          { label: "a", card_image: null, audio: null, next_page: "a1" },
+          { label: "b", card_image: null, audio: null, next_page: "b1" },
+        ],
+      },
+    },
+    { id: "a1", text: "a1", audio: null, image: null, next_page: "a2", choice: null },
+    { id: "a2", text: "a2", audio: null, image: null, next_page: null, choice: null },
+    { id: "b1", text: "b1", audio: null, image: null, next_page: "b2", choice: null },
+    { id: "b2", text: "b2", audio: null, image: null, next_page: null, choice: null },
+  ],
+};
+const fetchBranching = async () => ({ ok: true, json: async () => branchingJson });
+
 describe("loading a story.json (schema pinned by AI-357)", () => {
   it("orders the heard path by following next_page links, not array order", () => {
     // Given the pages arrive shuffled on the wire...
@@ -44,5 +77,18 @@ describe("loading a story.json (schema pinned by AI-357)", () => {
 
     const notFound = async () => ({ ok: false, status: 404 });
     await expect(loadStory(FIXTURE_URL, notFound)).rejects.toThrow(/404/);
+  });
+});
+
+describe("walking a branch arm (AI-428)", () => {
+  it("pagesFrom walks an arm to its ending", async () => {
+    const loaded = await loadStory("/dev-branching/story.json", fetchBranching);
+    const arm = loaded.pagesFrom("b1");
+    expect(arm.map((p) => p.id)).toEqual(["b1", "b2"]);
+  });
+
+  it("ordered walk still halts at the choice page", async () => {
+    const loaded = await loadStory("/dev-branching/story.json", fetchBranching);
+    expect(loaded.pages.map((p) => p.id)).toEqual(["p1", "p2"]);
   });
 });
