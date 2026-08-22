@@ -49,25 +49,25 @@ Everything grown-up will sit behind a small, low-contrast corner of the shelf. T
 
 ### The Workshop
 
-Behind a separate operator secret, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. Runs execute in-process and survive restarts — the pipeline's filesystem checkpoints double as the resume mechanism, so a mid-run reboot re-buys zero API calls. The design is settled in [ADR-005](docs/adr/ADR-005-workshop-area.md).
+Behind Clerk operator sign-in, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. Runs execute in-process and survive restarts — the pipeline's filesystem checkpoints double as the resume mechanism, so a mid-run reboot re-buys zero API calls. The design is settled in [ADR-005](docs/adr/ADR-005-workshop-area.md).
 
 ### Reading Mode, Optional (planned)
 
 For reading-along parents and emerging readers, an optional text panel will show the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading. The pipeline's word-timing (Deepgram) and gloss steps ship with this slice.
 
-### Five Languages
+### Seven Languages
 
-Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, and German ride along. Stories are authored natively per language, never translated: an Italian story reaches for *biscotti della nonna*, a Spanish one for *magdalenas*.
+Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, German, Bulgarian, and Russian ride along. Stories are authored natively per language, never translated: an Italian story reaches for *biscotti della nonna*, a Spanish one for *magdalenas*.
 
 ### Truly Private, Parent-Approved
 
-No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (localStorage today, IndexedDB when real stories land) and will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — today that mints or links the family token; requesting and reviewing stories arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (IndexedDB) and will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — at `/parent` they sign in to request story packs and follow their runs; the review queue arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
 
 ---
 
 ## For Developers
 
-Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area (today a Clerk-verified provisioning endpoint; the parent pages arrive with Phase 2), and an operator workshop (`/workshop`) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area (`/parent` — Clerk sign-in, story-pack requests with daily run caps, and per-family pack status), and an operator workshop (`/workshop`, behind Clerk operator sign-in) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
 
 ### Tech Stack
 
@@ -144,9 +144,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Status
 
-The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and IndexedDB state. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — all behind a single env-var secret, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). Published stories are live on R2 with bucket-direct playback.
+The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and IndexedDB state. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story-pack requests under daily run caps, and per-family pack tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
 
-What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), parent-face pack requests and the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
+What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
 
 ---
 
