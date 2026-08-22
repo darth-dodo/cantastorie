@@ -619,6 +619,20 @@ def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
     assert harness.store.load("operator", record.id) is None
 
 
+def test_approved_run_progress_links_its_published_stories(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+
+    progress = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    assert f'href="/workshop/staged/{story_id}?run={record.id}"' in progress.text
+    assert 'data-testid="review-link"' in progress.text
+
+
 def test_deleting_a_run_does_not_remove_shared_story_artifacts(
     tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
