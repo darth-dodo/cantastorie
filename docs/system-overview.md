@@ -99,7 +99,7 @@ flowchart TD
 
 ### Player state (`store.js`)
 
-The store is a plain object + listeners — five booleans/numbers, not a framework. Screens are one axis; the two overlays are independent flags on top of the `player` screen.
+The store is a plain object + listeners — seven booleans/numbers, not a framework. Screens are one axis; the two overlays are independent flags on top of the `player` screen.
 
 ```mermaid
 stateDiagram-v2
@@ -226,7 +226,7 @@ Every step's inputs — text, style prompt, sheet hash, model ID — hash into t
 
 The operator face (AI-388, [ADR-005](adr/)): start pack runs, watch progress, review staged stories, publish. Server-rendered Jinja2 + HTMX — the settled non-child pattern — with a vanilla-JS `workshop.js` for widgets.
 
-**Access is Clerk sign-in, not a shared secret (AI-426, [ADR-005](adr/)).** With Clerk unconfigured, every `/workshop` route answers 404 — the workshop does not exist. Each request resolves a `WorkshopScope` from the verified Clerk session JWT (`src/workshop/scope.py`): an **operator** (`public_metadata.role == "operator"`) works globally across all families; any other signed-in user is a **parent** scoped to their own `family_token` and, until the parent workshop views ship, sees a "coming soon" 403. ClerkJS loads on every workshop page to keep the short-lived `__session` JWT refreshed so HTMX polling does not 401 a minute after sign-in.
+**Access is Clerk sign-in, not a shared secret (AI-426, [ADR-005](adr/)).** With Clerk unconfigured, every `/workshop` route answers 404 — the workshop does not exist. Each request resolves a `WorkshopScope` from the verified Clerk session JWT (`src/workshop/scope.py`): an **operator** (`public_metadata.role == "operator"`) works globally across all families; any other signed-in user is a **parent** scoped to their own `family_token`. Post-sign-in navigation is role-dispatched (AI-430): every authed entry point serves its own role and 303-redirects the other (`_nav.py` → `home_path`) — operators land on `/workshop`, parents on their own `/parent` surface — so neither role meets a dead end or a redirect loop. ClerkJS loads on every workshop and parent page to keep the short-lived `__session` JWT refreshed so HTMX polling does not 401 a minute after sign-in.
 
 **Runs execute in-process.** `RunManager` runs `generate_story` as an asyncio background task in the same FastAPI process — `asyncio.to_thread` for the sync pipeline code, an `asyncio.Lock` for one-run-at-a-time. There is no queue framework.
 

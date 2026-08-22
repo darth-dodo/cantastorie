@@ -61,7 +61,7 @@ Italian and Spanish are the flagships — deepest content, first through every q
 
 ### Truly Private, Parent-Approved
 
-No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (IndexedDB) and will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — at `/parent` they sign in to request story packs and follow their runs; the review queue arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (localStorage today, IndexedDB when real stories land) and will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — at `/parent` they sign in to request story packs and follow their runs; the review queue arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
 
 ---
 
@@ -80,16 +80,16 @@ Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a se
 | **LLMs, images & narration** | OpenRouter | One gateway, per-step model choice; narration on Gemini 3.1 Flash TTS, word timings via Deepgram (ElevenLabs retired — [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) |
 | **Asset storage** | Cloudflare R2 | Zero egress fees, access logs off, bucket-direct playback |
 | **Hosting** | Render (Docker, `render.yaml`) | Hermano's deploy precedent |
-| **Child persistence** | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
+| **Child persistence** | localStorage (IndexedDB next) | Progress, settings, lockout, family token — nothing server-side |
 | **Testing** | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows in a real browser |
 
 ### System Overview
 
-One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and IndexedDB. The authoring pipeline runs either as a CLI or in-process via the workshop, sharing the same step functions. The app and the pipeline share only `src/config.py` and the `story.json` contract.
+One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and local storage. The authoring pipeline runs either as a CLI or in-process via the workshop, sharing the same step functions. The app and the pipeline share only `src/config.py` and the `story.json` contract.
 
 ```mermaid
 graph LR
-    B["Browser (child)<br/>ES modules + Web Audio + IndexedDB"]
+    B["Browser (child)<br/>ES modules + Web Audio + local state"]
     R2["Cloudflare R2<br/>audio · images · manifests"]
     F["FastAPI on Render<br/>player · parent area · workshop"]
     P["Pipeline<br/>plain Python + Pydantic AI"]
@@ -144,7 +144,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Status
 
-The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and IndexedDB state. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story-pack requests under daily run caps, and per-family pack tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
+The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and resume-from-exact-position state persisted in the browser. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story-pack requests under daily run caps, and per-family pack tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
 
 What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
 

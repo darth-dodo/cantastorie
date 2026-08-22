@@ -102,7 +102,7 @@ src/
 │   │   ├── narrate.py      Gemini TTS via OpenRouter (pcm wrapped to WAV; timings stay empty until slice 6's Deepgram pass)
 │   │   ├── illustrate.py   Character sheet first, then pages against it
 │   │   ├── assemble.py     story.json assembly + validation
-│   │   └── gloss.py        (slice 6, not yet built) Word-to-English gloss maps (cheap model)
+    │   │   └── gloss.py        Word-to-English gloss maps (cheap model)
 │   ├── cache.py            Content-addressed artifact cache
 │   ├── content_rules.py    The nine content rules, shared by write and safety prompts
 │   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, GlossMap
@@ -140,7 +140,7 @@ A batch job, not an agent: linear steps, one bounded loop, artifacts on disk. Ea
 graph TD
     O["outline<br/>theme + language + shape"] --> W["write<br/>native-language authoring"]
     W --> S{"safety gate<br/>9 rules, temperature 0,<br/>different model family"}
-    S -- "all pass" --> G["gloss (slice 6, not yet built)<br/>word-to-English map"]
+    S -- "all pass" --> G["gloss<br/>word-to-English map"]
     S -- "any fail" --> RV["revise<br/>targeted rewrite"]
     RV --> S2{"safety gate again"}
     S2 -- "pass" --> G
@@ -175,7 +175,7 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 |------|-------------|------|
 | Write / revise | Strong authoring model | Content rules embedded in the prompt; authored natively per language, never translated |
 | Safety gate | **Different family** than the writer, temperature 0 | A shared writer/judge blind spot is the failure mode that matters; cross-family judging is one config line |
-| Glosses (slice 6, not yet built) | Cheap fast model | Mechanical contextual mapping |
+| Glosses | Cheap fast model | Mechanical contextual mapping |
 | Narrate | TTS model (Gemini 3.1 Flash TTS via OpenRouter, `google/gemini-3.1-flash-tts-preview`) | One house voice across all languages, pinned at the AI-366 bake-off; `pcm` output wrapped to WAV (Gemini rejects `mp3`); no timestamps (see [Narration / Audio](#narration--audio)) |
 | Illustrate | Image-capable model | Character sheet fed as reference to every page — chaining page-to-page compounds drift |
 
@@ -254,7 +254,7 @@ On cover tap, the player fetches every page's audio and image for the story (a f
 
 ## Narration / Audio
 
-Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across five languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
+Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across seven languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
 
 ### Provider: Gemini TTS defaults via OpenRouter; Voxtral cloning via Mistral; Deepgram alongside
 
@@ -297,14 +297,14 @@ Playback mechanics live in [The Player → The audio engine](#the-audio-engine):
 
 ## The Parent Area
 
-Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped so far:** the Clerk identity layer — `require_parent` JWT verification via JWKS and the `/parent/api/provision` mint-or-link endpoint. The gate, settings page, export/import, and the parent pages themselves are designed but not yet built; today language and theme settings live in the child-side settings overlay, ungated.
+Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision` mint-or-link) and the parent pages themselves (AI-411) — a sign-in home, story-pack requests under a daily run cap, and per-pack progress polling. The gate and export/import are designed but not yet built; language and theme settings live in child-side dropdowns on the shelf, ungated.
 
 - **The gate (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
 - **Settings**: language multi-select, reading mode toggle.
 - **Export/import (not yet built)**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
 - **Parent authentication**: parents sign in via **Clerk** (magic link / OAuth) — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted, implemented). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK, async fetch). One parent account = one family; the family token is minted or linked at first sign-in and lives in Clerk `public_metadata`. Approved packs will publish to `published/families/{family_token}/…` + a family overlay manifest. The child player stays account-free — no Clerk script, no cookies on any child path.
-- **The workshop is Clerk-gated, and the parent area is a scope of it (AI-426)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition and publishing to a family overlay. The parent area is therefore not a separate `/parent` surface but a scope of the one `/workshop` router and template set — `WorkshopScope` decides visibility and publish target. With Clerk unconfigured, `/workshop` answers 404. ClerkJS loads on every workshop page to keep the `__session` JWT refreshed for HTMX polling. Until the parent views ship, a signed-in non-operator gets a "coming soon" 403.
-- **Phase 2** adds the parent pages (sign-in, pack request form, my-packs), the dashboard (unpublish toggles, kill switch), and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
+- **The workshop is Clerk-gated; the parent area is its sibling surface (AI-426, AI-430)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition. Parents work in their own `/parent` surface — sign-in, pack requests, run tracking — while operators author in `/workshop`; shared post-sign-in navigation (`src/api/routes/_nav.py`) dispatches each role to its home and 303-redirects the other, so neither role hits a dead end or a redirect loop. With Clerk unconfigured, both areas answer 404. ClerkJS loads on every workshop and parent page to keep the `__session` JWT refreshed for HTMX polling.
+- **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
 
 ---
 
