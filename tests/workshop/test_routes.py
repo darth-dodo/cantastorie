@@ -233,7 +233,7 @@ def test_starting_a_branching_run_threads_the_shape_to_the_manager(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post(
         "/workshop/runs",
@@ -248,7 +248,7 @@ def test_starting_a_branching_run_threads_the_shape_to_the_manager(
 
 def test_starting_a_run_defaults_to_a_linear_shape(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     harness.client.post(
         "/workshop/runs",
@@ -262,7 +262,7 @@ def test_starting_a_run_defaults_to_a_linear_shape(tmp_path: Path, s3: S3Client)
 
 def test_starting_a_run_with_an_unknown_shape_is_rejected(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
-    harness.login()
+    harness.sign_in()
 
     response = harness.client.post(
         "/workshop/runs",
