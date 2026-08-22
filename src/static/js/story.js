@@ -34,13 +34,23 @@ export async function loadStory(url, fetchFn) {
   }
 
   const base = url.slice(0, url.lastIndexOf("/") + 1);
+  // A choice option's card image and label audio resolve against the story
+  // base exactly like a page's image/audio.file. The rest of the option
+  // (label, next_page) rides along untouched.
+  const toPlayableOption = (option) => ({
+    ...option,
+    card_image: option.card_image ? base + option.card_image : null,
+    audioUrl: option.audio ? base + option.audio.file : null,
+  });
+  const toPlayableChoice = (choice) =>
+    choice ? { ...choice, options: (choice.options ?? []).map(toPlayableOption) } : null;
   const toPlayable = (page) => ({
     id: page.id,
     text: page.text,
     audioUrl: page.audio ? base + page.audio.file : null,
     imageUrl: page.image ? base + page.image : null,
     timings: page.audio?.timings ?? [],
-    choice: page.choice ?? null,
+    choice: toPlayableChoice(page.choice),
     // next_page rides along so pagesFrom can follow the graph without the raw JSON.
     next_page: page.next_page ?? null,
   });

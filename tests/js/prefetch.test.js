@@ -73,6 +73,73 @@ describe("Whole-story prefetch", () => {
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
+  it("banks each choice option's card image and label audio alongside page assets", async () => {
+    const engine = fakeEngine();
+    const fetchFn = okFetch();
+    const prefetcher = createPrefetcher({ engine, fetchFn });
+
+    const branching = {
+      pages: [{ id: "p1", audioUrl: "/s/p1.wav", imageUrl: "/s/p1.webp" }],
+      allPages: [
+        { id: "p1", audioUrl: "/s/p1.wav", imageUrl: "/s/p1.webp" },
+        {
+          id: "p2",
+          audioUrl: "/s/p2.wav",
+          imageUrl: "/s/p2.webp",
+          choice: {
+            options: [
+              { card_image: "/s/opt0.webp", audioUrl: "/s/opt0.wav" },
+              { card_image: "/s/opt1.webp", audioUrl: "/s/opt1.wav" },
+            ],
+          },
+        },
+      ],
+    };
+    await prefetcher.prefetchStory(branching);
+
+    // Page audio p1+p2 and both label audios decode into the engine (4).
+    expect(engine.load).toHaveBeenCalledWith("/s/opt0.wav");
+    expect(engine.load).toHaveBeenCalledWith("/s/opt1.wav");
+    expect(engine.load).toHaveBeenCalledTimes(4);
+    // Page images p1+p2 and both card images warm the HTTP cache (4).
+    expect(fetchFn).toHaveBeenCalledWith("/s/opt0.webp");
+    expect(fetchFn).toHaveBeenCalledWith("/s/opt1.webp");
+    expect(fetchFn).toHaveBeenCalledTimes(4);
+    expect(prefetcher.status()).toEqual({ total: 8, loaded: 8, failed: 0 });
+  });
+
+  it("a failed card image is counted, never fatal — the rest still bank", async () => {
+    const engine = fakeEngine();
+    const fetchFn = vi.fn(async (url) =>
+      url === "/s/opt1.webp"
+        ? { ok: false, status: 404 }
+        : { ok: true, arrayBuffer: async () => new ArrayBuffer(1) },
+    );
+    const prefetcher = createPrefetcher({ engine, fetchFn });
+
+    const branching = {
+      pages: [],
+      allPages: [
+        {
+          id: "p1",
+          audioUrl: "/s/p1.wav",
+          imageUrl: "/s/p1.webp",
+          choice: {
+            options: [
+              { card_image: "/s/opt0.webp", audioUrl: "/s/opt0.wav" },
+              { card_image: "/s/opt1.webp", audioUrl: "/s/opt1.wav" },
+            ],
+          },
+        },
+      ],
+    };
+    // Nothing throws; the one bad card is counted, the rest bank.
+    await prefetcher.prefetchStory(branching);
+    const status = prefetcher.status();
+    expect(status.failed).toBe(1);
+    expect(status.loaded).toBe(status.total - 1);
+  });
+
   it("a failed asset never sinks the story: the failure is counted, the rest still bank", async () => {
     // Given one image 404s on a bad night...
     const engine = fakeEngine();

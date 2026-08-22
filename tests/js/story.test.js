@@ -80,6 +80,50 @@ describe("loading a story.json (schema pinned by AI-357)", () => {
   });
 });
 
+describe("resolving choice option assets (AI-428)", () => {
+  // A branching graph whose choice options carry card images and label audio.
+  const withOptionAssets = {
+    ...branchingJson,
+    pages: branchingJson.pages.map((page) =>
+      page.id === "p2"
+        ? {
+            ...page,
+            choice: {
+              prompt: "which way?",
+              options: [
+                { label: "a", card_image: "p2.opt0.webp", audio: { file: "p2.opt0.wav" }, next_page: "a1" },
+                { label: "b", card_image: "p2.opt1.webp", audio: { file: "p2.opt1.wav" }, next_page: "b1" },
+              ],
+            },
+          }
+        : page,
+    ),
+  };
+  const fetchWithAssets = async () => ({ ok: true, json: async () => withOptionAssets });
+
+  it("resolves option card_image and audio against the story.json base", async () => {
+    const base = "/dev-branching/";
+    const loaded = await loadStory("/dev-branching/story.json", fetchWithAssets);
+    const choicePage = loaded.allPages.find((p) => p.id === "p2");
+    const [opt0, opt1] = choicePage.choice.options;
+    expect(opt0.card_image).toBe(base + "p2.opt0.webp");
+    expect(opt0.audioUrl).toBe(base + "p2.opt0.wav");
+    expect(opt1.card_image).toBe(base + "p2.opt1.webp");
+    expect(opt1.audioUrl).toBe(base + "p2.opt1.wav");
+    expect(opt0.label).toBe("a");
+    expect(opt0.next_page).toBe("a1");
+  });
+
+  it("leaves card_image and audioUrl null when an option has none (dev fixture)", async () => {
+    const loaded = await loadStory("/dev-branching/story.json", fetchBranching);
+    const choicePage = loaded.allPages.find((p) => p.id === "p2");
+    for (const opt of choicePage.choice.options) {
+      expect(opt.card_image).toBeNull();
+      expect(opt.audioUrl).toBeNull();
+    }
+  });
+});
+
 describe("walking a branch arm (AI-428)", () => {
   it("pagesFrom walks an arm to its ending", async () => {
     const loaded = await loadStory("/dev-branching/story.json", fetchBranching);

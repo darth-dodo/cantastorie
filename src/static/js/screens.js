@@ -314,17 +314,32 @@ export function updatePlayer(screen, state, view = mockView) {
   screen.querySelector(".nav-prev").classList.toggle("disabled", state.page === 0);
 }
 
-export function buildChoiceOverlay(store, onChoose) {
+// buildChoiceOverlay(view, store, onChoose): `view` is the loaded story's
+// resolved choice ({ prompt, options: [{ label, card_image, wash?, ... }] }).
+// A published option carries a card_image URL and renders an <img>; the mock
+// shelf and dev fixture have no cards, so the CSS wash face stays the fallback.
+// Without a view (a story-less cover), the mock choice backs the overlay.
+export function buildChoiceOverlay(view, store, onChoose) {
+  const choice = view ?? story.choice;
   const overlay = el("div", "overlay");
   const prompt = el("div", "prompt");
-  prompt.textContent = story.choice.prompt;
+  prompt.textContent = choice.prompt;
   const options = el("div", "options");
-  story.choice.options.forEach(({ label, wash }, index) => {
+  choice.options.forEach(({ label, wash, card_image }, index) => {
     const option = el("button", "option", { "aria-label": label });
-    const card = el("div", `choice-card ${wash}`);
-    const caption = el("span");
-    caption.textContent = label;
-    card.appendChild(caption);
+    // The wash class stays on the card either way; when a card image exists
+    // it layers on top, otherwise the wash face is what shows.
+    const card = el("div", wash ? `choice-card ${wash}` : "choice-card");
+    if (card_image) {
+      // Decorative — the button's aria-label already carries the label.
+      const img = el("img", "choice-card-image", { alt: "" });
+      img.src = card_image;
+      card.appendChild(img);
+    } else {
+      const caption = el("span");
+      caption.textContent = label;
+      card.appendChild(caption);
+    }
     const pill = el("div", "pill");
     pill.textContent = label;
     option.append(card, pill);

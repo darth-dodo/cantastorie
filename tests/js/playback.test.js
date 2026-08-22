@@ -401,6 +401,95 @@ describe("Branch following — the tapped option extends the played path (AI-428
   });
 });
 
+describe("Spoken option labels (AI-428) — the overlay speaks label 0 then label 1", () => {
+  // A branching fixture whose choice options carry label audio URLs.
+  function branchingStoryWithLabels() {
+    const page = (id, next_page, choice = null) => ({
+      id,
+      text: id,
+      audioUrl: `/s/${id}.wav`,
+      imageUrl: `/s/${id}.webp`,
+      next_page,
+      choice,
+    });
+    const allPages = [
+      page("p1", "p2"),
+      page("p2", "p3"),
+      page("p3", null, {
+        options: [
+          { label: "a", card_image: "/s/opt0.webp", audioUrl: "/s/opt0.wav", next_page: "a1" },
+          { label: "b", card_image: "/s/opt1.webp", audioUrl: "/s/opt1.wav", next_page: "b1" },
+        ],
+      }),
+      page("a1", null),
+      page("b1", null),
+    ];
+    const byId = new Map(allPages.map((p) => [p.id, p]));
+    const pagesFrom = (pageId) => {
+      const ordered = [];
+      const seen = new Set();
+      let current = byId.get(pageId);
+      while (current && !seen.has(current.id)) {
+        ordered.push(current);
+        seen.add(current.id);
+        current = current.next_page ? byId.get(current.next_page) : null;
+      }
+      return ordered;
+    };
+    return { id: "labels", title: "Labels", pages: pagesFrom("p1"), allPages, pagesFrom };
+  }
+
+  // The labels spoken on the prompt channel, excluding the story-start prompt
+  // that always fires on the cover tap.
+  function labelsSpoken() {
+    return promptsSpoken().filter((url) => url !== PROMPTS.story_start);
+  }
+
+  async function openToChoice(story) {
+    await playback.openStory(story);
+    engine.endPrompt(); // the story-start prompt ends; page 1 narrates
+    engine.endNarration(); // p1 -> p2
+    engine.endNarration(); // p2 -> p3 (choice page)
+    engine.endNarration(); // p3 audio ends -> the choice opens
+  }
+
+  it("opening the overlay speaks label 0, then label 1 only after 0 ends", async () => {
+    await openToChoice(branchingStoryWithLabels());
+    expect(store.state.choiceOpen).toBe(true);
+
+    // Label 0 speaks on the prompt channel; label 1 waits its turn.
+    expect(labelsSpoken()).toEqual(["/s/opt0.wav"]);
+
+    // ...and only once label 0 finishes does label 1 speak.
+    engine.endPrompt();
+    expect(labelsSpoken()).toEqual(["/s/opt0.wav", "/s/opt1.wav"]);
+  });
+
+  it("labels never overlap the narration — they wait until the choice-page audio ended", async () => {
+    const story = branchingStoryWithLabels();
+    await playback.openStory(story);
+    engine.endPrompt();
+    engine.endNarration(); // p1 -> p2
+    engine.endNarration(); // p2 -> p3 (choice page narrates)
+
+    // The choice page is still narrating; no label has spoken yet.
+    expect(labelsSpoken()).toEqual([]);
+
+    engine.endNarration(); // p3 audio ends -> overlay opens, labels begin
+    expect(labelsSpoken()).toEqual(["/s/opt0.wav"]);
+  });
+
+  it("options without audioUrl skip silently (the dev fixture)", async () => {
+    const story = branchingStoryWithLabels();
+    story.allPages.find((p) => p.id === "p3").choice.options.forEach((o) => {
+      o.audioUrl = null;
+    });
+    await openToChoice(story);
+    expect(store.state.choiceOpen).toBe(true);
+    expect(labelsSpoken()).toEqual([]);
+  });
+});
+
 describe("Race interleavings (PR #8 review)", () => {
   it("a double-tapped cover speaks one start prompt sequence and starts page 1 exactly once", async () => {
     // Given an excited double-tap: both openStory calls run...

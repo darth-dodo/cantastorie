@@ -263,7 +263,15 @@ export async function init(
       } else if (state.screen === "player") {
         playerScreen = buildPlayer(store, view);
         app.appendChild(playerScreen);
-        if (state.choiceOpen) playerScreen.appendChild(buildChoiceOverlay(store, onChoose));
+        if (state.choiceOpen) {
+          // The published choice (resolved card images and labels) sits on the
+          // current choicePage of the played path; a story-less cover falls back
+          // to the mock choice inside buildChoiceOverlay.
+          const choiceView = activeStory
+            ? activeStory.pages[store.state.choicePage].choice
+            : undefined;
+          playerScreen.appendChild(buildChoiceOverlay(choiceView, store, onChoose));
+        }
         if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store));
         if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {
