@@ -37,6 +37,8 @@ from src.pipeline.publish import (
     _build_client,
     _content_type,
     delete_staged_story,
+    list_orphan_story_dirs,
+    list_published_stories,
     publish_story,
     unpublish_story,
 )
@@ -220,6 +222,21 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
             languages=get_args(Language),
             live=LIVE_STATES,
         ),
+    )
+
+
+@router.get("/library", response_class=HTMLResponse)
+async def library(request: Request, settings: WorkshopSettings) -> Response:
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _to_login()
+    if not scope.is_operator:
+        return RedirectResponse(home_path(scope.is_operator), status_code=303)
+    stories = sorted(list_published_stories(settings), key=lambda s: (s.language, s.title))
+    return templates.TemplateResponse(
+        request,
+        "workshop/library.html",
+        _base_ctx(settings, stories=stories, orphans=list_orphan_story_dirs(settings)),
     )
 
 
