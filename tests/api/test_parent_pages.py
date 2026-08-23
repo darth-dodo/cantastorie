@@ -280,7 +280,8 @@ def test_clerk_loads_nowhere_in_the_child_player() -> None:
     in their template dirs and in workshop.js. The invariant that still holds,
     and that this guards, is that NO Clerk script, hostname, or cookie logic ever
     reaches a child-player path. Scans every template outside
-    src/templates/parent|workshop|auth and every static JS file except workshop.js.
+    src/templates/parent|workshop|auth and every static JS file except the two
+    admin modules (workshop.js, auth.js), which only admin templates load.
     """
     import re  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
@@ -295,8 +296,9 @@ def test_clerk_loads_nowhere_in_the_child_player() -> None:
             continue
         if pattern.search(path.read_text()):
             offenders.append(str(path))
+    admin_js = ("workshop.js", "auth.js")
     for path in (root / "static" / "js").rglob("*.js"):
-        if path.name == "workshop.js":  # the operator surface's own admin JS
+        if path.name in admin_js:  # the operator/parent surfaces' own admin JS
             continue
         if pattern.search(path.read_text()):
             offenders.append(str(path))
