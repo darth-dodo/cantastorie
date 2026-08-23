@@ -141,3 +141,32 @@ def test_the_library_asks_for_sign_in_when_unauthenticated(tmp_path: Path, s3: S
 
     assert page.status_code == 200
     assert 'id="clerk-signin"' in page.text
+
+
+def test_an_operator_deletes_any_published_story_forever(tmp_path: Path, s3: S3Client) -> None:
+    _put_manifest(s3, "it", [("sea-it-1", "La barchetta")])
+    _put_assets(s3, "sea-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    response = harness.client.post(
+        "/workshop/stories/sea-it-1/delete",
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert _manifest(s3, "it")["stories"] == []
+    assert _asset_keys(s3, "sea-it-1") == []
+
+
+def test_a_non_operator_cannot_delete_via_the_workshop(tmp_path: Path, s3: S3Client) -> None:
+    _put_manifest(s3, "it", [("sea-it-1", "La barchetta")])
+    _put_assets(s3, "sea-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(PARENT)
+
+    response = harness.client.post("/workshop/stories/sea-it-1/delete")
+
+    assert response.status_code == 403
+    assert len(_asset_keys(s3, "sea-it-1")) == 2
