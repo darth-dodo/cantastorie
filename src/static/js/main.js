@@ -83,6 +83,30 @@ function saveLang(lang, storage = globalThis.localStorage) {
   }
 }
 
+// Fold recorded branch picks over a freshly loaded story so a resumed path is
+// rebuilt exactly as the child left it. For each pick, find the next choice
+// page still ahead on the path and append the chosen arm — mirroring
+// playback.extendPath's "first choice at or after the arm's start" walk, so a
+// story that branches again is followed correctly. Mutating loaded.pages here
+// (before it becomes playback's story) is what extendPath does mid-run; the
+// unfinished check then sees the full rebuilt length. Returns false when a pick
+// no longer fits the graph (choice page gone, option index out of range, or a
+// dangling next_page) so the caller can discard the save.
+function replayResume(loaded, choices) {
+  let searchFrom = 0;
+  for (const optionIndex of choices) {
+    const choicePageIndex = loaded.pages.findIndex((page, i) => i >= searchFrom && page.choice);
+    if (choicePageIndex === -1) return false;
+    const option = loaded.pages[choicePageIndex].choice.options?.[optionIndex];
+    if (!option) return false;
+    const arm = loaded.pagesFrom(option.next_page);
+    if (arm.length === 0) return false;
+    searchFrom = loaded.pages.length; // the next branch must be inside the new arm
+    loaded.pages = [...loaded.pages, ...arm];
+  }
+  return true;
+}
+
 export async function init(
   root = document,
   { fetchFn = globalThis.fetch?.bind(globalThis), engine = null } = {},
@@ -142,7 +166,16 @@ export async function init(
         }
         const loaded = await pending;
         activeStory = loaded;
+        // A save left mid-branch replays here: fold the recorded picks over the
+        // loaded story so the arm the child chose is back on the played path
+        // BEFORE playback.openStory runs — its unfinished check (page <
+        // pageCount) must see the rebuilt path, and the restored page index must
+        // point into it. A pick that no longer fits the graph (republished
+        // story) discards the save and starts fresh; never a crash.
+        const savedChoices = store.state.choices ?? [];
+        const replayed = savedChoices.length === 0 || replayResume(loaded, savedChoices);
         await playback.openStory(loaded);
+        if (!replayed) store.resumeRestart();
         return;
       } catch (err) {
         console.warn("story unavailable, using the page timer", err);

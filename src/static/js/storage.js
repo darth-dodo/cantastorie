@@ -7,7 +7,10 @@ export function load(storage = globalThis.localStorage) {
   try {
     const raw = storage?.getItem(KEY);
     const saved = raw ? JSON.parse(raw) : null;
-    return saved && typeof saved.screen === "string" ? saved : null;
+    // choices defaults to [] so payloads written before branches (AI-428) —
+    // which have no choices key — resume without the replay tripping on
+    // undefined. New payloads override it with their own recorded picks.
+    return saved && typeof saved.screen === "string" ? { choices: [], ...saved } : null;
   } catch {
     return null;
   }
