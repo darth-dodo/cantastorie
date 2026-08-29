@@ -278,6 +278,10 @@ The player template carries the three things the player boot needs: the design-s
 
 The `/parent` pages — sign-in, the pack request form, and the my-packs list with HTMX progress polling and per-family run caps — ship in AI-411; the provision API mints the family token at first sign-in.
 
+### Published-story CRUD
+
+The operator library (`GET /workshop/library`, `POST /workshop/stories/{id}/delete`) lists everything published across all language manifests — flagging orphan story directories — and hard-deletes any story, launch content included. Parents get the same single destructive delete scoped to their own approved packs (`GET /parent/stories`, `POST /parent/stories/{id}/delete`). Both faces call `unpublish_story()`; listing comes from `list_published_stories()` and `list_orphan_story_dirs()`, all in [`src/pipeline/publish.py`](../src/pipeline/publish.py).
+
 ### Observability (`src/observability.py`)
 
 LangSmith, off by default and inert when off. `init_observability` (called from `create_app` and the CLI) syncs settings into the env vars the SDK reads; `build_traced_openai_client` wraps the OpenRouter client; `typed_traceable` decorates pipeline steps; `TracingMiddleware` traces requests. With tracing disabled, all of these are pass-throughs.
