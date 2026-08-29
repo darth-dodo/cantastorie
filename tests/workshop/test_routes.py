@@ -9,6 +9,7 @@ seam and mint JWTs locally against a mock JWKS — zero network, no mocking of
 the code under test.
 """
 
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -876,3 +877,18 @@ def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3
 
     assert "La barchetta" in page.text or "Review" in page.text  # title or review button shown
     assert page.status_code == 200
+
+
+def test_no_stale_clerk_artifacts_survive() -> None:
+    """Phase 2 killed clerk-js@5, jsdelivr, the meta-tag key, and the old
+    mount id; nothing anywhere under src/ may bring them back."""
+    stale = re.compile(
+        r"clerk-js@5|cdn\.jsdelivr\.net/npm/@clerk|clerk-publishable-key\" *content=|"
+        r'id="clerk-signin"',
+    )
+    offenders = [
+        str(p)
+        for p in Path("src").rglob("*")
+        if p.suffix in {".html", ".js", ".py"} and stale.search(p.read_text())
+    ]
+    assert offenders == []
