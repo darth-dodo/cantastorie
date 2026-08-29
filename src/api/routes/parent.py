@@ -32,7 +32,7 @@ from src.api.routes.workshop import (  # shared DI seam, overridable in tests
 )
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Theme
-from src.pipeline.publish import list_published_stories
+from src.pipeline.publish import list_published_stories, unpublish_story
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import PackRequest
 
@@ -158,6 +158,22 @@ async def parent_stories(
     return templates.TemplateResponse(
         request, "parent/stories.html", {**context, "stories": stories}
     )
+
+
+@router.post("/stories/{story_id}/delete")
+async def delete_parent_story(
+    request: Request,
+    story_id: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    if story_id not in _owned_story_ids(manager, ctx.family_token):
+        raise HTTPException(status_code=404)
+    unpublish_story(story_id, settings)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return RedirectResponse("/parent/stories", status_code=303)
 
 
 @router.post("/packs")

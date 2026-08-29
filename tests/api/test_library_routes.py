@@ -198,3 +198,33 @@ def test_a_signed_out_parent_gets_the_sign_in_page(tmp_path: Path, s3: S3Client)
 
     assert page.status_code == 200
     assert 'id="clerk-sign-in"' in page.text
+
+
+def test_a_parent_deletes_own_story_forever(tmp_path: Path, s3: S3Client) -> None:
+    _put_manifest(s3, "it", [("sea-it-1", "La barchetta")])
+    _put_assets(s3, "sea-it-1")
+    harness = Harness(tmp_path, s3)
+    _approved_run(harness.store, FAMILY, ["sea-it-1"])
+    harness.sign_in(PARENT)
+
+    response = harness.client.post(
+        "/parent/stories/sea-it-1/delete",
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert _manifest(s3, "it")["stories"] == []
+    assert _asset_keys(s3, "sea-it-1") == []
+
+
+def test_a_parent_cannot_delete_another_familys_story(tmp_path: Path, s3: S3Client) -> None:
+    _put_manifest(s3, "it", [("neve-it-1", "Prima neve")])
+    _put_assets(s3, "neve-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(PARENT)
+
+    response = harness.client.post("/parent/stories/neve-it-1/delete")
+
+    assert response.status_code == 404
+    assert len(_asset_keys(s3, "neve-it-1")) == 2
