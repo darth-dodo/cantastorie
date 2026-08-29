@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.api.auth import verify_clerk_session
-from src.api.routes._nav import home_path
+from src.api.routes._nav import fapi_host, home_path
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
@@ -85,9 +85,11 @@ Manager = Annotated[RunManager, Depends(get_run_manager)]
 
 
 def _base_ctx(settings: Settings, **extra: object) -> dict[str, object]:
-    """Every workshop template needs the Clerk publishable key (ClerkJS init)."""
+    """Every gated template needs its door, the FAPI host, and the key."""
     return {
-        "clerk_publishable_key": settings.clerk_publishable_key.get_secret_value(),
+        "door": "workshop",
+        "fapi_host": fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
         **extra,
     }
 
@@ -105,7 +107,7 @@ async def _scope(request: Request, settings: Settings) -> WorkshopScope | None:
 
 def _sign_in_page(request: Request, settings: Settings, status_code: int = 200) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "workshop/login.html", _base_ctx(settings), status_code=status_code
+        request, "auth/sign_in.html", _base_ctx(settings), status_code=status_code
     )
 
 

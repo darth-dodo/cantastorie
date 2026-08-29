@@ -9,6 +9,7 @@ seam and mint JWTs locally against a mock JWKS — zero network, no mocking of
 the code under test.
 """
 
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -53,7 +54,9 @@ def s3() -> Iterator[S3Client]:
 
 
 def _settings(tmp_path: Path) -> Settings:
-    s = clerk_settings()  # sets publishable_key + jwks_url + secret_key
+    # issuer set explicitly: gated pages run fapi_host, and pk_test_xxx is not
+    # valid base64 for the pk fallback.
+    s = clerk_settings(clerk_issuer="https://test.clerk.test")
     return s.model_copy(update={"r2_bucket": BUCKET, "content_dir": tmp_path / "content"})
 
 
@@ -130,6 +133,7 @@ class _Harness:
         payload.setdefault("iat", now())
         payload.setdefault("nbf", now())
         payload.setdefault("exp", now() + 3600)
+        payload.setdefault("iss", "https://test.clerk.test")
         token = mint_token(self.key, payload)
         self.client.cookies.set(SESSION_COOKIE, token)
 
@@ -147,7 +151,11 @@ def test_unauthenticated_workshop_shows_the_sign_in_page(tmp_path: Path, s3: S3C
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' in page.text
+    assert 'id="clerk-sign-in"' in page.text
+    assert 'data-auth-door="workshop"' in page.text
+    assert "test.clerk.test/npm/@clerk/ui@1" in page.text
+    assert "test.clerk.test/npm/@clerk/clerk-js@6" in page.text
+    assert "jsdelivr" not in page.text
     assert "workshop/login" not in page.text  # no secret form anymore
     assert "first_snow" not in page.text
 
@@ -159,7 +167,7 @@ def test_operator_session_sees_the_dashboard(tmp_path: Path, s3: S3Client) -> No
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' not in page.text  # not the sign-in page
+    assert 'id="clerk-sign-in"' not in page.text  # not the sign-in page
     assert 'action="/workshop/runs"' in page.text
 
 
@@ -182,7 +190,7 @@ def test_an_expired_session_falls_back_to_the_sign_in_page(tmp_path: Path, s3: S
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' in page.text
+    assert 'id="clerk-sign-in"' in page.text
 
 
 def test_every_workshop_page_loads_clerk_js(tmp_path: Path, s3: S3Client) -> None:
@@ -191,9 +199,9 @@ def test_every_workshop_page_loads_clerk_js(tmp_path: Path, s3: S3Client) -> Non
 
     page = harness.client.get("/workshop")
 
-    assert "clerk.browser.js" in page.text
-    assert 'name="clerk-publishable-key"' in page.text
-    assert "pk_test_xxx" in page.text  # the key from clerk_settings()
+    assert "npm/@clerk/clerk-js@6" in page.text
+    assert "npm/@clerk/ui@1" in page.text
+    assert 'data-clerk-publishable-key="pk_test_xxx"' in page.text
 
 
 def test_starting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
@@ -969,3 +977,18 @@ def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3
 
     assert "La barchetta" in page.text or "Review" in page.text  # title or review button shown
     assert page.status_code == 200
+
+
+def test_no_stale_clerk_artifacts_survive() -> None:
+    """Phase 2 killed clerk-js@5, jsdelivr, the meta-tag key, and the old
+    mount id; nothing anywhere under src/ may bring them back."""
+    stale = re.compile(
+        r"clerk-js@5|cdn\.jsdelivr\.net/npm/@clerk|clerk-publishable-key\" *content=|"
+        r'id="clerk-signin"',
+    )
+    offenders = [
+        str(p)
+        for p in Path("src").rglob("*")
+        if p.suffix in {".html", ".js", ".py"} and stale.search(p.read_text())
+    ]
+    assert offenders == []

@@ -1,0 +1,20 @@
+{% extends "auth/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="ws-login-wrap">
+  <div class="ws-wordmark-stack">
+    <div class="ws-wordmark">Cantastorie</div>
+    <div class="ws-tagline">bedtime stories your family speaks</div>
+  </div>
+  <div class="ws-card ws-login-card">
+    {% if onboarding %}
+      <p data-parent-onboarding>Setting up your family's shelf…</p>
+    {% else %}
+      <div id="clerk-sign-in" data-clerk-mount>
+        <p data-signin-fallback hidden>Can't sign in right now — the stories on the shelf still play. Try again in a little while.</p>
+      </div>
+    {% endif %}
+  </div>
+  <p class="ws-mono-note">sign in with your account —<br>with Clerk unconfigured, this area answers 404</p>
+</div>
+{% endblock %}

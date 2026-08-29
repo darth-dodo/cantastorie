@@ -7,7 +7,6 @@ pack request form, my-packs) arrive in the next step of the design.
 from __future__ import annotations
 
 import secrets
-from base64 import b64decode
 from pathlib import Path
 from typing import Annotated, get_args
 
@@ -26,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
-from src.api.routes._nav import home_path
+from src.api.routes._nav import fapi_host, home_path
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
     get_run_manager,
@@ -76,20 +75,6 @@ class ProvisionResponse(BaseModel):
     action: str  # "already" | "linked" | "minted"
 
 
-def _fapi_host(settings: Settings) -> str:
-    """Frontend-API host for the ClerkJS CDN script tags.
-
-    Prefer the configured issuer (it IS the frontend API origin); fall back to
-    decoding the publishable key (base64 of the host + '$', after the last '_').
-    """
-    if settings.clerk_issuer:
-        return settings.clerk_issuer.removeprefix("https://").removeprefix("http://")
-    pk = settings.clerk_publishable_key.get_secret_value()
-    encoded = pk.rsplit("_", 1)[-1]
-    padded = encoded + "=" * (-len(encoded) % 4)
-    return b64decode(padded).decode().rstrip("$")
-
-
 async def _page_identity(request: Request, settings: Settings) -> CandidateContext | None:
     """Candidate identity for page routes: 401 → None (render sign-in);
     404 (feature unset) and 403 (disabled) propagate unchanged."""
@@ -112,15 +97,16 @@ async def parent_home(
         # Superusers author in the workshop — they have no parent view here.
         return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
-        "fapi_host": _fapi_host(settings),
+        "door": "parent",
+        "fapi_host": fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),
     }
     if ctx is None:
-        return templates.TemplateResponse(request, "parent/signin.html", context)
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
     if ctx.family_token is None:
         # First sign-in: page JS POSTs /parent/api/provision then reloads.
         context["onboarding"] = True
-        return templates.TemplateResponse(request, "parent/signin.html", context)
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
     # Provisioned parents get the packs page with their own runs, newest first.
     runs = manager.store.list_runs(family_token=ctx.family_token)
     runs.sort(key=lambda r: r.created_at, reverse=True)
@@ -155,7 +141,8 @@ async def request_pack(
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
         context: dict[str, object] = {
-            "fapi_host": _fapi_host(settings),
+            "door": "parent",
+            "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "runs": [],
             "cap_message": str(cap),

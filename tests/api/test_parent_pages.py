@@ -68,6 +68,8 @@ def test_anonymous_gets_sign_in_page_with_clerk_script() -> None:
     assert 'data-clerk-publishable-key="pk_test_xxx"' in response.text
     # FAPI host derived from clerk_issuer
     assert "test.clerk.test/npm/@clerk/clerk-js@6" in response.text
+    assert "test.clerk.test/npm/@clerk/ui@1" in response.text
+    assert 'data-auth-door="parent"' in response.text
 
 
 def test_unset_clerk_config_404s_the_page() -> None:
@@ -84,6 +86,7 @@ def test_signed_in_unprovisioned_gets_onboarding_state(
         monkeypatch,
         clerk_settings(clerk_issuer="https://test.clerk.test"),
         include_family_token=False,
+        iss="https://test.clerk.test",
     )
     response = client.get("/parent")
     assert response.status_code == 200
@@ -277,14 +280,15 @@ def test_clerk_loads_nowhere_in_the_child_player() -> None:
     in their template dirs and in workshop.js. The invariant that still holds,
     and that this guards, is that NO Clerk script, hostname, or cookie logic ever
     reaches a child-player path. Scans every template outside
-    src/templates/parent|workshop and every static JS file except workshop.js.
+    src/templates/parent|workshop|auth and every static JS file except the two
+    admin modules (workshop.js, auth.js), which only admin templates load.
     """
     import re  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
 
     root = Path(__file__).resolve().parent.parent.parent / "src"
     pattern = re.compile(r"clerk", re.IGNORECASE)
-    admin_template_dirs = ("templates/parent", "templates/workshop")
+    admin_template_dirs = ("templates/auth", "templates/parent", "templates/workshop")
     offenders: list[str] = []
     for path in (root / "templates").rglob("*.html"):
         norm = str(path).replace("\\", "/")
@@ -292,8 +296,9 @@ def test_clerk_loads_nowhere_in_the_child_player() -> None:
             continue
         if pattern.search(path.read_text()):
             offenders.append(str(path))
+    admin_js = ("workshop.js", "auth.js")
     for path in (root / "static" / "js").rglob("*.js"):
-        if path.name == "workshop.js":  # the operator surface's own admin JS
+        if path.name in admin_js:  # the operator/parent surfaces' own admin JS
             continue
         if pattern.search(path.read_text()):
             offenders.append(str(path))
