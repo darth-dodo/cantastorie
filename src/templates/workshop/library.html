@@ -1,0 +1,39 @@
+{% extends "auth/base.html" %}
+{% block title %}Library{% endblock %}
+{% block content %}
+<div class="ws-page">
+  <div class="ws-bench-header">
+    <div class="ws-wordmark">Workshop</div>
+    <div class="ws-tagline">everything published</div>
+  </div>
+
+  {% for language, rows in stories | groupby("language") %}
+    <div class="ws-section-head">{{ language }}</div>
+    {% for story in rows %}
+      <div class="ws-run-card" data-story-card="{{ story.id }}">
+        <a href="{{ story.cover }}" target="_blank" rel="noopener" class="ws-run-card-link">
+          <div class="ws-run-card-body">
+            <div class="ws-run-title">{{ story.title }}</div>
+            <div class="ws-run-meta">{{ story.id }}</div>
+          </div>
+        </a>
+        <button class="ws-delete-btn"
+                hx-post="/workshop/stories/{{ story.id }}/delete"
+                hx-target="closest [data-story-card]"
+                hx-swap="outerHTML"
+                hx-confirm="Delete “{{ story.title }}” forever?">×</button>
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  {% if orphans %}
+    <div class="ws-section-head">Orphans</div>
+    {% for orphan in orphans %}
+      <div class="ws-card ws-empty-card">
+        <div class="ws-empty-title">{{ orphan }}</div>
+        <div class="ws-empty-sub">on the bucket but no manifest lists it</div>
+      </div>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

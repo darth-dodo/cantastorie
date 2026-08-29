@@ -89,7 +89,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
 | **5 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German alongside — per-language manifests and the settings switch are live; content exists for it/es/en trials only |
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
-| **Parent dashboard** | ⏳ Planned | Language tabs, unpublish toggles, kill switch |
+| **Parent dashboard** | 🔄 In progress | Story rows with a single destructive delete of this family's packs — removes the story from every shelf until family overlays ship; language tabs and kill switch planned |
 | **Pack requests & review** | ⏳ Planned | Parents request 1–3 stories on a theme, preview everything, approve or reject (Phase 2) |
 | **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
 | **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
@@ -331,7 +331,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | **Choice overlay** | Page dims 30 percent behind two picture cards, each 40 percent of screen width |
 | **Story end** | Final scene, replay and shelf pictures, end prompt; goodnight sign-off after 20 seconds idle |
 | **Parent gate** | Hold circle fills over 3 seconds, then addition on a keypad; lockout shows the teapot |
-| **Parent dashboard** | Language tabs, story rows with unpublish toggles, kill switch |
+| **Your stories** | This family's published packs, each with one confirmed destructive delete |
 | **Review queue** | Full text, per-page audio players, image strip, approve / reject / regenerate with the cap noted |
 | **Settings** | Language multi-select, reading mode toggle |
 | **Export-import** | Inline validation errors |
