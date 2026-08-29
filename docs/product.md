@@ -84,7 +84,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 |---------|--------|-------------|
 | **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published packs |
 | **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, play-pause plus prev/next page buttons, auto page turns, exact-position resume |
-| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at fixed branch points |
+| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at a branch point; a tap follows the chosen arm to its own ending |
 | **Reading mode** | ⏳ Planned | Parent-enabled story text with karaoke word highlighting and tap-word English glosses |
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
 | **5 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German alongside — per-language manifests and the settings switch are live; content exists for it/es/en trials only |
