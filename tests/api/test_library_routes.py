@@ -89,7 +89,7 @@ class Harness:
         auth_mod._fetch_jwks = make_mock_fetch(self.key)  # type: ignore[assignment]
         auth_mod._jwks_state.keys = None
         auth_mod._jwks_state.fetched_at = 0.0
-        self.settings = clerk_settings().model_copy(
+        self.settings = clerk_settings(clerk_issuer="https://test.clerk.test").model_copy(
             update={"r2_bucket": BUCKET, "content_dir": tmp_path / "content"}
         )
         self.store = RunStore(self.settings, client=s3)
@@ -100,7 +100,13 @@ class Harness:
         self.client = TestClient(app, base_url="https://testserver")
 
     def sign_in(self, claims: dict[str, Any]) -> None:
-        payload = {**claims, "iat": now(), "nbf": now(), "exp": now() + 3600}
+        payload = {
+            **claims,
+            "iat": now(),
+            "nbf": now(),
+            "exp": now() + 3600,
+            "iss": "https://test.clerk.test",
+        }
         self.client.cookies.set(SESSION_COOKIE, mint_token(self.key, payload))
 
 
@@ -170,3 +176,25 @@ def test_a_non_operator_cannot_delete_via_the_workshop(tmp_path: Path, s3: S3Cli
 
     assert response.status_code == 403
     assert len(_asset_keys(s3, "sea-it-1")) == 2
+
+
+def test_a_parent_sees_only_own_approved_packs(tmp_path: Path, s3: S3Client) -> None:
+    _put_manifest(s3, "it", [("sea-it-1", "La barchetta"), ("neve-it-1", "Prima neve")])
+    harness = Harness(tmp_path, s3)
+    _approved_run(harness.store, FAMILY, ["sea-it-1"])
+    harness.sign_in(PARENT)
+
+    page = harness.client.get("/parent/stories")
+
+    assert page.status_code == 200
+    assert "La barchetta" in page.text
+    assert "Prima neve" not in page.text
+
+
+def test_a_signed_out_parent_gets_the_sign_in_page(tmp_path: Path, s3: S3Client) -> None:
+    harness = Harness(tmp_path, s3)
+
+    page = harness.client.get("/parent/stories")
+
+    assert page.status_code == 200
+    assert 'id="clerk-sign-in"' in page.text

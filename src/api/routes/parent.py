@@ -32,6 +32,7 @@ from src.api.routes.workshop import (  # shared DI seam, overridable in tests
 )
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Theme
+from src.pipeline.publish import list_published_stories
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import PackRequest
 
@@ -39,6 +40,16 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 router = APIRouter(prefix="/parent")
+
+
+def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
+    return {
+        story_id
+        for record in manager.store.list_runs(family_token=family_token)
+        if record.state == "approved"
+        for story_id in record.story_ids
+    }
+
 
 Manager = Annotated[RunManager, Depends(get_run_manager)]
 
@@ -121,6 +132,31 @@ async def parent_home(
             "themes": THEMES,
             "languages": LANGUAGES,
         },
+    )
+
+
+@router.get("/stories", response_class=HTMLResponse)
+async def parent_stories(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    ctx = await _page_identity(request, settings)
+    if ctx is not None and ctx.is_operator:
+        return RedirectResponse(home_path(True), status_code=303)
+    context: dict[str, object] = {
+        "fapi_host": _fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+    }
+    if ctx is None:
+        return templates.TemplateResponse(request, "parent/signin.html", context)
+    if ctx.family_token is None:
+        context["onboarding"] = True
+        return templates.TemplateResponse(request, "parent/signin.html", context)
+    owned = _owned_story_ids(manager, ctx.family_token)
+    stories = [s for s in list_published_stories(settings) if s.id in owned]
+    return templates.TemplateResponse(
+        request, "parent/stories.html", {**context, "stories": stories}
     )
 
 
