@@ -88,6 +88,7 @@ export function buildShelf(
   } else {
     stories.forEach((entry) => {
       const name = entry.title ?? entry.label;
+      const card = el("div", "cover-card");
       const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
       if (entry.cover) {
         const img = el("img", "cover-art");
@@ -96,11 +97,11 @@ export function buildShelf(
         img.loading = "lazy";
         cover.appendChild(img);
       }
-      const caption = el("span");
-      caption.textContent = name;
-      cover.appendChild(caption);
       cover.addEventListener("click", () => onOpen(entry));
-      covers.appendChild(cover);
+      const caption = el("span", "cover-caption");
+      caption.textContent = name;
+      card.append(cover, caption);
+      covers.appendChild(card);
     });
   }
 
@@ -109,7 +110,7 @@ export function buildShelf(
   gear.addEventListener("click", onOpenSettings);
 
   const parent = el("a", "parent-corner");
-  parent.href = "/workshop";
+  parent.href = "/parent";
   parent.textContent = "parent";
 
   screen.append(header, covers, gear, parent);
@@ -335,13 +336,13 @@ export function buildChoiceOverlay(store) {
   return overlay;
 }
 
-export function buildResumeOverlay(store) {
+export function buildResumeOverlay(store, resumeText = "Welcome back! Continue or start over?") {
   const overlay = el("div", "overlay");
   const prompt = el("div", "prompt");
   const title = el("strong");
   title.textContent = "Welcome back!";
   const sub = el("small");
-  sub.textContent = "Continue or start over?";
+  sub.textContent = resumeText;
   prompt.append(title, sub);
 
   const options = el("div", "options");
@@ -381,7 +382,7 @@ export function buildAudioError(store) {
   return overlay;
 }
 
-export function buildEnd(store) {
+export function buildEnd(store, endText = { title: "The End!", again: "Again!", prompt: "Another story?" }) {
   const screen = el("div", "screen end night");
 
   const stars = el("div", "stars");
@@ -390,12 +391,12 @@ export function buildEnd(store) {
   screen.appendChild(stars);
 
   const title = el("h2");
-  title.textContent = "The End!";
+  title.textContent = endText.title;
 
   const options = el("div", "options");
   options.append(
-    blobOption({ label: "Again!", icon: iconReplay(), onTap: () => store.replay() }),
-    blobOption({ label: "Another story", icon: iconShelf(), onTap: () => store.toShelf() }),
+    blobOption({ label: endText.again, icon: iconReplay(), onTap: () => store.replay() }),
+    blobOption({ label: endText.prompt, icon: iconShelf(), onTap: () => store.toShelf() }),
   );
 
   screen.append(title, options);

@@ -65,6 +65,7 @@ button.presses:active {
   display: flex;
   flex-direction: column;
   padding: max(24px, env(safe-area-inset-top)) 20px 0;
+  isolation: isolate;
 }
 
 [data-theme="dusk"] .shelf {
@@ -209,6 +210,28 @@ button.presses:active {
   color: var(--text-soft, #8a82a0);
   margin: 0;
   line-height: 1.5;
+}
+
+.cover-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.cover-caption {
+  font: 600 11px/1.2 var(--font-app, system-ui);
+  text-align: center;
+  color: rgba(74, 59, 46, 0.7);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+[data-theme="dusk"] .cover-caption {
+  color: rgba(243, 233, 218, 0.42);
 }
 
 .cover {
@@ -377,6 +400,27 @@ button.presses:active {
   color: var(--ink);
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shelf::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120px;
+  background: linear-gradient(to top, var(--surface) 40%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-theme="dusk"] .shelf::after {
+  background: linear-gradient(to top, #2a2119 40%, transparent);
+}
+
+.settings-gear,
+.parent-corner {
+  z-index: 1;
 }
 
 .settings-gear svg {
