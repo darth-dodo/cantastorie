@@ -145,14 +145,14 @@ async def parent_stories(
     if ctx is not None and ctx.is_operator:
         return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
-        "fapi_host": _fapi_host(settings),
+        "fapi_host": fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),
     }
     if ctx is None:
-        return templates.TemplateResponse(request, "parent/signin.html", context)
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
     if ctx.family_token is None:
         context["onboarding"] = True
-        return templates.TemplateResponse(request, "parent/signin.html", context)
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
     owned = _owned_story_ids(manager, ctx.family_token)
     stories = [s for s in list_published_stories(settings) if s.id in owned]
     return templates.TemplateResponse(

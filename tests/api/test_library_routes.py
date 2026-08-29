@@ -146,7 +146,7 @@ def test_the_library_asks_for_sign_in_when_unauthenticated(tmp_path: Path, s3: S
     page = harness.client.get("/workshop/library")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' in page.text
+    assert 'id="clerk-sign-in"' in page.text
 
 
 def test_an_operator_deletes_any_published_story_forever(tmp_path: Path, s3: S3Client) -> None:
