@@ -89,8 +89,9 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
 | **5 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German alongside — per-language manifests and the settings switch are live; content exists for it/es/en trials only |
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
-| **Parent dashboard** | 🔄 In progress | Story rows with a single destructive delete of this family's packs — removes the story from every shelf until family overlays ship; language tabs and kill switch planned |
-| **Pack requests & review** | ⏳ Planned | Parents request 1–3 stories on a theme, preview everything, approve or reject (Phase 2) |
+| **Parent dashboard** | 🔄 In progress | Story rows with a single destructive delete of this family's own **private shelf** (the family overlay); language tabs and kill switch planned |
+| **Private family shelf** | ✅ Shipped | A family's approved packs publish to a private overlay (`published/families/{token}/…`) that only that family's child sees; the child player merges it onto the shared shelf. Never promoted to global — private stays private |
+| **Pack requests & review** | 🔄 In progress | Parents request 1–3 stories on a theme and approve a staged pack to their private shelf; full preview UI planned |
 | **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
 | **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
 | **Authoring pipeline** | 🔄 In progress | Generates story text, narration, watercolor images, word timings, and glosses for approval — all steps ship except word timings (Deepgram pass) and glosses |
@@ -353,6 +354,8 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Style | Soft watercolor, warm palette, rounded characters, nothing frightening | Bedtime, not Saturday cartoons |
 | Reading mode | Optional text with karaoke highlighting and tap-word glosses; parent-enabled, default off; timings and glosses precomputed at authoring | Serves reading-along parents without breaking the voice-first core |
 | Tenancy | One shared deployment; per-family shelves keyed by a local family token (anchored to a recoverable parent identity via Clerk — [ADR-003](adr/ADR-003-parent-authentication-clerk.md), Accepted) | One instance to run; token recoverable across device loss; the token is a random capability, not an identity |
+| Global vs private stories | **Global** = operator-authored, published to the shared per-language shelf, reaches every child. **Private** = family-approved, published to that family's overlay (`published/families/{token}/…`), reaches only that family's child. **No promotion** — private never becomes global; `publish_target` is one-way and origin-fixed | Keeps a family's content confined to its own child and the shared shelf operator-curated; the family-token prefix is the boundary |
+| Operator moderation of private stories | The operator can **see and delete** any family's private story from `/workshop/library` (safety/moderation); delete is destruction, never promotion | A safety escape hatch without giving the operator authoring power over a family's shelf |
 
 ---
 
@@ -423,6 +426,7 @@ Phase 1 ships in seven vertical slices — each ends with a child hearing someth
 - **Ads**: never
 - **Offline mode (v1)**: bucket-direct playback is already resilient; revisit after launch
 - **Parent UI localization**: parents in the target families read English; cuts the localization surface by five
+- **Promotion of private → global**: a family's private story is never elevated to the shared shelf; the global shelf is operator-authored only
 
 ---
 
