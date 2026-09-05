@@ -46,10 +46,6 @@ svg.i.solid { fill:currentColor; stroke:none; }
 .trust b { color:var(--ink-soft); }
 .trust .i { width:16px; height:16px; vertical-align:-3px; color:var(--primary); }
 
-.problem .card { background:linear-gradient(180deg,#FFFFFF,#EDF3E8); border:1px solid rgba(59,107,69,.18); }
-.problem p { font-size:16px; color:var(--ink); }
-.problem p + p { margin-top:12px; color:var(--ink-soft); }
-
 .steps { display:flex; flex-direction:column; gap:16px; margin-top:20px; }
 .step { display:flex; gap:16px; align-items:flex-start; }
 .step .ico { flex:0 0 72px; height:72px; border-radius:18px; overflow:hidden; box-shadow:var(--card-shadow-sm); }
