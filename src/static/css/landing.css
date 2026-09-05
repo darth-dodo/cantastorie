@@ -63,3 +63,4 @@ footer { text-align:center; padding:40px 0 46px; color:var(--ink-faint); font-si
 footer a { color:var(--ink-soft); text-decoration:none; font-weight:700; }
 footer .colophon { margin-top:10px; color:var(--ink-faint); }
 footer .colophon a { color:var(--ink-faint); font-weight:600; text-decoration:underline; }
+footer .colophon .heart { width:13px; height:13px; vertical-align:-2px; color:#CE5B54; }
