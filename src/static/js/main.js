@@ -70,6 +70,94 @@ async function fetchManifest(assetBase, fetchFn, lang) {
   }
 }
 
+// Canonical family token: 32 lowercase hex chars (secrets.token_hex(16)),
+// mirroring src/api/routes/parent.py. A malformed token must never be built
+// into an overlay URL.
+const FAMILY_TOKEN_RE = /^[0-9a-f]{32}$/;
+
+// The family's private overlay shelf, additive on top of the shared shelf.
+// Anonymous, bucket-direct, no credentials, no auth SDK — the child player
+// stays sign-in-free. Any failure (404, network, bad token) resolves to null:
+// the shared shelf must still render, never blocking bedtime.
+async function fetchOverlayManifest(assetBase, fetchFn, token, lang) {
+  if (!token || !FAMILY_TOKEN_RE.test(token)) return null;
+  try {
+    const res = await fetchFn(`${assetBase}/families/${token}/${lang}/manifest.json`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("overlay manifest unavailable", err);
+    return null;
+  }
+}
+
+// Merge a family overlay onto the shared shelf. Shared wins on an id collision
+// (lanes don't collide by design, but the shared shelf is authoritative), and
+// shared prompts win — an overlay only fills a prompt the shared set lacks.
+function mergeOverlay(manifest, overlay) {
+  if (!manifest || !overlay) return manifest;
+  const merged = {
+    ...manifest,
+    prompts: { ...(overlay.prompts ?? {}), ...(manifest.prompts ?? {}) },
+  };
+  const seen = new Set((manifest.stories ?? []).map((s) => s.id));
+  const extra = (overlay.stories ?? []).filter((s) => !seen.has(s.id));
+  merged.stories = [...(manifest.stories ?? []), ...extra];
+  return merged;
+}
+
+// Default token reader: the child's own IndexedDB (same-origin, no auth SDK,
+// no network). Returns null on any absence or error so the shared shelf
+// renders regardless.
+function readFamilyTokenFromIndexedDB(win = globalThis) {
+  const idb = win?.indexedDB;
+  if (!idb) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let open;
+    try {
+      open = idb.open("cantastorie", 1);
+    } catch {
+      resolve(null);
+      return;
+    }
+    open.onupgradeneeded = () => {
+      try {
+        open.result.createObjectStore("family");
+      } catch {
+        // store may already exist on a bumped version — ignore
+      }
+    };
+    open.onerror = () => resolve(null);
+    open.onsuccess = () => {
+      const db = open.result;
+      try {
+        if (!db.objectStoreNames.contains("family")) {
+          db.close();
+          resolve(null);
+          return;
+        }
+        const req = db.transaction("family", "readonly").objectStore("family").get("token");
+        req.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+        req.onsuccess = () => {
+          db.close();
+          const value = req.result;
+          resolve(typeof value === "string" ? value : null);
+        };
+      } catch {
+        try {
+          db.close();
+        } catch {
+          // already closed
+        }
+        resolve(null);
+      }
+    };
+  });
+}
+
 function loadLang(storage = globalThis.localStorage) {
   try {
     return storage?.getItem("cantastorie-lang") ?? null;
@@ -111,7 +199,11 @@ function replayResume(loaded, choices) {
 
 export async function init(
   root = document,
-  { fetchFn = globalThis.fetch?.bind(globalThis), engine = null } = {},
+  {
+    fetchFn = globalThis.fetch?.bind(globalThis),
+    engine = null,
+    readFamilyToken = () => readFamilyTokenFromIndexedDB(root.defaultView ?? globalThis),
+  } = {},
 ) {
   const app = root.querySelector("#app");
   if (!app) return null;
@@ -127,7 +219,24 @@ export async function init(
   const store = createStore(load());
   engine ??= createAudioEngine();
 
-  let manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
+  // Read the family token once. Never throws — a null token means shared-only.
+  let familyToken = null;
+  try {
+    familyToken = fetchFn ? await readFamilyToken() : null;
+  } catch (err) {
+    console.warn("family token read failed", err);
+  }
+
+  async function fetchShelf(targetLang) {
+    if (!fetchFn) return null;
+    const shared = await fetchManifest(assetBase, fetchFn, targetLang);
+    if (shared === null) return null; // cold-load: let the clouds screen handle it
+    if (!familyToken) return shared; // no token → zero overlay requests
+    const overlay = await fetchOverlayManifest(assetBase, fetchFn, familyToken, targetLang);
+    return mergeOverlay(shared, overlay);
+  }
+
+  let manifest = await fetchShelf(lang);
 
   // Same-origin on purpose — NOT assetBase. assetBase is the R2 bucket in
   // prod, which is unreachable in the very offline case this screen handles;
@@ -147,7 +256,7 @@ export async function init(
         }),
       );
     });
-    manifest = await fetchManifest(assetBase, fetchFn, lang);
+    manifest = await fetchShelf(lang);
   }
 
   let stories = manifest?.stories ?? fallbackShelf;
@@ -195,7 +304,7 @@ export async function init(
     storyCache.clear();
     activeStory = null;
     playback.clearStory();
-    manifest = fetchFn ? await fetchManifest(assetBase, fetchFn, lang) : null;
+    manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
     prefetcher = createPrefetcher({ engine, fetchFn });
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
