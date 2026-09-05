@@ -29,6 +29,19 @@ Seven languages are in scope (Italian and Spanish flagship; English, Greek, Germ
 
 ---
 
+## Stories
+
+Every story is painted by the authoring pipeline in one consistent watercolor style — warm, rounded, nothing frightening. A sample of covers from the live shelf:
+
+<p align="center">
+  <img src="docs/assets/stories/gentle-forest-friends.webp" alt="Gli Amici del Bosco Gentile" width="180">
+  <img src="docs/assets/stories/grandparent-visit.webp" alt="La Visita dei Nonni" width="180">
+  <img src="docs/assets/stories/tiny-garden-adventure.webp" alt="La Piccola Avventura nel Giardino" width="180">
+  <img src="docs/assets/stories/picnic-surprise.webp" alt="Il Picnic a Sorpresa sulla Spiaggia" width="180">
+</p>
+
+---
+
 ## For Developers
 
 One FastAPI app with three faces — a vanilla-JS child player, a server-rendered parent area (`/parent`, Clerk sign-in), and an operator workshop (`/workshop`) for in-app authoring — plus a plain-Python authoring pipeline that runs from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in the [ADRs](docs/adr/).
