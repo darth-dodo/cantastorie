@@ -19,7 +19,7 @@ test("story title renders below the cover image, not as an overlay", async ({ pa
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
-  await page.goto(`${PROD}/?lang=en`, { waitUntil: "networkidle" });
+  await page.goto(`${PROD}/play?lang=en`, { waitUntil: "networkidle" });
   await page.waitForSelector(".covers .cover");
   await page.waitForTimeout(1500);
 

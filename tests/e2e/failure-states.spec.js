@@ -16,7 +16,7 @@ test.describe("When Things Go Wrong (product.md)", () => {
     // Every narration file is dead before the night begins; the prompts live.
     await page.route(STORY_AUDIO, (route) => route.abort());
 
-    await page.goto("/?theme=dusk");
+    await page.goto("/play?theme=dusk");
     await page.locator(".greeting").click();
     await page.waitForFunction(() => window.__shell?.engine.unlocked === true);
     await page.locator(".cover").first().click();
@@ -45,7 +45,7 @@ test.describe("When Things Go Wrong (product.md)", () => {
     });
 
     await page.route("**/manifest.json", (route) => route.abort());
-    await page.goto("/?theme=dusk");
+    await page.goto("/play?theme=dusk");
 
     // Clouds, the line, no covers, no spinner.
     await expect(page.locator(".offline")).toBeVisible();

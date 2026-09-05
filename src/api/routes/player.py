@@ -15,10 +15,11 @@ router = APIRouter()
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/play", response_class=HTMLResponse)
 async def player_page(
     request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> HTMLResponse:
     # asset_base tells the shell where published stories live — the static
-    # mount in dev, the R2 public bucket in production (AI-365).
+    # mount in dev, the R2 public bucket in production (AI-365). The landing
+    # page (AI-433) owns "/", so the player self-serves from "/play".
     return templates.TemplateResponse(request, "index.html", {"asset_base": settings.asset_base})
