@@ -72,8 +72,8 @@ class Harness:
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager
-        app.dependency_overrides[get_family_publisher] = (
-            lambda: lambda story_id, family_token: self.published.append((story_id, family_token))
+        app.dependency_overrides[get_family_publisher] = lambda: (
+            lambda story_id, family_token: self.published.append((story_id, family_token))
         )
         self.client = TestClient(app, base_url="https://testserver")
 
