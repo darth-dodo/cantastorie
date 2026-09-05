@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 const STORY_BASE = "/static/content/it/stories/la-barchetta-e-la-luna/";
 
 async function wakeAndOpenTheStory(page) {
-  await page.goto("/?theme=dusk");
+  await page.goto("/play?theme=dusk");
   // Given the shelf: the first tap anywhere wakes the sound...
   await page.locator(".greeting").click();
   await page.waitForFunction(() => window.__shell?.engine.unlocked === true);

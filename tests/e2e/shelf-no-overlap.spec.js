@@ -23,7 +23,7 @@ test("shelf covers do not overlap on the 7-cover EN manifest", async ({ page }) 
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
-  await page.goto(`${PROD}/?lang=en`, { waitUntil: "networkidle" });
+  await page.goto(`${PROD}/play?lang=en`, { waitUntil: "networkidle" });
   await page.waitForSelector(".covers .cover");
   await page.waitForTimeout(1500);
 

@@ -36,7 +36,7 @@ const ARM_FIRST_PAGE_INDEX = 6;
 const BRANCHED_PATH_LENGTH = 10;
 
 async function wakeAndOpenBranchingStory(page) {
-  await page.goto("/?lang=it&theme=light");
+  await page.goto("/play?lang=it&theme=light");
   // The first tap anywhere wakes the sound...
   await page.locator(".greeting").click();
   await page.waitForFunction(() => window.__shell?.engine.unlocked === true);

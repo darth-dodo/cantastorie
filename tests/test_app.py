@@ -15,7 +15,7 @@ def test_health() -> None:
 
 
 def test_player_page_serves_shell() -> None:
-    response = client.get("/")
+    response = client.get("/play")
     assert response.status_code == 200
     assert 'id="app"' in response.text
     assert "/static/css/tokens.css" in response.text
@@ -31,7 +31,7 @@ def test_player_page_asset_base_defaults_to_the_static_mount() -> None:
         return Settings(_env_file=None)
 
     app2.dependency_overrides[get_settings] = _default_settings
-    body = TestClient(app2).get("/").text
+    body = TestClient(app2).get("/play").text
     assert 'name="asset-base" content="/static/content"' in body
 
 
@@ -43,7 +43,7 @@ def test_player_page_serves_the_configured_asset_base() -> None:
     deployed.dependency_overrides[get_settings] = lambda: Settings(
         _env_file=None, asset_base="https://pub-test.r2.dev/published"
     )
-    body = TestClient(deployed).get("/").text
+    body = TestClient(deployed).get("/play").text
     assert 'name="asset-base" content="https://pub-test.r2.dev/published"' in body
 
 

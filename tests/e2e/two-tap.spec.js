@@ -15,7 +15,7 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
     }
   });
 
-  await page.goto("/?theme=light&speed=600");
+  await page.goto("/play?theme=light&speed=600");
   await expect(page.locator(".shelf .cover")).toHaveCount(4);
 
   const start = Date.now();
@@ -40,7 +40,7 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
 });
 
 test("the parent corner exists but leads nowhere yet", async ({ page }) => {
-  await page.goto("/?theme=light");
+  await page.goto("/play?theme=light");
   await expect(page.locator(".parent-corner")).toBeVisible();
   await page.locator(".parent-corner").click();
   await expect(page.locator(".shelf")).toBeVisible(); // still on the shelf
