@@ -71,7 +71,10 @@
         </div>
       {% endif %}
     {% elif record.state == "staged" %}
-      <div class="ws-progress-sub">Your stories are made — they'll appear on the shelf after review.</div>
+      <div class="ws-progress-sub">Your stories are made — approve to add them to your family's private shelf.</div>
+      <form method="post" action="{{ base_url }}/{{ record.id }}/approve" class="ws-review-pills">
+        <button type="submit" class="ws-pill ws-pill-confirm" data-testid="parent-approve">Add to our shelf</button>
+      </form>
     {% endif %}
 
     {% if record.state == "failed" and record.error %}

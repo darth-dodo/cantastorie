@@ -242,14 +242,20 @@ async def library(request: Request, settings: WorkshopSettings) -> Response:
 
 @router.post("/stories/{story_id}/delete")
 async def delete_published_story(
-    request: Request, settings: WorkshopSettings, story_id: str
+    request: Request,
+    settings: WorkshopSettings,
+    story_id: str,
+    family_token: str | None = None,
 ) -> Response:
     scope = await _scope(request, settings)
     if scope is None:
         return _to_login()
     if not scope.is_operator:
         raise HTTPException(status_code=403)
-    unpublish_story(story_id, settings)
+    # Moderation: the operator can delete a shared-shelf story (family_token
+    # absent) or reach into any family's private overlay (family_token given).
+    # unpublish_story validates the token before it becomes an R2 prefix.
+    unpublish_story(story_id, settings, family_token=family_token or None)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/workshop/library", status_code=303)

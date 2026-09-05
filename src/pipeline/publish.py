@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -41,8 +42,30 @@ if TYPE_CHECKING:
     from src.pipeline.steps.assemble import AssembledStory
 
 PUBLISHED_PREFIX = "published"
+FAMILIES_SEGMENT = "families"
 STAGED_PREFIX = "pending/staged"
 STORY_FILE = "story.json"
+
+# The tenancy boundary in R2-key form. A family_token becomes a path prefix, so
+# it must be exactly the canonical 32-hex mint (secrets.token_hex(16)) — no
+# casing variants, no path separators, no empty string. See src/workshop/scope.py
+# and src/api/routes/parent.py (FAMILY_TOKEN_PATTERN).
+_FAMILY_TOKEN_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _publish_root(family_token: str | None) -> str:
+    """Resolve the publish root for a scope.
+
+    ``None`` → the shared shelf root (``published``), byte-identical to today.
+    A family token → its private overlay root (``published/families/{token}``).
+    A non-canonical token raises rather than smuggling into a bucket key.
+    """
+    if family_token is None:
+        return PUBLISHED_PREFIX
+    if not _FAMILY_TOKEN_RE.fullmatch(family_token):
+        raise ValueError(f"invalid family token for overlay publish: {family_token!r}")
+    return f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/{family_token}"
+
 
 CONTENT_TYPES = {
     ".mp3": "audio/mpeg",
@@ -150,9 +173,9 @@ def _upload_if_new(
 
 
 def _load_manifest(
-    client: S3Client, bucket: str, language: str
+    client: S3Client, bucket: str, language: str, root: str = PUBLISHED_PREFIX
 ) -> tuple[dict[str, Any], str | None]:
-    key = f"{PUBLISHED_PREFIX}/{language}/manifest.json"
+    key = f"{root}/{language}/manifest.json"
     try:
         obj = client.get_object(Bucket=bucket, Key=key)
     except ClientError as error:
@@ -186,10 +209,11 @@ def _publish_manifest(
     story: Story,
     public_base: str,
     prompt_urls: dict[str, str],
+    root: str = PUBLISHED_PREFIX,
 ) -> tuple[list[str], list[str], list[str]]:
-    manifest_key = f"{PUBLISHED_PREFIX}/{language}/manifest.json"
+    manifest_key = f"{root}/{language}/manifest.json"
     for attempt in range(_MANIFEST_WRITE_ATTEMPTS):
-        manifest, etag = _load_manifest(client, bucket, language)
+        manifest, etag = _load_manifest(client, bucket, language, root)
         if prompt_urls:
             manifest["prompts"] = {**manifest.get("prompts", {}), **prompt_urls}
         _upsert_story(manifest, story, public_base)
@@ -262,6 +286,7 @@ def publish_story(
     settings: Settings,
     *,
     client: S3Client | None = None,
+    family_token: str | None = None,
 ) -> PublishResult:
     """Publish a staged story to R2 and update its language manifest.
 
@@ -269,7 +294,12 @@ def publish_story(
     regenerates), uploads story.json, every hashed asset, and the language's
     prompts, then rewrites the manifest last. Every upload is a
     skip-if-unchanged, so a repeat publish is a no-op.
+
+    ``family_token`` selects the lane: ``None`` writes the shared shelf
+    (operator, global), a canonical token writes that family's private overlay
+    under ``published/families/{token}/…``. The two lanes never cross.
     """
+    root = _publish_root(family_token)
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
     pending_bucket = settings.pending_bucket
@@ -278,6 +308,8 @@ def publish_story(
             "R2_PUBLIC_BASE must be set before publishing — manifest URLs would be relative"
         )
     public_base = settings.r2_public_base.rstrip("/")
+    if family_token is not None:
+        public_base = f"{public_base}/{FAMILIES_SEGMENT}/{family_token}"
     staged_prefix = f"{STAGED_PREFIX}/{story_id}"
 
     story_bytes = client.get_object(Bucket=pending_bucket, Key=f"{staged_prefix}/{STORY_FILE}")[
@@ -313,11 +345,11 @@ def publish_story(
                 continue
             body = client.get_object(Bucket=pending_bucket, Key=key)["Body"].read()
             send(
-                f"{PUBLISHED_PREFIX}/stories/{story_id}/{name}",
+                f"{root}/stories/{story_id}/{name}",
                 body,
                 _content_type(name),
             )
-    send(f"{PUBLISHED_PREFIX}/stories/{story_id}/{STORY_FILE}", story_bytes, "application/json")
+    send(f"{root}/stories/{story_id}/{STORY_FILE}", story_bytes, "application/json")
 
     prompt_prefix = f"{STAGED_PREFIX}/prompts/{language}"
     prompt_urls: dict[str, str] = {}
@@ -327,7 +359,7 @@ def publish_story(
             name = key.removeprefix(f"{prompt_prefix}/")
             body = client.get_object(Bucket=pending_bucket, Key=key)["Body"].read()
             send(
-                f"{PUBLISHED_PREFIX}/prompts/{language}/{name}",
+                f"{root}/prompts/{language}/{name}",
                 body,
                 _content_type(name),
             )
@@ -336,7 +368,7 @@ def publish_story(
                 prompt_urls[manifest_key] = f"{public_base}/prompts/{language}/{name}"
 
     manifest_uploaded, manifest_skipped, manifest_story_ids = _publish_manifest(
-        client, bucket, language, story, public_base, prompt_urls
+        client, bucket, language, story, public_base, prompt_urls, root
     )
     uploaded.extend(manifest_uploaded)
     skipped.extend(manifest_skipped)
@@ -354,25 +386,27 @@ def unpublish_story(
     settings: Settings,
     *,
     client: S3Client | None = None,
+    family_token: str | None = None,
 ) -> None:
+    """Remove a published story: its manifest entry and its asset directory.
+
+    ``family_token`` scopes the search to a lane. ``None`` searches only the
+    shared shelf (``published/{lang}/manifest.json`` + ``published/stories/…``);
+    a canonical token searches only that family's overlay root. Scoping keeps a
+    family confined to its own partition and lets the operator target a
+    specific family's private story by passing its token.
+    """
+    root = _publish_root(family_token)
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
     language: str | None = None
     manifest: dict[str, Any] | None = None
-    for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
-    ):
-        for item in page.get("Contents", []):
-            key = item["Key"]
-            if not key.endswith("/manifest.json"):
-                continue
-            candidate = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-            loaded, _ = _load_manifest(client, bucket, candidate)
-            if any(entry.get("id") == story_id for entry in loaded.get("stories", [])):
-                language = candidate
-                manifest = loaded
-                break
-        if manifest is not None:
+    manifest_prefixes = _manifest_prefixes_under(client, bucket, root)
+    for candidate in manifest_prefixes:
+        loaded, _ = _load_manifest(client, bucket, candidate, root)
+        if any(entry.get("id") == story_id for entry in loaded.get("stories", [])):
+            language = candidate
+            manifest = loaded
             break
     if language is not None and manifest is not None:
         manifest["stories"] = [
@@ -380,17 +414,37 @@ def unpublish_story(
         ]
         client.put_object(
             Bucket=bucket,
-            Key=f"{PUBLISHED_PREFIX}/{language}/manifest.json",
+            Key=f"{root}/{language}/manifest.json",
             Body=json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode(),
             ContentType="application/json",
         )
     keys: list[ObjectIdentifierTypeDef] = []
     for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/{story_id}/"
+        Bucket=bucket, Prefix=f"{root}/stories/{story_id}/"
     ):
         keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
     for start in range(0, len(keys), 1000):
         client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})
+
+
+def _manifest_prefixes_under(client: S3Client, bucket: str, root: str) -> list[str]:
+    """Language prefixes owning a manifest.json directly under ``root``.
+
+    Only the manifests one level below ``root`` — never a family overlay's when
+    ``root`` is the shared shelf, and never the shared shelf's when ``root`` is a
+    family overlay. Returns e.g. ``["it", "es"]``.
+    """
+    prefixes: list[str] = []
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"{root}/"):
+        for item in page.get("Contents", []):
+            key = item["Key"]
+            if not key.endswith("/manifest.json"):
+                continue
+            candidate = key.removeprefix(f"{root}/").removesuffix("/manifest.json")
+            if "/" in candidate:
+                continue  # a deeper (family) manifest — not owned by this root
+            prefixes.append(candidate)
+    return prefixes
 
 
 class AuditResult(BaseModel):
@@ -398,19 +452,30 @@ class AuditResult(BaseModel):
     manifests_checked: int
 
 
-def _check_manifest_url(sid: str, url: str) -> str | None:
+def _check_manifest_url(sid: str, url: str, lane_asset_prefix: str) -> str | None:
+    """Verify a manifest entry's URL stays inside its own lane's asset root.
+
+    ``lane_asset_prefix`` is ``{root}/stories/`` for the lane owning this
+    manifest. A URL pointing anywhere else under published/ (the shared shelf
+    from a family manifest, another family, or a family asset from the shared
+    manifest) is a cross-tenant leak.
+    """
     if not url:
         return f"{sid}: manifest entry has an empty URL"
     if "pending/" in url:
         return f"{sid}: manifest URL points into pending/ — {url}"
     if f"/{PUBLISHED_PREFIX}/" not in url and not url.startswith(PUBLISHED_PREFIX):
         return f"{sid}: manifest URL outside published/ — {url}"
+    if f"/{lane_asset_prefix}" not in url and not url.startswith(lane_asset_prefix):
+        return f"{sid}: cross-tenant manifest URL outside its lane — {url}"
     return None
 
 
-def _check_story_assets(client: S3Client, bucket: str, sid: str) -> tuple[list[str], Story | None]:
+def _check_story_assets(
+    client: S3Client, bucket: str, sid: str, root: str
+) -> tuple[list[str], Story | None]:
     violations: list[str] = []
-    story_key = f"{PUBLISHED_PREFIX}/stories/{sid}/{STORY_FILE}"
+    story_key = f"{root}/stories/{sid}/{STORY_FILE}"
     try:
         body = client.get_object(Bucket=bucket, Key=story_key)["Body"].read()
     except ClientError as error:
@@ -421,11 +486,11 @@ def _check_story_assets(client: S3Client, bucket: str, sid: str) -> tuple[list[s
     story = Story.model_validate_json(body)
     for page_obj in story.pages:
         if page_obj.audio:
-            akey = f"{PUBLISHED_PREFIX}/stories/{sid}/{page_obj.audio.file}"
+            akey = f"{root}/stories/{sid}/{page_obj.audio.file}"
             if not _object_exists(client, bucket, akey):
                 violations.append(f"{sid}: missing audio {page_obj.audio.file}")
         if page_obj.image:
-            ikey = f"{PUBLISHED_PREFIX}/stories/{sid}/{page_obj.image}"
+            ikey = f"{root}/stories/{sid}/{page_obj.image}"
             if not _object_exists(client, bucket, ikey):
                 violations.append(f"{sid}: missing image {page_obj.image}")
     return violations, story
@@ -441,14 +506,21 @@ def _object_exists(client: S3Client, bucket: str, key: str) -> bool:
         raise
 
 
-def _find_orphan_story_dirs(client: S3Client, bucket: str, listed_story_ids: set[str]) -> list[str]:
+def _find_orphan_story_dirs(
+    client: S3Client, bucket: str, root: str, listed_story_ids: set[str]
+) -> list[str]:
+    """Story directories directly under ``{root}/stories/`` no manifest lists.
+
+    Scoped to one lane: it walks only ``{root}/stories/`` so a shared audit
+    never mistakes a family's story dir for a shared orphan, and vice versa.
+    """
     orphans: list[str] = []
     story_dirs: list[str] = []
     for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
+        Bucket=bucket, Prefix=f"{root}/stories/"
     ):
         for item in page.get("Contents", []):
-            parts = item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/stories/").split("/", 1)
+            parts = item["Key"].removeprefix(f"{root}/stories/").split("/", 1)
             if len(parts) == 2 and parts[0] not in story_dirs:
                 story_dirs.append(parts[0])
     for sdir in story_dirs:
@@ -462,19 +534,20 @@ def audit_published_bucket(
     *,
     client: S3Client | None = None,
 ) -> AuditResult:
-    """Verify every reachable asset is approved; zero child-reachable unapproved.
+    """Verify every reachable asset is approved and confined to its lane.
 
-    Checks that every manifest entry resolves to real objects under
-    ``published/``, that no manifest URL points into ``pending/`` or
-    outside ``published/``, that every story.json's referenced audio and
-    image files exist, and that no orphan story directory lurks unlisted.
+    Walks the shared shelf and every family overlay. For each lane, checks
+    that every manifest entry resolves to real objects **inside that lane's own
+    asset root**, that no URL points into ``pending/`` / outside ``published/``
+    / into another lane (a cross-tenant leak), that every story.json's audio and
+    image files exist, and that no orphan story directory lurks unlisted. Zero
+    child-reachable unapproved or cross-tenant asset is the invariant.
     """
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
 
     violations: list[str] = []
     manifests_checked = 0
-    listed_story_ids: set[str] = set()
 
     manifest_keys: list[str] = []
     for page in client.get_paginator("list_objects_v2").paginate(
@@ -484,28 +557,69 @@ def audit_published_bucket(
             if item["Key"].endswith("/manifest.json"):
                 manifest_keys.append(item["Key"])
 
+    # Group manifests by lane root, tracking which story ids each lane lists so
+    # orphan detection stays lane-local.
+    listed_by_root: dict[str, set[str]] = {}
     for mkey in manifest_keys:
+        lane = _manifest_lane(mkey)
+        if lane is None:
+            continue
         manifests_checked += 1
-        lang = mkey.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-        manifest, _ = _load_manifest(client, bucket, lang)
+        language, family_token = lane
+        root = _publish_root(family_token)
+        lane_asset_prefix = f"{root}/stories/"
+        listed = listed_by_root.setdefault(root, set())
+        manifest, _ = _load_manifest(client, bucket, language, root)
         for entry in manifest.get("stories", []):
             sid = entry.get("id", "?")
             story_url = entry.get("story", "")
             cover_url = entry.get("cover", "")
 
             for url in (story_url, cover_url):
-                v = _check_manifest_url(sid, url)
+                v = _check_manifest_url(sid, url, lane_asset_prefix)
                 if v:
                     violations.append(v)
 
-            if story_url and f"{PUBLISHED_PREFIX}/" in story_url:
-                listed_story_ids.add(sid)
-                story_violations, _ = _check_story_assets(client, bucket, sid)
+            # Only walk assets for an entry that stays in its own lane; a
+            # cross-tenant URL is already a violation above.
+            if story_url and lane_asset_prefix in f"/{story_url}":
+                listed.add(sid)
+                story_violations, _ = _check_story_assets(client, bucket, sid, root)
                 violations.extend(story_violations)
 
-    violations.extend(_find_orphan_story_dirs(client, bucket, listed_story_ids))
+    # Orphans: check every lane root that has a stories/ area, not only those
+    # with a manifest (a family whose only manifest was deleted still leaves a
+    # story dir behind).
+    for root in _all_lane_roots(client, bucket):
+        violations.extend(
+            _find_orphan_story_dirs(client, bucket, root, listed_by_root.get(root, set()))
+        )
 
     return AuditResult(violations=violations, manifests_checked=manifests_checked)
+
+
+def _all_lane_roots(client: S3Client, bucket: str) -> list[str]:
+    """Every lane root that owns a ``stories/`` area: the shared shelf and each
+    family overlay present on the bucket."""
+    roots: set[str] = set()
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
+    ):
+        if page.get("Contents"):
+            roots.add(PUBLISHED_PREFIX)
+            break
+    prefix = f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/"
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        for item in page.get("Contents", []):
+            rest = item["Key"].removeprefix(prefix).split("/", 1)
+            token = rest[0]
+            if (
+                len(rest) == 2
+                and rest[1].startswith("stories/")
+                and _FAMILY_TOKEN_RE.fullmatch(token)
+            ):
+                roots.add(f"{prefix}{token}")
+    return sorted(roots)
 
 
 def delete_staged_story(
@@ -530,6 +644,27 @@ class PublishedStory(BaseModel):
     title: str
     language: str
     cover: str
+    # None for the shared shelf (operator, global); the owning family for a
+    # private overlay story. The operator library reads this to tag and to
+    # scope a delete back to the right lane.
+    family_token: str | None = None
+
+
+def _manifest_lane(key: str) -> tuple[str, str | None] | None:
+    """Map a manifest.json key to (language, family_token) or None if it is not
+    a lane manifest.
+
+    ``published/it/manifest.json`` → ``("it", None)`` (shared shelf).
+    ``published/families/{token}/it/manifest.json`` → ``("it", token)``.
+    Anything else (a deeper or malformed key) is ignored.
+    """
+    inner = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
+    parts = inner.split("/")
+    if len(parts) == 1:
+        return parts[0], None
+    if len(parts) == 3 and parts[0] == FAMILIES_SEGMENT and _FAMILY_TOKEN_RE.fullmatch(parts[1]):
+        return parts[2], parts[1]
+    return None
 
 
 def list_published_stories(
@@ -537,7 +672,13 @@ def list_published_stories(
     *,
     client: S3Client | None = None,
 ) -> list[PublishedStory]:
-    """Every manifest entry across languages, sorted for stable pages."""
+    """Every manifest entry across every lane, sorted for stable pages.
+
+    Enumerates the shared shelf (``published/{lang}/manifest.json``) and every
+    family overlay (``published/families/{token}/{lang}/manifest.json``),
+    tagging each row with its owning family (None for the shared shelf) so the
+    operator library can show and moderate private stories.
+    """
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
     stories: list[PublishedStory] = []
@@ -548,8 +689,12 @@ def list_published_stories(
             key = item["Key"]
             if not key.endswith("/manifest.json"):
                 continue
-            language = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-            manifest, _ = _load_manifest(client, bucket, language)
+            lane = _manifest_lane(key)
+            if lane is None:
+                continue
+            language, family_token = lane
+            root = _publish_root(family_token)
+            manifest, _ = _load_manifest(client, bucket, language, root)
             for entry in manifest.get("stories", []):
                 stories.append(
                     PublishedStory(
@@ -557,9 +702,10 @@ def list_published_stories(
                         title=str(entry.get("title", "")),
                         language=language,
                         cover=str(entry.get("cover", "")),
+                        family_token=family_token,
                     )
                 )
-    stories.sort(key=lambda story: (story.language, story.id))
+    stories.sort(key=lambda story: (story.family_token or "", story.language, story.id))
     return stories
 
 

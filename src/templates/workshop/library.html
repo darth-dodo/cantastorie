@@ -14,11 +14,11 @@
         <a href="{{ story.cover }}" target="_blank" rel="noopener" class="ws-run-card-link">
           <div class="ws-run-card-body">
             <div class="ws-run-title">{{ story.title }}</div>
-            <div class="ws-run-meta">{{ story.id }}</div>
+            <div class="ws-run-meta">{{ story.id }}{% if story.family_token %} · private · family {{ story.family_token }}{% else %} · shared shelf{% endif %}</div>
           </div>
         </a>
         <button class="ws-delete-btn"
-                hx-post="/workshop/stories/{{ story.id }}/delete"
+                hx-post="/workshop/stories/{{ story.id }}/delete{% if story.family_token %}?family_token={{ story.family_token }}{% endif %}"
                 hx-target="closest [data-story-card]"
                 hx-swap="outerHTML"
                 hx-confirm="Delete “{{ story.title }}” forever?">×</button>

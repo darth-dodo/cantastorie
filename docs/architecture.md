@@ -201,24 +201,28 @@ A `shape` parameter (default `linear`, threaded from the CLI and the workshop fo
 
 ```
 published/
-├── it/manifest.json          ← short TTL, the only volatile file
+├── it/manifest.json          ← short TTL, the only volatile file (shared shelf)
 ├── es/manifest.json
 ├── ...
-├── stories/{story-id}/
+├── stories/{story-id}/        ← shared-shelf (operator, global) assets
 │   ├── story.json            text, structure, choice graph, timings, glosses
 │   ├── p1.{hash}.mp3         immutable, cache-forever
 │   ├── p1.{hash}.webp
 │   └── ...
-└── prompts/{lang}/{name}.{hash}.mp3
+├── prompts/{lang}/{name}.{hash}.mp3
+└── families/{family_token}/    ← private overlay (per family, only that child)
+    ├── it/manifest.json        the family's own per-language shelf
+    ├── stories/{story-id}/     the family's approved-pack assets
+    └── prompts/{lang}/{name}.{hash}.mp3
 ```
 
 **Immutable assets, volatile manifests.** Asset filenames embed a content hash → browsers cache them forever. Only manifests are fetched fresh (short TTL). "Approve publishes within 60 seconds" then never fights a cache, and repeat bedtimes of a favorite story hit the local cache for everything but one tiny JSON file.
 
-Phase 2 adds a private `pending/` prefix (separate credentials, never listed in any manifest) for generated-but-unapproved packs, plus token-keyed family overlay manifests.
+A private `pending/` prefix (separate credentials, never listed in any manifest) holds generated-but-unapproved packs. **Two publish lanes** share the `published/` bucket: the **shared shelf** (operator, global — `published/stories/…` + `published/{lang}/manifest.json`) and a **family overlay** (private — `published/families/{token}/stories/…` + `published/families/{token}/{lang}/manifest.json`). `publish_story(..., family_token=…)` selects the lane; the family-token prefix is the tenancy boundary and is validated (`^[0-9a-f]{32}$`) before it becomes a key. The lanes never cross and there is no promotion of private → global. The audit (`audit_published_bucket`) enforces this: a manifest may reference only its own lane's assets — a cross-tenant URL is a violation.
 
 ### Serving
 
-The player fetches published assets bucket-direct: the web service injects `ASSET_BASE` (the bucket's public URL plus the `/published` prefix) into the shell, and the player appends `/{lang}/manifest.json`. The bucket has **public read, access logs off, and CORS scoped to the player origin** (`deploy/r2-cors.json`) — nothing about the child ever leaves the browser, so there is nothing to log. Deploy steps and verification live in [`docs/setup.md`](setup.md).
+The player fetches published assets bucket-direct: the web service injects `ASSET_BASE` (the bucket's public URL plus the `/published` prefix) into the shell, and the player appends `/{lang}/manifest.json`. When a `family_token` is present in the child's IndexedDB, the player additionally fetches `/{ASSET_BASE}/families/{token}/{lang}/manifest.json` and merges its stories onto the shared shelf (dedupe by id, shared wins; overlay fetch failure falls back to the shared shelf and never blocks playback). No token → zero overlay requests. The overlay fetch is anonymous and bucket-direct — the child loads no auth SDK and sets no cookies. The bucket has **public read, access logs off, and CORS scoped to the player origin** (`deploy/r2-cors.json`) — nothing about the child ever leaves the browser, so there is nothing to log. Deploy steps and verification live in [`docs/setup.md`](setup.md).
 
 ### IndexedDB (the child's side)
 
@@ -312,8 +316,8 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 - **The gate (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
 - **Settings**: language multi-select, reading mode toggle.
 - **Export/import (not yet built)**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
-- **Parent authentication**: parents sign in via **Clerk** (magic link / OAuth) — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted, implemented). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK, async fetch). One parent account = one family; the family token is minted or linked at first sign-in and lives in Clerk `public_metadata`. Approved packs will publish to `published/families/{family_token}/…` + a family overlay manifest. The child player stays account-free — no Clerk script, no cookies on any child path.
-- **The workshop is Clerk-gated; the parent area is its sibling surface (AI-426, AI-430)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition. Parents work in their own `/parent` surface — sign-in, pack requests, run tracking — while operators author in `/workshop`; shared post-sign-in navigation (`src/api/routes/_nav.py`) dispatches each role to its home and 303-redirects the other, so neither role hits a dead end or a redirect loop. With Clerk unconfigured, both areas answer 404. ClerkJS loads on every workshop and parent page to keep the `__session` JWT refreshed for HTMX polling.
+- **Parent authentication**: parents sign in via **Clerk** (magic link / OAuth) — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted, implemented). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK, async fetch). One parent account = one family; the family token is minted or linked at first sign-in and lives in Clerk `public_metadata`. Approved packs publish to `published/families/{family_token}/…` + a family overlay manifest (a family approving a staged pack at `/parent/packs/{id}/approve`); the child player merges that overlay onto the shared shelf. The child player stays account-free — no Clerk script, no cookies on any child path.
+- **The workshop is Clerk-gated; the parent area is its sibling surface (AI-426, AI-430)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition who publishes to their private overlay. The operator can also **see and delete** any family's private story from `/workshop/library` (moderation — never promotion). Parents work in their own `/parent` surface — sign-in, pack requests, run tracking, approving a staged pack to their private shelf — while operators author in `/workshop`; shared post-sign-in navigation (`src/api/routes/_nav.py`) dispatches each role to its home and 303-redirects the other, so neither role hits a dead end or a redirect loop. With Clerk unconfigured, both areas answer 404. ClerkJS loads on every workshop and parent page to keep the `__session` JWT refreshed for HTMX polling.
 - **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
 
 ---

@@ -76,6 +76,41 @@ def _manifest(s3: S3Client, language: str) -> dict[str, Any]:
     return dict(json.loads(body))
 
 
+def _put_overlay_manifest(
+    s3: S3Client, family_token: str, language: str, stories: list[tuple[str, str]]
+) -> None:
+    root = f"published/families/{family_token}"
+    entries: list[dict[str, Any]] = [
+        {
+            "id": story_id,
+            "title": title,
+            "wash": "wash-barchetta",
+            "story": f"{PUBLIC_BASE}/families/{family_token}/stories/{story_id}/story.json",
+            "cover": f"{PUBLIC_BASE}/families/{family_token}/stories/{story_id}/p1.webp",
+        }
+        for story_id, title in stories
+    ]
+    body = json.dumps({"language": language, "prompts": {}, "stories": entries}).encode()
+    s3.put_object(Bucket=BUCKET, Key=f"{root}/{language}/manifest.json", Body=body)
+
+
+def _put_overlay_assets(s3: S3Client, family_token: str, story_id: str) -> None:
+    root = f"published/families/{family_token}/stories/{story_id}"
+    s3.put_object(Bucket=BUCKET, Key=f"{root}/story.json", Body=b"{}")
+    s3.put_object(Bucket=BUCKET, Key=f"{root}/p1.webp", Body=b"webp:p1")
+
+
+def _overlay_asset_keys(s3: S3Client, family_token: str, story_id: str) -> list[str]:
+    prefix = f"published/families/{family_token}/stories/{story_id}/"
+    response = s3.list_objects_v2(Bucket=BUCKET, Prefix=prefix)
+    return [item["Key"] for item in response.get("Contents", [])]
+
+
+def _overlay_manifest(s3: S3Client, family_token: str, language: str) -> dict[str, Any]:
+    key = f"published/families/{family_token}/{language}/manifest.json"
+    return dict(json.loads(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()))
+
+
 def _approved_run(store: RunStore, family_token: str, story_ids: list[str]) -> RunRecord:
     record = new_run(family_token, PackRequest(theme="first_snow", language="it", count=1))
     record = record.advance("running").advance("staged").advance("approved", story_ids=story_ids)
@@ -179,7 +214,9 @@ def test_a_non_operator_cannot_delete_via_the_workshop(tmp_path: Path, s3: S3Cli
 
 
 def test_a_parent_sees_only_own_approved_packs(tmp_path: Path, s3: S3Client) -> None:
-    _put_manifest(s3, "it", [("sea-it-1", "La barchetta"), ("neve-it-1", "Prima neve")])
+    # A family's approved stories live in their private overlay, not the shared shelf.
+    _put_overlay_manifest(s3, FAMILY, "it", [("sea-it-1", "La barchetta")])
+    _put_overlay_manifest(s3, "c" * 32, "it", [("neve-it-1", "Prima neve")])
     harness = Harness(tmp_path, s3)
     _approved_run(harness.store, FAMILY, ["sea-it-1"])
     harness.sign_in(PARENT)
@@ -188,7 +225,7 @@ def test_a_parent_sees_only_own_approved_packs(tmp_path: Path, s3: S3Client) -> 
 
     assert page.status_code == 200
     assert "La barchetta" in page.text
-    assert "Prima neve" not in page.text
+    assert "Prima neve" not in page.text  # another family's overlay never leaks
 
 
 def test_a_signed_out_parent_gets_the_sign_in_page(tmp_path: Path, s3: S3Client) -> None:
@@ -201,8 +238,8 @@ def test_a_signed_out_parent_gets_the_sign_in_page(tmp_path: Path, s3: S3Client)
 
 
 def test_a_parent_deletes_own_story_forever(tmp_path: Path, s3: S3Client) -> None:
-    _put_manifest(s3, "it", [("sea-it-1", "La barchetta")])
-    _put_assets(s3, "sea-it-1")
+    _put_overlay_manifest(s3, FAMILY, "it", [("sea-it-1", "La barchetta")])
+    _put_overlay_assets(s3, FAMILY, "sea-it-1")
     harness = Harness(tmp_path, s3)
     _approved_run(harness.store, FAMILY, ["sea-it-1"])
     harness.sign_in(PARENT)
@@ -214,17 +251,61 @@ def test_a_parent_deletes_own_story_forever(tmp_path: Path, s3: S3Client) -> Non
 
     assert response.status_code == 200
     assert response.text == ""
-    assert _manifest(s3, "it")["stories"] == []
-    assert _asset_keys(s3, "sea-it-1") == []
+    assert _overlay_manifest(s3, FAMILY, "it")["stories"] == []
+    assert _overlay_asset_keys(s3, FAMILY, "sea-it-1") == []
 
 
 def test_a_parent_cannot_delete_another_familys_story(tmp_path: Path, s3: S3Client) -> None:
-    _put_manifest(s3, "it", [("neve-it-1", "Prima neve")])
-    _put_assets(s3, "neve-it-1")
+    other = "c" * 32
+    _put_overlay_manifest(s3, other, "it", [("neve-it-1", "Prima neve")])
+    _put_overlay_assets(s3, other, "neve-it-1")
     harness = Harness(tmp_path, s3)
-    harness.sign_in(PARENT)
+    harness.sign_in(PARENT)  # session = FAMILY
 
     response = harness.client.post("/parent/stories/neve-it-1/delete")
 
     assert response.status_code == 404
-    assert len(_asset_keys(s3, "neve-it-1")) == 2
+    assert len(_overlay_asset_keys(s3, other, "neve-it-1")) == 2
+
+
+def test_the_library_lists_family_overlays_tagged_by_owner(tmp_path: Path, s3: S3Client) -> None:
+    """Operator moderation: private stories show in /workshop/library, tagged."""
+    _put_manifest(s3, "it", [("global-it-1", "Storia globale")])
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    page = harness.client.get("/workshop/library")
+
+    assert page.status_code == 200
+    assert "Storia globale" in page.text
+    assert "Storia privata" in page.text
+    assert FAMILY in page.text  # the owning family is surfaced to the operator
+
+
+def test_an_operator_deletes_a_familys_private_story(tmp_path: Path, s3: S3Client) -> None:
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    _put_overlay_assets(s3, FAMILY, "fam-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    response = harness.client.post(
+        f"/workshop/stories/fam-it-1/delete?family_token={FAMILY}",
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert _overlay_manifest(s3, FAMILY, "it")["stories"] == []
+    assert _overlay_asset_keys(s3, FAMILY, "fam-it-1") == []
+
+
+def test_a_parent_cannot_reach_the_operator_overlay_delete(tmp_path: Path, s3: S3Client) -> None:
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    _put_overlay_assets(s3, FAMILY, "fam-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(PARENT)
+
+    response = harness.client.post(f"/workshop/stories/fam-it-1/delete?family_token={FAMILY}")
+
+    assert response.status_code == 403
+    assert len(_overlay_asset_keys(s3, FAMILY, "fam-it-1")) == 2

@@ -86,7 +86,7 @@ flowchart TD
 
 | Module | Owns | Key exports |
 |--------|------|-------------|
-| `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, audio unlock on first gesture, spoken greeting, the render loop, the dev page-timer stand-in | `init(root, {fetchFn, engine})` → shell handle |
+| `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, **family-overlay merge** (when a `family_token` is in IndexedDB, fetch `families/{token}/{lang}/manifest.json` and append its stories — dedupe by id, shared wins; a token-less boot makes zero overlay requests; an overlay fetch failure falls back to the shared shelf and never throws), audio unlock on first gesture, spoken greeting, the render loop, the dev page-timer stand-in | `init(root, {fetchFn, engine, readFamilyToken})` → shell handle |
 | `store.js` | All player state and every legal transition; pure, no DOM, no audio; `choose(i)` records the tapped option in a `choices` array | `createStore`, `initialState` |
 | `playback.js` | The playback loop: story-start prompt, narrating the current page, auto page turn on audio end, pause/resume at exact position; `extendPath()` appends a tapped arm to the played path and recomputes the next choice page | `createPlayback` |
 | `audio-engine.js` | The single `AudioContext`; decoded-buffer cache; narration vs prompt channels; crossfades and ducking via gain ramps | `createAudioEngine`, `CROSSFADE_SECONDS` |
@@ -252,7 +252,7 @@ Two properties keep the lifecycle honest:
 - **The reaper (`reap_stale`, AI-417)** retires `queued`/`running` records whose heartbeat is too old to belong to a live process — a deploy or crash left them stranded — marking them `failed` with a distinct "the workshop restarted" note so the screen can tell an interruption apart from a pipeline error. Terminal and review-waiting states are never swept.
 - **Retry re-buys nothing.** `failed → queued` is a legal edge because the step functions run against the content-addressed `ArtifactCache`: completed steps are pure lookups, so a resumed or retried run only pays for what never finished.
 
-Progress shown in the UI is read from the run record plus the working folder's checkpoint dirs — there is no parallel status store. Publish calls the pipeline's `publish_story`, which remains the only writer to `published/`; nothing under `pending/` is ever listed in a manifest.
+Progress shown in the UI is read from the run record plus the working folder's checkpoint dirs — there is no parallel status store. Publish calls the pipeline's `publish_story`, which remains the only writer to `published/`; nothing under `pending/` is ever listed in a manifest. `publish_story(..., family_token=…)` selects the lane: an operator approve publishes to the **shared shelf** (`published/stories/…` + `published/{lang}/manifest.json`); a parent approve (`POST /parent/packs/{id}/approve`) publishes to that family's **private overlay** (`published/families/{token}/…`). The family-token prefix is validated (`^[0-9a-f]{32}$`) before it becomes a key; the lanes never cross and private is never promoted to global.
 
 ---
 
@@ -264,7 +264,7 @@ An app factory (`create_app`) that initializes observability, adds LangSmith's `
 |--------|------|--------------|
 | `player.py` | `/` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
 | `published.py` | `/published` | R2 content proxy for dev/prod parity |
-| `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, and the my-packs list with progress polling — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
+| `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, the my-packs list with progress polling, and **approving a staged pack to the family's private overlay** (`POST /parent/packs/{id}/approve` → `publish_story(..., family_token=…)`) — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
 | `workshop.py` | `/workshop` | Clerk-gated operator screens, operator role (Jinja2 + HTMX): start a run, watch step progress, review the staged story, publish. `src/workshop/manager.py` orchestrates runs in-process and reaps stale ones; `records.py` persists run records to the R2 pending bucket, surviving Render's ephemeral disk |
 
 Unset Clerk config means the `/workshop` and `/parent` routers answer 404 — each area simply does not exist until configured.
@@ -281,7 +281,7 @@ The `/parent` pages — sign-in, the pack request form, and the my-packs list wi
 
 ### Published-story CRUD
 
-The operator library (`GET /workshop/library`, `POST /workshop/stories/{id}/delete`) lists everything published across all language manifests — flagging orphan story directories — and hard-deletes any story, launch content included. Parents get the same single destructive delete scoped to their own approved packs (`GET /parent/stories`, `POST /parent/stories/{id}/delete`). Both faces call `unpublish_story()`; listing comes from `list_published_stories()` and `list_orphan_story_dirs()`, all in [`src/pipeline/publish.py`](../src/pipeline/publish.py).
+The operator library (`GET /workshop/library`, `POST /workshop/stories/{id}/delete`) lists everything published across **every lane** — the shared shelf and every family overlay — tagging each row with its owning family, flagging orphan story directories, and hard-deleting any story (launch content or a family's private story, via `?family_token=`). This is moderation, not promotion — there is no affordance to elevate a private story to the shared shelf. Parents get the same single destructive delete scoped to their **own overlay lane** (`GET /parent/stories`, `POST /parent/stories/{id}/delete`), with the token taken from the session. Both faces call `unpublish_story()` (lane-scoped by `family_token`); listing comes from `list_published_stories()` (each row tagged with its `family_token`, `None` for shared) and `list_orphan_story_dirs()`, all in [`src/pipeline/publish.py`](../src/pipeline/publish.py).
 
 ### Observability (`src/observability.py`)
 
