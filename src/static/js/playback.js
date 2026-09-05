@@ -18,6 +18,7 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
   let narratingPage = null; // page index whose voice is live or held
   let starting = false; // the story start prompt is speaking; hold page 1
   let prevScreen = store.state.screen;
+  let choiceWasOpen = store.state.choiceOpen; // to catch the open transition
 
   function narrate(index) {
     const page = story?.pages[index];
@@ -56,7 +57,31 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
       .catch(() => {});
   }
 
+  // When the choice overlay opens, the two option labels speak on the prompt
+  // channel — label 0, then label 1 only once 0 has ended — so they never
+  // overlap and never talk over the just-ended narration. An option with no
+  // banked label audio (the dev fixture) is skipped silently.
+  function speakLabels(page) {
+    const options = page?.choice?.options ?? [];
+    const urls = options.map((option) => option.audioUrl).filter(Boolean);
+    if (urls.length === 0) return;
+    const speakFrom = (i) => {
+      if (i >= urls.length) return;
+      engine
+        .playPrompt(urls[i], { onEnded: () => speakFrom(i + 1) })
+        .catch(() => {});
+    };
+    speakFrom(0);
+  }
+
   function sync(state) {
+    // The overlay just opened (choice-page audio ended): speak the labels. Do
+    // this before any early return so the labels speak even while playback
+    // otherwise waits out the choice.
+    const choiceOpening = state.choiceOpen && !choiceWasOpen;
+    choiceWasOpen = state.choiceOpen;
+    if (choiceOpening && story) speakLabels(story.pages[state.choicePage]);
+
     if (state.screen !== "player") {
       const entering = state.screen !== prevScreen;
       prevScreen = state.screen;
@@ -99,6 +124,23 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
 
   return {
     hasStory: () => story !== null,
+
+    // A branch option was tapped (AI-428): append the chosen arm's pages to
+    // the played path and recompute the next choicePage. main.js calls this
+    // BEFORE store.choose() — choose() advances page to choicePage + 1, which
+    // must already be the arm's first page.
+    extendPath(pages) {
+      if (!story) return;
+      const start = story.pages.length; // the arm's first page lands here
+      story.pages = [...story.pages, ...pages];
+      // The next branch on the extended path: the first choice page at or
+      // after the arm's start — same findIndex shape as the initial load.
+      const relative = story.pages.slice(start).findIndex((page) => page.choice);
+      store.extendShape({
+        pageCount: story.pages.length,
+        choicePage: relative === -1 ? null : start + relative,
+      });
+    },
 
     // A cover without a published story.json: the page timer stands in.
     clearStory() {

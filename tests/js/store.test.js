@@ -29,6 +29,32 @@ describe("story state machine", () => {
     expect(store.state).toMatchObject({ choiceOpen: false, page: CHOICE_PAGE + 1 });
   });
 
+  it("choose records the option index (default 0) for the chosen branch", () => {
+    const store = createStore({ screen: "player", choiceOpen: true, choicePage: 3, page: 3 });
+    store.choose(1);
+    expect(store.state.choices).toEqual([1]);
+    expect(store.state.page).toBe(4);
+    expect(store.state.choiceOpen).toBe(false);
+
+    const zero = createStore({ screen: "player", choiceOpen: true, choicePage: 2, page: 2 });
+    zero.choose();
+    expect(zero.state.choices).toEqual([0]);
+  });
+
+  it("leaving, replaying, or restarting a story clears recorded choices", () => {
+    const exiting = createStore({ screen: "player", page: 3, choices: [1] });
+    exiting.exitStory();
+    expect(exiting.state.choices).toEqual([]);
+
+    const replaying = createStore({ screen: "end", page: PAGE_COUNT - 1, choices: [0, 1] });
+    replaying.replay();
+    expect(replaying.state.choices).toEqual([]);
+
+    const restarting = createStore({ screen: "player", page: 4, resumeOpen: true, choices: [1] });
+    restarting.resumeRestart();
+    expect(restarting.state.choices).toEqual([]);
+  });
+
   it("the final page ends the story", () => {
     const store = createStore({ screen: "player", page: PAGE_COUNT - 1, playing: true });
     store.advance();

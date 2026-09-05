@@ -247,6 +247,70 @@ describe("the wired playback loop (cover tap -> prompt -> narration turns the pa
   });
 });
 
+describe("resume across a branch (AI-428)", () => {
+  const branchingStory = JSON.parse(
+    readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
+  );
+
+  // The dev-branching graph: shared p1..p6 (choice on p6), arm a = a1..a4,
+  // arm b = b1..b4. pagesFrom("p1") halts at the choice (six pages); option 1
+  // extends the played path with arm b, so an arm-b page sits at index 6..9.
+  const branchingFetch = async (url) => {
+    const path = String(url);
+    if (path.endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+    if (path.includes("dev-branching")) return { ok: true, json: async () => branchingStory };
+    if (path.endsWith("story.json")) return { ok: true, json: async () => storyFixture };
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+  };
+
+  // The dev-branching cover is the last entry in the manifest.
+  const branchingCover = () => [...document.querySelectorAll(".shelf .cover")].at(-1);
+
+  it("replays the recorded choice, rebuilding the path so the saved page lands in the chosen arm", async () => {
+    // A save left mid-arm-b: page 7 (b2 in the rebuilt path), option 1 picked.
+    // Screen rests on the shelf so the cover is tappable — the reopen path.
+    localStorage.setItem(
+      "cantastorie-shell",
+      JSON.stringify({ screen: "shelf", page: 7, choices: [1] }),
+    );
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: branchingFetch, engine: fakeEngine() });
+
+    branchingCover().click();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+
+    // Reopening an unfinished story offers resume; continue keeps the page.
+    await vi.waitFor(() => expect(running.store.state.resumeOpen).toBe(true));
+    running.store.resumeContinue();
+
+    // The path was rebuilt (shared prefix + arm b = 10 pages) and the restored
+    // index points into arm b, not off the un-extended six-page prefix.
+    expect(running.store.state.pageCount).toBe(10);
+    expect(running.store.state.page).toBe(7);
+    expect(running.store.state.choices).toEqual([1]);
+    expect(document.querySelectorAll(".page-art")).toHaveLength(10);
+    expect(document.querySelector(".page-art.current").dataset.page).toBe("7");
+  });
+
+  it("discards a save whose recorded choice no longer fits the story graph — no crash, fresh start", async () => {
+    // Option index 5 does not exist on the choice page: a republished story.
+    localStorage.setItem(
+      "cantastorie-shell",
+      JSON.stringify({ screen: "shelf", page: 7, choices: [5] }),
+    );
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: branchingFetch, engine: fakeEngine() });
+
+    branchingCover().click();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+
+    // No resume offer for a discarded save: the story starts fresh at page 0.
+    expect(running.store.state.resumeOpen).toBe(false);
+    expect(running.store.state.page).toBe(0);
+    expect(running.store.state.choices).toEqual([]);
+  });
+});
+
 describe("published shelf: cross-origin R2 manifest", () => {
   const r2Manifest = {
     language: "en",

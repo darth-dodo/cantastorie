@@ -8,6 +8,7 @@ cross-family safety judge.
 """
 
 from collections.abc import Sequence
+from typing import Literal
 
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
@@ -20,7 +21,9 @@ from src.pipeline.providers import build_model
 from src.pipeline.steps.safety import safety_gate
 from src.pipeline.steps.write import (
     WRITE_INSTRUCTIONS,
+    BranchingStoryDraft,
     StoryDraft,
+    branching_story_from_draft,
     story_from_draft,
     write_story,
 )
@@ -57,6 +60,10 @@ def build_revise_agent(model: Model) -> Agent[None, StoryDraft]:
     return Agent(model=model, output_type=StoryDraft, instructions=REVISE_INSTRUCTIONS)
 
 
+def build_branching_revise_agent(model: Model) -> Agent[None, BranchingStoryDraft]:
+    return Agent(model=model, output_type=BranchingStoryDraft, instructions=REVISE_INSTRUCTIONS)
+
+
 def revise_story(
     story: Story,
     failures: Sequence[str],
@@ -80,10 +87,16 @@ def revise_story(
             f"This story failed review:\n{story.model_dump_json()}\n\n"
             f"Failures to fix:\n{failure_lines}"
         )
-        draft = build_revise_agent(llm).run_sync(prompt).output
-        revised = story_from_draft(
-            draft, story_id=story.id, theme=story.theme, language=story.language
-        )
+        if story.shape == "branching":
+            branching_draft = build_branching_revise_agent(llm).run_sync(prompt).output
+            revised = branching_story_from_draft(
+                branching_draft, story_id=story.id, theme=story.theme, language=story.language
+            )
+        else:
+            draft = build_revise_agent(llm).run_sync(prompt).output
+            revised = story_from_draft(
+                draft, story_id=story.id, theme=story.theme, language=story.language
+            )
         return revised.model_dump_json().encode()
 
     return Story.model_validate_json(run_step(cache, "revise", inputs, produce))
@@ -108,6 +121,7 @@ def author_story(
     settings: Settings,
     cache: ArtifactCache,
     *,
+    shape: Literal["linear", "branching"] = "linear",
     write_model: Model | None = None,
     safety_model: Model | None = None,
     revise_model: Model | None = None,
@@ -117,9 +131,12 @@ def author_story(
 
     Every candidate — the original and each revision — must clear both the
     content limits (as code) and all nine safety verdicts. Two failed
-    revisions reject the story.
+    revisions reject the story. The shape selects a linear or branching
+    writer; revise infers it from the story it is correcting.
     """
-    story = write_story(theme, language, settings, cache, model=write_model, premise=premise)
+    story = write_story(
+        theme, language, settings, cache, model=write_model, premise=premise, shape=shape
+    )
     report = safety_gate(story, settings, cache, model=safety_model)
     failures = _gate_failures(story, report)
 

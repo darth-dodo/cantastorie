@@ -60,12 +60,17 @@ class ConcurrentModificationError(Exception):
 
 
 class PackRequest(BaseModel):
-    """What a parent (or the operator) asked for: theme + language + count."""
+    """What a parent (or the operator) asked for: theme + language + count.
+
+    Shape defaults to linear so records persisted before branching arrived
+    deserialize unchanged.
+    """
 
     theme: Theme
     language: Language
     count: int = Field(ge=1, le=3)
     premise: str | None = None
+    shape: Literal["linear", "branching"] = "linear"
 
 
 class RunRecord(BaseModel):

@@ -87,19 +87,19 @@ flowchart TD
 | Module | Owns | Key exports |
 |--------|------|-------------|
 | `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, audio unlock on first gesture, spoken greeting, the render loop, the dev page-timer stand-in | `init(root, {fetchFn, engine})` → shell handle |
-| `store.js` | All player state and every legal transition; pure, no DOM, no audio | `createStore`, `initialState` |
-| `playback.js` | The playback loop: story-start prompt, narrating the current page, auto page turn on audio end, pause/resume at exact position | `createPlayback` |
+| `store.js` | All player state and every legal transition; pure, no DOM, no audio; `choose(i)` records the tapped option in a `choices` array | `createStore`, `initialState` |
+| `playback.js` | The playback loop: story-start prompt, narrating the current page, auto page turn on audio end, pause/resume at exact position; `extendPath()` appends a tapped arm to the played path and recomputes the next choice page | `createPlayback` |
 | `audio-engine.js` | The single `AudioContext`; decoded-buffer cache; narration vs prompt channels; crossfades and ducking via gain ramps | `createAudioEngine`, `CROSSFADE_SECONDS` |
 | `fsm.js` | Tiny generic FSM: frozen machine, warn-and-ignore invalid transitions | `createMachine`, `interpret` |
-| `prefetch.js` | On cover tap, bank every page's audio (decoded buffers) and image (HTTP cache), both branch arms included; failures counted, never fatal | `createPrefetcher` |
-| `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `shelf`, `story` |
-| `screens.js` | Detached-element builders for shelf, player, end screen, the choice/resume/settings overlays, and the failure states (audio-retry bird, offline clouds); `playerView()` derives captions/beads/images from a loaded story | `buildShelf`, `buildPlayer`, `updatePlayer`, … |
-| `storage.js` | Progress persistence under one key; localStorage now, IndexedDB when real stories land; failures are silent by design | `load`, `save` |
+| `prefetch.js` | On cover tap, bank every page's audio (decoded buffers) and image (HTTP cache), both branch arms included, plus each choice option's card image and spoken label; failures counted, never fatal | `createPrefetcher` |
+| `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs (choice-card images and label audio included); `pagesFrom(pageId)` walks one arm for branch following; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `shelf`, `story` |
+| `screens.js` | Detached-element builders for shelf, player, end screen, the choice/resume/settings overlays, and the failure states (audio-retry bird, offline clouds); the choice overlay shows each option's card image (a wash fallback when absent) behind its spoken label; `playerView()` derives captions/beads/images from a loaded story | `buildShelf`, `buildPlayer`, `updatePlayer`, … |
+| `storage.js` | Progress persistence under one key (the recorded `choices` ride along so resume replays the chosen branch); localStorage now, IndexedDB when real stories land; failures are silent by design | `load`, `save` |
 | `palette-resolve.js` | Theme (light/dusk by hour, `?theme=` override) and palette resolution; pure logic shared with the `palette.js` head script and the test suites | `VALID_PALETTES`, `resolvePalette`, `resolveTheme` |
 
 ### Player state (`store.js`)
 
-The store is a plain object + listeners — seven booleans/numbers, not a framework. Screens are one axis; the two overlays are independent flags on top of the `player` screen.
+The store is a plain object + listeners — a handful of booleans/numbers plus a `choices` array, not a framework. Screens are one axis; the two overlays are independent flags on top of the `player` screen.
 
 ```mermaid
 stateDiagram-v2
@@ -118,9 +118,10 @@ stateDiagram-v2
     end --> shelf: toShelf()
 ```
 
-Two details worth knowing:
+Three details worth knowing:
 
 - **`advance()` is the only forward motion**, and it refuses to act while paused or while an overlay is open. Narration end and the dev timer both funnel through it.
+- **`choose(i)` follows the branch** — the player extends the played path with the tapped arm (`playback.extendPath`) *before* `choose()` advances the index, so the store never needs to know the story graph; the picked index is kept in `choices` and replayed on resume.
 - **Exiting keeps `page`** — that is what makes the resume offer ("Continuiamo o ricominciamo?") work when the same cover is tapped again.
 
 ### The audio engine (`audio-engine.js`)
@@ -205,7 +206,7 @@ flowchart LR
 
 | Module | Owns | Notable constraints enforced in code |
 |--------|------|--------------------------------------|
-| `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `ChoicePoint` is exactly two options; `SafetyReport` must contain each of the nine rules exactly once |
+| `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `ChoiceOption`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `Story.shape` is `linear`/`branching`; `ChoicePoint` is exactly two options, each `ChoiceOption` carrying an optional `card_image` and spoken `audio`; `SafetyReport` must contain each of the nine rules exactly once |
 | `cache.py` | Content-addressed artifact store; the filesystem **is** the checkpoint | `cache_key()` = sha256 of canonical-JSON inputs; writes are tmp-then-rename atomic; `run_step()` makes unchanged inputs a pure lookup — zero API calls |
 | `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration requests `pcm` (Gemini rejects `mp3`) and wraps it into a WAV container, with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
 | `generate.py` | The whole authoring run, write through stage, as one function — the seam shared by the CLI and the workshop's `RunManager` | Provider seams (models, narration client, image transport) are injectable, so the full run is exercised with zero network |
@@ -310,7 +311,6 @@ The provider and Clerk tests mock at the httpx-transport seam, so logic is teste
 | Page timer (3.8 s) for unpublished covers | Narration `onEnded` → `advance()` (already live for published stories) | more published stories |
 | `/static/content/` as the *default* `asset_base` | The `/published` R2 proxy (live) — deployed config points there; the fixture remains the dev default | dev config catching up |
 | `localStorage` progress | IndexedDB (progress, settings, lockout, family token) | slice 2 |
-| Choice pages halt the ordered walk | Choice overlay drives branch following | AI-370 |
 | Empty word timings in `story.json` | Deepgram STT transcription pass | slice 6 (reading mode) |
 | No gloss step in the pipeline | Word-to-English gloss maps (cheap model) | slice 6 (reading mode) |
 | Spoken prompts staged for Italian only | All ten prompts per enabled language | slice 4 |

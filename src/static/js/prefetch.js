@@ -44,6 +44,13 @@ export function createPrefetcher({ engine, fetchFn = (...args) => globalThis.fet
       for (const page of pages) {
         jobs.push(bank(page.audioUrl, () => engine.load(page.audioUrl)));
         jobs.push(bank(page.imageUrl, () => warmImage(page.imageUrl)));
+        // A choice page's option cards and spoken labels bank like page
+        // assets: card images warm the HTTP cache, label audio decodes into
+        // the engine. A miss is counted, never fatal — same as any page asset.
+        for (const option of page.choice?.options ?? []) {
+          jobs.push(bank(option.card_image, () => warmImage(option.card_image)));
+          jobs.push(bank(option.audioUrl, () => engine.load(option.audioUrl)));
+        }
       }
       for (const url of extraAudio) {
         jobs.push(bank(url, () => engine.load(url)));

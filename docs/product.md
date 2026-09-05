@@ -84,7 +84,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 |---------|--------|-------------|
 | **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published packs |
 | **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, play-pause plus prev/next page buttons, auto page turns, exact-position resume |
-| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at fixed branch points |
+| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at a branch point; a tap follows the chosen arm to its own ending |
 | **Reading mode** | ⏳ Planned | Parent-enabled story text with karaoke word highlighting and tap-word English glosses |
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
 | **5 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German alongside — per-language manifests and the settings switch are live; content exists for it/es/en trials only |
@@ -145,19 +145,16 @@ Narrator: "Quale scegli? Tocca una figura!"
 
 ### Branching Topology
 
-Every branching story uses exactly this shape — two choice points, all paths reconverge, every heard path is 8 pages:
+Every branching story uses exactly this shape — a shared opening, **one choice point**, and two arms that each run to **their own ending** (the arms never reconverge). A heard path is the shared pages plus one arm: a full story's length, with every node obeying the same per-page word and sentence limits.
 
 ```mermaid
 graph TD
-  P1[p1] --> P2[p2] --> P3[p3] --> C1{choice 1}
-  C1 -->|a| A1[p4a] --> A2[p5a] --> M1[p6]
-  C1 -->|b| B1[p4b] --> B2[p5b] --> M1
-  M1 --> C2{choice 2}
-  C2 -->|a| A3[p7a] --> M2[p8]
-  C2 -->|b| B3[p7b] --> M2
+  P1[p1] --> P2[p2] --> P3[p3] --> P4[p4] --> P5[p5] --> C{"p6 · choice"}
+  C -->|"card a"| A1[a1] --> A2[a2] --> A3[a3] --> A4["a4 · ending"]
+  C -->|"card b"| B1[b1] --> B2[b2] --> B3[b3] --> B4["b4 · ending"]
 ```
 
-Replayability comes from the branches: Sofia can have the boat story again, *then the other ending*.
+At launch a branching story carries a single choice point (the arm length is a fixed constant, the shared prefix fills the rest); the path model supports more, but the writer produces one. Replayability comes from the two endings: Sofia can have the boat story again, *then the other ending*.
 
 ---
 
@@ -274,7 +271,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 
 **Linear stories:** 8 pages, 30–70 words per page, 250–600 total, a 12-word sentence cap, present tense preferred, gentle repetition and sound words, and a final page that lands on comfort or sleepiness.
 
-**Branching stories** follow the same per-page word and sentence limits on every node; every heard path is 8 pages and stays within the linear totals. Choice labels count as story text for every limit and for the gloss map.
+**Branching stories** follow the same per-page word and sentence limits on every node; every heard path — the shared opening plus one arm — is a full story's length and stays within the linear totals. Choice labels count as story text for every limit and for the gloss map.
 
 **Themes, only these at launch:** animals helping each other · tiny garden adventure · the sleepy sea · rain and puddles · bakery morning · grandparent visit · the lost mitten · gentle forest friends · the moon says goodnight · picnic surprise · the little boat · first snow.
 

@@ -16,6 +16,12 @@
     },
     { "id": "panetteria", "title": "panetteria", "wash": "wash-panetteria" },
     { "id": "il-bosco", "title": "il bosco", "wash": "wash-bosco" },
-    { "id": "il-guanto", "title": "il guanto", "wash": "wash-guanto" }
+    { "id": "il-guanto", "title": "il guanto", "wash": "wash-guanto" },
+    {
+      "id": "dev-branching",
+      "title": "Il bivio della luna",
+      "wash": "wash-barchetta-notte",
+      "story": "/static/content/it/stories/dev-branching/story.json"
+    }
   ]
 }

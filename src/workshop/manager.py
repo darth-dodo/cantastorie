@@ -57,7 +57,13 @@ def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
     """
     staged: dict[str, str] = {}
     for _ in range(request.count):
-        prefix = generate_story(request.theme, request.language, settings, premise=request.premise)
+        prefix = generate_story(
+            request.theme,
+            request.language,
+            settings,
+            shape=request.shape,
+            premise=request.premise,
+        )
         story_id = prefix.rsplit("/", 1)[-1]
         staged[story_id] = prefix
     return list(staged.values())

@@ -25,6 +25,7 @@ from src.pipeline.publish import (
 )
 from src.pipeline.steps.assemble import AssembledStory, assemble_story
 from src.pipeline.steps.illustrate import IllustrationSet
+from tests.pipeline.test_assemble_branching import assembled_branching_fixture
 
 BUCKET = "cantastorie-published"
 PUBLIC_BASE = "https://cdn.example.test/published"
@@ -118,6 +119,33 @@ def test_audit_passes_when_every_manifest_entry_resolves(tmp_path: Path, s3: S3C
     stage_story(assembled, settings, client=s3)
     _stage_prompts(s3)
 
+    publish_story(assembled.story.id, settings, client=s3)
+
+    result = audit_published_bucket(settings, client=s3)
+    assert result.violations == []
+    assert result.manifests_checked == 1
+
+
+def test_audit_passes_for_a_branching_story(tmp_path: Path, s3: S3Client) -> None:
+    """Given a published *branching* story — a choice page carrying no next_page,
+    each option carrying its own next_page plus a picture card and label audio,
+    When audit runs,
+    Then zero violations are reported.
+
+    The audit walks pages checking audio/image presence, not the branch graph:
+    a choice page's next_page=None (structure enforced by content_rules) is
+    invisible to it, and the option cards are extra assets it never demands. This
+    locks that a branching story clears the child-safety gate as cleanly as a
+    linear one — the branch shape never trips the audit.
+    """
+    settings = _settings(tmp_path)
+    story, illustrations = assembled_branching_fixture(tmp_path)
+    assembled = assemble_story(story, illustrations)
+    assert assembled.story.shape == "branching"
+    assert any(page.choice is not None for page in assembled.story.pages)
+
+    stage_story(assembled, settings, client=s3)
+    _stage_prompts(s3)
     publish_story(assembled.story.id, settings, client=s3)
 
     result = audit_published_bucket(settings, client=s3)

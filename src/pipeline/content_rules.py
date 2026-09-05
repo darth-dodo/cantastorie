@@ -19,8 +19,16 @@ PAGE_WORDS_MAX = 70
 STORY_WORDS_MIN = 250
 STORY_WORDS_MAX = 600
 SENTENCE_WORDS_MAX = 20
+ARM_PAGES = 4  # pages per branch arm; shared prefix = PAGE_COUNT - ARM_PAGES
 
-ContentRule = Literal["page_count", "page_words", "story_words", "sentence_cap"]
+ContentRule = Literal[
+    "page_count",
+    "page_words",
+    "story_words",
+    "sentence_cap",
+    "branch_structure",
+    "path_length",
+]
 
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
 
@@ -57,22 +65,43 @@ def _page_sentences(page: Page) -> list[str]:
     return result
 
 
-def check_story(story: Story) -> list[ContentViolation]:
-    """Every content-limit violation in the story, or [] when it conforms."""
+def heard_paths(story: Story) -> list[list[Page]]:
+    """Every path a child can hear: follow next_page, forking at each choice."""
+    by_id = {page.id: page for page in story.pages}
+    referenced: set[str] = set()
+    for page in story.pages:
+        if page.next_page:
+            referenced.add(page.next_page)
+        if page.choice:
+            for option in page.choice.options:
+                referenced.add(option.next_page)
+    entry = next((p for p in story.pages if p.id not in referenced), story.pages[0])
+
+    paths: list[list[Page]] = []
+
+    def walk(page: Page | None, trail: list[Page]) -> None:
+        if page is None or page in trail:
+            paths.append(trail)
+            return
+        trail = [*trail, page]
+        if page.choice is not None:
+            for option in page.choice.options:
+                walk(by_id.get(option.next_page), trail)
+            return
+        if page.next_page is None:
+            paths.append(trail)
+            return
+        walk(by_id.get(page.next_page), trail)
+
+    walk(entry, [])
+    return paths
+
+
+def _check_pages(story: Story) -> list[ContentViolation]:
+    """Per-page limits (words with labels, sentence cap), unchanged by shape."""
     violations: list[ContentViolation] = []
-
-    if len(story.pages) != PAGE_COUNT:
-        violations.append(
-            ContentViolation(
-                rule="page_count",
-                detail=f"story has {len(story.pages)} pages; exactly {PAGE_COUNT} required",
-            )
-        )
-
-    total_words = 0
     for page in story.pages:
         count = page_word_count(page)
-        total_words += count
         if not PAGE_WORDS_MIN <= count <= PAGE_WORDS_MAX:
             violations.append(
                 ContentViolation(
@@ -97,7 +126,30 @@ def check_story(story: Story) -> list[ContentViolation]:
                         ),
                     )
                 )
+    return violations
 
+
+def _check_linear(story: Story) -> list[ContentViolation]:
+    """Whole-story count and total-word limits for a straight-line story."""
+    violations: list[ContentViolation] = []
+
+    if len(story.pages) != PAGE_COUNT:
+        violations.append(
+            ContentViolation(
+                rule="page_count",
+                detail=f"story has {len(story.pages)} pages; exactly {PAGE_COUNT} required",
+            )
+        )
+
+    if any(page.choice is not None for page in story.pages):
+        violations.append(
+            ContentViolation(
+                rule="branch_structure",
+                detail="linear story must not contain a choice page",
+            )
+        )
+
+    total_words = sum(page_word_count(page) for page in story.pages)
     if not STORY_WORDS_MIN <= total_words <= STORY_WORDS_MAX:
         violations.append(
             ContentViolation(
@@ -108,4 +160,75 @@ def check_story(story: Story) -> list[ContentViolation]:
             )
         )
 
+    return violations
+
+
+def _check_branching(story: Story) -> list[ContentViolation]:
+    """Per-path structure, length, and total-word limits for a branching story."""
+    violations: list[ContentViolation] = []
+
+    for page in story.pages:
+        if page.choice is not None and page.next_page is not None:
+            violations.append(
+                ContentViolation(
+                    rule="branch_structure",
+                    page_id=page.id,
+                    detail=f"choice page {page.id} must have next_page=None",
+                )
+            )
+
+    if not any(page.choice is not None for page in story.pages):
+        violations.append(
+            ContentViolation(
+                rule="branch_structure",
+                detail="branching story must contain at least one choice page",
+            )
+        )
+
+    paths = heard_paths(story)
+    reachable = {page.id for path in paths for page in path}
+    for page in story.pages:
+        if page.id not in reachable:
+            violations.append(
+                ContentViolation(
+                    rule="branch_structure",
+                    page_id=page.id,
+                    detail=f"page {page.id} is unreachable from any heard path",
+                )
+            )
+
+    for path in paths:
+        terminal = path[-1].id if path else "<empty>"
+        if len(path) != PAGE_COUNT:
+            violations.append(
+                ContentViolation(
+                    rule="path_length",
+                    detail=(
+                        f"heard path ending at {terminal} has {len(path)} pages; "
+                        f"exactly {PAGE_COUNT} required"
+                    ),
+                )
+            )
+        path_words = sum(page_word_count(page) for page in path)
+        if not STORY_WORDS_MIN <= path_words <= STORY_WORDS_MAX:
+            violations.append(
+                ContentViolation(
+                    rule="story_words",
+                    detail=(
+                        f"heard path ending at {terminal} has {path_words} words; "
+                        f"{STORY_WORDS_MIN}-{STORY_WORDS_MAX} required"
+                    ),
+                )
+            )
+
+    return violations
+
+
+def check_story(story: Story) -> list[ContentViolation]:
+    """Every content-limit violation in the story, or [] when it conforms."""
+    violations = _check_pages(story)
+    if story.shape == "branching":
+        violations.extend(_check_branching(story))
+    else:
+        violations.extend(_check_linear(story))
     return violations

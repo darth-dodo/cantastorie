@@ -11,6 +11,7 @@ export function initialState() {
     playing: true,
     choiceOpen: false,
     resumeOpen: false,
+    choices: [], // option indices picked at each choice page, in order (AI-428)
     audioError: false, // narration failed to load; the sleeping bird holds the stage
     // The open story's shape; a loaded story.json reconfigures both on
     // openStory(). The defaults keep the design-shell mock behavior.
@@ -108,12 +109,30 @@ export function createStore(saved = null) {
       set({ page: state.page - 1 });
     },
 
-    choose() {
-      set({ choiceOpen: false, page: state.choicePage + 1 });
+    // A branch option was tapped. Record the pick (Task 12 replays the path)
+    // and keep the exact page: choicePage + 1 advance — the chosen arm's first
+    // page must already sit at that index (main.js extends the path first).
+    choose(optionIndex = 0) {
+      // Turn off the choice page: page === choicePage whenever the overlay is
+      // open, so page + 1 is the choice page's next slot. We advance from page,
+      // not choicePage, because extendPath may have already moved choicePage to
+      // the arm's *next* branch before this runs (the ordering invariant).
+      set({
+        choiceOpen: false,
+        page: state.page + 1,
+        choices: [...state.choices, optionIndex],
+      });
     },
 
     togglePlay() {
       set({ playing: !state.playing });
+    },
+
+    // The played path grew: a chosen branch arm was appended (AI-428). Only
+    // the shape changes — page, playing, and overlays are left untouched so
+    // the next auto-turn lands on the arm's first page.
+    extendShape({ pageCount, choicePage }) {
+      set({ pageCount, choicePage });
     },
 
     // Narration for the current page failed to load (AI-367). Only the
@@ -131,7 +150,7 @@ export function createStore(saved = null) {
 
     exitStory() {
       // Page is kept: reopening offers "Continuiamo o ricominciamo?"
-      set({ screen: "shelf", playing: false, choiceOpen: false, resumeOpen: false, audioError: false });
+      set({ screen: "shelf", playing: false, choiceOpen: false, resumeOpen: false, choices: [], audioError: false });
     },
 
     resumeContinue() {
@@ -139,15 +158,15 @@ export function createStore(saved = null) {
     },
 
     resumeRestart() {
-      set({ resumeOpen: false, page: 0, playing: true });
+      set({ resumeOpen: false, page: 0, playing: true, choices: [] });
     },
 
     replay() {
-      set({ screen: "player", page: 0, playing: true, choiceOpen: false, resumeOpen: false, audioError: false });
+      set({ screen: "player", page: 0, playing: true, choiceOpen: false, resumeOpen: false, choices: [], audioError: false });
     },
 
     toShelf() {
-      set({ screen: "shelf", page: 0, playing: true, choiceOpen: false, resumeOpen: false, audioError: false });
+      set({ screen: "shelf", page: 0, playing: true, choiceOpen: false, resumeOpen: false, choices: [], audioError: false });
     },
   };
 }

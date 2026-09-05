@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
 
     from src.config import Settings
+    from src.pipeline.models import ChoiceOption
 
 AUDIO_SUFFIX = ".wav"
 CONTENT_HASH_LENGTH = 16
@@ -58,10 +59,13 @@ def _synthesize_cached(
     client: NarrationClient,
     cache: ArtifactCache,
     step: str,
+    extra_inputs: Mapping[str, object] | None = None,
 ) -> Path:
     """Synthesize text once, persisting audio under one key.
 
     A cold cache costs exactly one TTS call; a warm cache costs zero.
+    `extra_inputs` widens the cache key so distinct kinds of narration (e.g.
+    a page vs. a spoken choice label) with identical text never collide.
     """
     voice = settings.narration_voices.get(language, "alloy")
     inputs: dict[str, object] = {
@@ -70,6 +74,8 @@ def _synthesize_cached(
         "model_id": settings.narration_model,
         "output_format": settings.narration_response_format,
     }
+    if extra_inputs:
+        inputs.update(extra_inputs)
     key = cache_key(inputs)
 
     def synthesize() -> bytes:
@@ -99,6 +105,48 @@ def narrate_pages(
         audio_path = _synthesize_cached(page.text, language, settings, client, cache, PAGE_STEP)
         audio = PageAudio(file=str(audio_path), timings=[])
         narrated.append(page.model_copy(update={"audio": audio}))
+    return narrated
+
+
+def narrate_choice_labels(
+    pages: list[Page],
+    language: Language,
+    settings: Settings,
+    cache: ArtifactCache,
+    *,
+    client: NarrationClient | None = None,
+) -> list[Page]:
+    """Narrate the two spoken option labels on every choice page.
+
+    Returns pages with each `option.audio` set to the cached wav plus empty
+    word timings — same contract as page audio (Gemini returns no timestamps;
+    Deepgram STT reconstructs them at slice 6). The narration cache key adds
+    ``kind="choice_label"`` so a label and a page with identical text never
+    collide. Non-choice pages pass through untouched (identity).
+    """
+    client = client or NarrationClient(settings)
+    narrated: list[Page] = []
+    for page in pages:
+        if page.choice is None:
+            narrated.append(page)
+            continue
+        options: list[ChoiceOption] = []
+        for index, option in enumerate(page.choice.options):
+            audio_path = _synthesize_cached(
+                option.label,
+                language,
+                settings,
+                client,
+                cache,
+                PAGE_STEP,
+                extra_inputs={"kind": "choice_label"},
+            )
+            label_path = audio_path.with_name(f"{page.id}.opt{index}{AUDIO_SUFFIX}")
+            label_path.write_bytes(audio_path.read_bytes())
+            audio = PageAudio(file=str(label_path), timings=[])
+            options.append(option.model_copy(update={"audio": audio}))
+        choice = page.choice.model_copy(update={"options": tuple(options)})
+        narrated.append(page.model_copy(update={"choice": choice}))
     return narrated
 
 
