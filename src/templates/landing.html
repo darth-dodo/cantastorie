@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cantastorie — bedtime stories your child steers</title>
+  <title>Cantastorie: bedtime stories your child steers</title>
   <meta name="description" content="Bedtime stories your child steers, painted in watercolor, in your family's languages. You approve every story before your child hears it." />
   <link rel="stylesheet" href="/static/css/landing.css" />
 </head>
@@ -25,16 +25,9 @@
     <div class="trust">
       <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> <b>No child accounts</b></span>
       <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg> <b>You approve everything</b></span>
-      <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg> <b>5 languages</b></span>
+      <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg> <b>7 languages</b></span>
     </div>
   </header>
-
-  <section class="problem wrap">
-    <div class="card">
-      <p>Pre-readers can't use apps built on text, and tapping screens teach the wrong bedtime habits.</p>
-      <p>Smaller languages get robotic voices, and parents can't preview what their child sees.</p>
-    </div>
-  </section>
 
   <section class="wrap">
     <div class="center">
@@ -44,55 +37,36 @@
     <div class="steps">
       <div class="step">
         <div class="ico"><img src="/static/img/landing-spot-taps.png" alt="" /></div>
-        <div><h3>Two taps to a story</h3><p>A tap wakes the shelf and it greets your child aloud. Tap a cover; pages turn themselves.</p></div>
+        <div><h3>Two taps to a story</h3><p>A tap greets your child. Tap a cover; pages turn themselves.</p></div>
       </div>
       <div class="step">
         <div class="ico"><img src="/static/img/landing-spot-choice.png" alt="" /></div>
-        <div><h3>Choices are pictures</h3><p>At a fork, two picture cards appear with spoken labels. A finger picks the path.</p></div>
+        <div><h3>Choices are pictures</h3><p>Two picture cards, spoken labels. A finger picks the path.</p></div>
       </div>
       <div class="step">
         <div class="ico"><img src="/static/img/landing-spot-narrator.png" alt="" /></div>
-        <div><h3>One warm narrator</h3><p>One storyteller voice across every language. Every prompt is spoken.</p></div>
+        <div><h3>One warm narrator</h3><p>One voice across every language. Every prompt is spoken.</p></div>
       </div>
-    </div>
-  </section>
-
-  <section class="privacy wrap">
-    <div class="card">
-      <span class="pill"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg> Private by design</span>
-      <p><b>Nothing about your child leaves the device.</b> No child accounts, no child tracking. Every story needs your approval before it reaches a shelf.</p>
     </div>
   </section>
 
   <section class="wrap center">
-    <span class="eyebrow">Native, never translated</span>
-    <h2 class="sec">Five languages</h2>
-    <p class="sec-sub">Italian and Spanish lead; English, Greek, and German ride along.</p>
-    <div class="langs">
-      <span class="lang flag">Italiano</span>
-      <span class="lang flag">Español</span>
-      <span class="lang">English</span>
-      <span class="lang">Ελληνικά</span>
-      <span class="lang">Deutsch</span>
-    </div>
-  </section>
-
-  <section class="wrap">
-    <div class="built">
-      <span class="eyebrow" style="color:#E7C471">Under the hood</span>
-      <h2>Built as a showcase.</h2>
-      <p>A FastAPI app, a vanilla-JS Web Audio player, and a Python pipeline that writes, narrates, and paints every story.</p>
-      <div class="stack">
-        <span>FastAPI</span><span>Vanilla JS + Web Audio</span><span>Tailwind</span>
-        <span>Pydantic AI</span><span>Cloudflare R2</span><span>Playwright</span>
-      </div>
-      <a href="https://github.com/darth-dodo/cantastorie"><svg class="i solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.5 1.6 6.7L12 16.9 5.8 20.6l1.6-6.7L2.2 8.9l6.9-.6z"/></svg>View the code on GitHub →</a>
-    </div>
+    <span class="eyebrow">How it's made</span>
+    <h2 class="sec">Written, narrated, and painted by AI.</h2>
+    <p class="sec-sub">An AI pipeline drafts each story, judges it against nine safety rules, narrates it in one warm voice, and paints every page. A parent approves it before any child hears it.</p>
+    <ol class="pipeline">
+      <li><span class="dot">1</span>Write</li>
+      <li><span class="dot">2</span>Safety</li>
+      <li><span class="dot">3</span>Narrate</li>
+      <li><span class="dot">4</span>Paint</li>
+      <li><span class="dot">5</span>Approve</li>
+    </ol>
+    <a class="ghost-link" href="https://github.com/darth-dodo/cantastorie">View the code on GitHub →</a>
   </section>
 
   <footer>
-    <p><a href="/play">Start listening</a> · <a href="/parent">For parents</a> · <a href="https://github.com/darth-dodo/cantastorie">GitHub</a></p>
-    <p style="margin-top:10px">MIT · Built with Claude</p>
+    <p><a href="/play">Start listening</a> · <a href="/parent">For parents</a></p>
+    <p class="colophon">Open source (MIT) · Built with <svg class="i solid heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> for little ones</p>
   </footer>
 </body>
 </html>
