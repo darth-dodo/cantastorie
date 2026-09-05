@@ -173,7 +173,13 @@ async def parent_stories(
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
     owned = _owned_story_ids(manager, ctx.family_token)
-    stories = [s for s in list_published_stories(settings) if s.id in owned]
+    # A family sees only its own overlay lane — never the shared shelf, never
+    # another family's overlay. list_published_stories tags each row's owner.
+    stories = [
+        s
+        for s in list_published_stories(settings)
+        if s.family_token == ctx.family_token and s.id in owned
+    ]
     return templates.TemplateResponse(
         request, "parent/stories.html", {**context, "stories": stories}
     )
@@ -189,7 +195,9 @@ async def delete_parent_story(
 ) -> Response:
     if story_id not in _owned_story_ids(manager, ctx.family_token):
         raise HTTPException(status_code=404)
-    unpublish_story(story_id, settings)
+    # A family delete stays scoped to its own overlay lane — never the shared
+    # shelf, never another family. The token is the session's, never the URL's.
+    unpublish_story(story_id, settings, family_token=ctx.family_token)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent/stories", status_code=303)

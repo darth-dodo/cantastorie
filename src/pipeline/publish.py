@@ -584,6 +584,27 @@ class PublishedStory(BaseModel):
     title: str
     language: str
     cover: str
+    # None for the shared shelf (operator, global); the owning family for a
+    # private overlay story. The operator library reads this to tag and to
+    # scope a delete back to the right lane.
+    family_token: str | None = None
+
+
+def _manifest_lane(key: str) -> tuple[str, str | None] | None:
+    """Map a manifest.json key to (language, family_token) or None if it is not
+    a lane manifest.
+
+    ``published/it/manifest.json`` → ``("it", None)`` (shared shelf).
+    ``published/families/{token}/it/manifest.json`` → ``("it", token)``.
+    Anything else (a deeper or malformed key) is ignored.
+    """
+    inner = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
+    parts = inner.split("/")
+    if len(parts) == 1:
+        return parts[0], None
+    if len(parts) == 3 and parts[0] == FAMILIES_SEGMENT and _FAMILY_TOKEN_RE.fullmatch(parts[1]):
+        return parts[2], parts[1]
+    return None
 
 
 def list_published_stories(
@@ -591,7 +612,13 @@ def list_published_stories(
     *,
     client: S3Client | None = None,
 ) -> list[PublishedStory]:
-    """Every manifest entry across languages, sorted for stable pages."""
+    """Every manifest entry across every lane, sorted for stable pages.
+
+    Enumerates the shared shelf (``published/{lang}/manifest.json``) and every
+    family overlay (``published/families/{token}/{lang}/manifest.json``),
+    tagging each row with its owning family (None for the shared shelf) so the
+    operator library can show and moderate private stories.
+    """
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
     stories: list[PublishedStory] = []
@@ -602,8 +629,12 @@ def list_published_stories(
             key = item["Key"]
             if not key.endswith("/manifest.json"):
                 continue
-            language = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-            manifest, _ = _load_manifest(client, bucket, language)
+            lane = _manifest_lane(key)
+            if lane is None:
+                continue
+            language, family_token = lane
+            root = _publish_root(family_token)
+            manifest, _ = _load_manifest(client, bucket, language, root)
             for entry in manifest.get("stories", []):
                 stories.append(
                     PublishedStory(
@@ -611,9 +642,10 @@ def list_published_stories(
                         title=str(entry.get("title", "")),
                         language=language,
                         cover=str(entry.get("cover", "")),
+                        family_token=family_token,
                     )
                 )
-    stories.sort(key=lambda story: (story.language, story.id))
+    stories.sort(key=lambda story: (story.family_token or "", story.language, story.id))
     return stories
 
 
