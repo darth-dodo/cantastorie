@@ -263,3 +263,109 @@ def test_audit_reports_manifests_checked_count(tmp_path: Path, s3: S3Client) -> 
 
     result = audit_published_bucket(settings, client=s3)
     assert result.manifests_checked == 2
+
+
+# --- Family overlay (private lane) audit invariants -------------------------
+
+FAMILY_A = "a" * 32
+FAMILY_B = "b" * 32
+
+
+def test_audit_passes_for_a_clean_family_overlay(tmp_path: Path, s3: S3Client) -> None:
+    """A shared story plus a family overlay story, all assets present → clean."""
+    settings = _settings(tmp_path)
+
+    shared = _assembled(tmp_path, story_id="shared-it", title="Globale")
+    stage_story(shared, settings, client=s3)
+    _stage_prompts(s3)
+    publish_story("shared-it", settings, client=s3)
+
+    private = _assembled(tmp_path, story_id="private-it", title="Privata")
+    stage_story(private, settings, client=s3)
+    publish_story("private-it", settings, client=s3, family_token=FAMILY_A)
+
+    result = audit_published_bucket(settings, client=s3)
+    assert result.violations == []
+    assert result.manifests_checked == 2  # shared + one overlay
+
+
+def test_audit_fails_when_a_family_manifest_references_the_shared_shelf(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Cross-tenant: family A's manifest may not point at a shared asset."""
+    settings = _settings(tmp_path)
+    private = _assembled(tmp_path, story_id="private-it", title="Privata")
+    stage_story(private, settings, client=s3)
+    publish_story("private-it", settings, client=s3, family_token=FAMILY_A)
+
+    key = f"published/families/{FAMILY_A}/it/manifest.json"
+    manifest = json.loads(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read())
+    manifest["stories"][0]["story"] = f"{PUBLIC_BASE}/stories/private-it/story.json"
+    s3.put_object(Bucket=BUCKET, Key=key, Body=json.dumps(manifest).encode())
+
+    result = audit_published_bucket(settings, client=s3)
+    assert any("cross-tenant" in v or "outside its lane" in v for v in result.violations)
+
+
+def test_audit_fails_when_family_a_manifest_references_family_b_assets(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Cross-tenant: family A's manifest may not point at family B's assets."""
+    settings = _settings(tmp_path)
+    a = _assembled(tmp_path, story_id="story-a", title="A")
+    b = _assembled(tmp_path, story_id="story-b", title="B")
+    stage_story(a, settings, client=s3)
+    stage_story(b, settings, client=s3)
+    publish_story("story-a", settings, client=s3, family_token=FAMILY_A)
+    publish_story("story-b", settings, client=s3, family_token=FAMILY_B)
+
+    key = f"published/families/{FAMILY_A}/it/manifest.json"
+    manifest = json.loads(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read())
+    manifest["stories"][0]["story"] = (
+        f"{PUBLIC_BASE}/families/{FAMILY_B}/stories/story-b/story.json"
+    )
+    s3.put_object(Bucket=BUCKET, Key=key, Body=json.dumps(manifest).encode())
+
+    result = audit_published_bucket(settings, client=s3)
+    assert any("cross-tenant" in v or "outside its lane" in v for v in result.violations)
+
+
+def test_audit_fails_when_the_shared_manifest_references_a_family_asset(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """The shared shelf may reference only published/stories/… — never a family."""
+    settings = _settings(tmp_path)
+    shared = _assembled(tmp_path, story_id="shared-it", title="Globale")
+    stage_story(shared, settings, client=s3)
+    _stage_prompts(s3)
+    publish_story("shared-it", settings, client=s3)
+
+    manifest = json.loads(
+        s3.get_object(Bucket=BUCKET, Key="published/it/manifest.json")["Body"].read()
+    )
+    manifest["stories"][0]["story"] = (
+        f"{PUBLIC_BASE}/families/{FAMILY_A}/stories/shared-it/story.json"
+    )
+    s3.put_object(
+        Bucket=BUCKET, Key="published/it/manifest.json", Body=json.dumps(manifest).encode()
+    )
+
+    result = audit_published_bucket(settings, client=s3)
+    assert any("cross-tenant" in v or "outside its lane" in v for v in result.violations)
+
+
+def test_audit_fails_on_an_orphan_family_story_dir(tmp_path: Path, s3: S3Client) -> None:
+    """A family story directory no overlay manifest lists is an orphan."""
+    settings = _settings(tmp_path)
+    private = _assembled(tmp_path, story_id="private-it", title="Privata")
+    stage_story(private, settings, client=s3)
+    publish_story("private-it", settings, client=s3, family_token=FAMILY_A)
+
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=f"published/families/{FAMILY_A}/stories/ghost/story.json",
+        Body=b"{}",
+    )
+
+    result = audit_published_bucket(settings, client=s3)
+    assert any("ghost" in v for v in result.violations)

@@ -452,19 +452,30 @@ class AuditResult(BaseModel):
     manifests_checked: int
 
 
-def _check_manifest_url(sid: str, url: str) -> str | None:
+def _check_manifest_url(sid: str, url: str, lane_asset_prefix: str) -> str | None:
+    """Verify a manifest entry's URL stays inside its own lane's asset root.
+
+    ``lane_asset_prefix`` is ``{root}/stories/`` for the lane owning this
+    manifest. A URL pointing anywhere else under published/ (the shared shelf
+    from a family manifest, another family, or a family asset from the shared
+    manifest) is a cross-tenant leak.
+    """
     if not url:
         return f"{sid}: manifest entry has an empty URL"
     if "pending/" in url:
         return f"{sid}: manifest URL points into pending/ — {url}"
     if f"/{PUBLISHED_PREFIX}/" not in url and not url.startswith(PUBLISHED_PREFIX):
         return f"{sid}: manifest URL outside published/ — {url}"
+    if f"/{lane_asset_prefix}" not in url and not url.startswith(lane_asset_prefix):
+        return f"{sid}: cross-tenant manifest URL outside its lane — {url}"
     return None
 
 
-def _check_story_assets(client: S3Client, bucket: str, sid: str) -> tuple[list[str], Story | None]:
+def _check_story_assets(
+    client: S3Client, bucket: str, sid: str, root: str
+) -> tuple[list[str], Story | None]:
     violations: list[str] = []
-    story_key = f"{PUBLISHED_PREFIX}/stories/{sid}/{STORY_FILE}"
+    story_key = f"{root}/stories/{sid}/{STORY_FILE}"
     try:
         body = client.get_object(Bucket=bucket, Key=story_key)["Body"].read()
     except ClientError as error:
@@ -475,11 +486,11 @@ def _check_story_assets(client: S3Client, bucket: str, sid: str) -> tuple[list[s
     story = Story.model_validate_json(body)
     for page_obj in story.pages:
         if page_obj.audio:
-            akey = f"{PUBLISHED_PREFIX}/stories/{sid}/{page_obj.audio.file}"
+            akey = f"{root}/stories/{sid}/{page_obj.audio.file}"
             if not _object_exists(client, bucket, akey):
                 violations.append(f"{sid}: missing audio {page_obj.audio.file}")
         if page_obj.image:
-            ikey = f"{PUBLISHED_PREFIX}/stories/{sid}/{page_obj.image}"
+            ikey = f"{root}/stories/{sid}/{page_obj.image}"
             if not _object_exists(client, bucket, ikey):
                 violations.append(f"{sid}: missing image {page_obj.image}")
     return violations, story
@@ -495,14 +506,21 @@ def _object_exists(client: S3Client, bucket: str, key: str) -> bool:
         raise
 
 
-def _find_orphan_story_dirs(client: S3Client, bucket: str, listed_story_ids: set[str]) -> list[str]:
+def _find_orphan_story_dirs(
+    client: S3Client, bucket: str, root: str, listed_story_ids: set[str]
+) -> list[str]:
+    """Story directories directly under ``{root}/stories/`` no manifest lists.
+
+    Scoped to one lane: it walks only ``{root}/stories/`` so a shared audit
+    never mistakes a family's story dir for a shared orphan, and vice versa.
+    """
     orphans: list[str] = []
     story_dirs: list[str] = []
     for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
+        Bucket=bucket, Prefix=f"{root}/stories/"
     ):
         for item in page.get("Contents", []):
-            parts = item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/stories/").split("/", 1)
+            parts = item["Key"].removeprefix(f"{root}/stories/").split("/", 1)
             if len(parts) == 2 and parts[0] not in story_dirs:
                 story_dirs.append(parts[0])
     for sdir in story_dirs:
@@ -516,19 +534,20 @@ def audit_published_bucket(
     *,
     client: S3Client | None = None,
 ) -> AuditResult:
-    """Verify every reachable asset is approved; zero child-reachable unapproved.
+    """Verify every reachable asset is approved and confined to its lane.
 
-    Checks that every manifest entry resolves to real objects under
-    ``published/``, that no manifest URL points into ``pending/`` or
-    outside ``published/``, that every story.json's referenced audio and
-    image files exist, and that no orphan story directory lurks unlisted.
+    Walks the shared shelf and every family overlay. For each lane, checks
+    that every manifest entry resolves to real objects **inside that lane's own
+    asset root**, that no URL points into ``pending/`` / outside ``published/``
+    / into another lane (a cross-tenant leak), that every story.json's audio and
+    image files exist, and that no orphan story directory lurks unlisted. Zero
+    child-reachable unapproved or cross-tenant asset is the invariant.
     """
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
 
     violations: list[str] = []
     manifests_checked = 0
-    listed_story_ids: set[str] = set()
 
     manifest_keys: list[str] = []
     for page in client.get_paginator("list_objects_v2").paginate(
@@ -538,28 +557,69 @@ def audit_published_bucket(
             if item["Key"].endswith("/manifest.json"):
                 manifest_keys.append(item["Key"])
 
+    # Group manifests by lane root, tracking which story ids each lane lists so
+    # orphan detection stays lane-local.
+    listed_by_root: dict[str, set[str]] = {}
     for mkey in manifest_keys:
+        lane = _manifest_lane(mkey)
+        if lane is None:
+            continue
         manifests_checked += 1
-        lang = mkey.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-        manifest, _ = _load_manifest(client, bucket, lang)
+        language, family_token = lane
+        root = _publish_root(family_token)
+        lane_asset_prefix = f"{root}/stories/"
+        listed = listed_by_root.setdefault(root, set())
+        manifest, _ = _load_manifest(client, bucket, language, root)
         for entry in manifest.get("stories", []):
             sid = entry.get("id", "?")
             story_url = entry.get("story", "")
             cover_url = entry.get("cover", "")
 
             for url in (story_url, cover_url):
-                v = _check_manifest_url(sid, url)
+                v = _check_manifest_url(sid, url, lane_asset_prefix)
                 if v:
                     violations.append(v)
 
-            if story_url and f"{PUBLISHED_PREFIX}/" in story_url:
-                listed_story_ids.add(sid)
-                story_violations, _ = _check_story_assets(client, bucket, sid)
+            # Only walk assets for an entry that stays in its own lane; a
+            # cross-tenant URL is already a violation above.
+            if story_url and lane_asset_prefix in f"/{story_url}":
+                listed.add(sid)
+                story_violations, _ = _check_story_assets(client, bucket, sid, root)
                 violations.extend(story_violations)
 
-    violations.extend(_find_orphan_story_dirs(client, bucket, listed_story_ids))
+    # Orphans: check every lane root that has a stories/ area, not only those
+    # with a manifest (a family whose only manifest was deleted still leaves a
+    # story dir behind).
+    for root in _all_lane_roots(client, bucket):
+        violations.extend(
+            _find_orphan_story_dirs(client, bucket, root, listed_by_root.get(root, set()))
+        )
 
     return AuditResult(violations=violations, manifests_checked=manifests_checked)
+
+
+def _all_lane_roots(client: S3Client, bucket: str) -> list[str]:
+    """Every lane root that owns a ``stories/`` area: the shared shelf and each
+    family overlay present on the bucket."""
+    roots: set[str] = set()
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
+    ):
+        if page.get("Contents"):
+            roots.add(PUBLISHED_PREFIX)
+            break
+    prefix = f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/"
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        for item in page.get("Contents", []):
+            rest = item["Key"].removeprefix(prefix).split("/", 1)
+            token = rest[0]
+            if (
+                len(rest) == 2
+                and rest[1].startswith("stories/")
+                and _FAMILY_TOKEN_RE.fullmatch(token)
+            ):
+                roots.add(f"{prefix}{token}")
+    return sorted(roots)
 
 
 def delete_staged_story(
