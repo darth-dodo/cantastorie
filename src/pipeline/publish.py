@@ -523,3 +523,77 @@ def delete_staged_story(
         keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
     for start in range(0, len(keys), 1000):
         client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})
+
+
+class PublishedStory(BaseModel):
+    id: str
+    title: str
+    language: str
+    cover: str
+
+
+def list_published_stories(
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+) -> list[PublishedStory]:
+    """Every manifest entry across languages, sorted for stable pages."""
+    client = client or _build_client(settings)
+    bucket = settings.r2_bucket
+    stories: list[PublishedStory] = []
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
+    ):
+        for item in page.get("Contents", []):
+            key = item["Key"]
+            if not key.endswith("/manifest.json"):
+                continue
+            language = key.removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
+            manifest, _ = _load_manifest(client, bucket, language)
+            for entry in manifest.get("stories", []):
+                stories.append(
+                    PublishedStory(
+                        id=str(entry.get("id", "")),
+                        title=str(entry.get("title", "")),
+                        language=language,
+                        cover=str(entry.get("cover", "")),
+                    )
+                )
+    stories.sort(key=lambda story: (story.language, story.id))
+    return stories
+
+
+def list_orphan_story_dirs(
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+) -> list[str]:
+    """Story directories under published/stories/ that no manifest lists."""
+    client = client or _build_client(settings)
+    bucket = settings.r2_bucket
+    listed: set[str] = set()
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
+    ):
+        for item in page.get("Contents", []):
+            if not item["Key"].endswith("/manifest.json"):
+                continue
+            language = (
+                item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
+            )
+            manifest, _ = _load_manifest(client, bucket, language)
+            for entry in manifest.get("stories", []):
+                if entry.get("story"):
+                    listed.add(str(entry["id"]))
+    seen: set[str] = set()
+    dirs: list[str] = []
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
+    ):
+        for item in page.get("Contents", []):
+            name = item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/stories/")
+            parts = name.split("/", 1)
+            if len(parts) == 2 and parts[0] not in seen:
+                seen.add(parts[0])
+                dirs.append(parts[0])
+    return [story_id for story_id in dirs if story_id not in listed]

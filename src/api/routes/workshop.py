@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.api.auth import verify_clerk_session
-from src.api.routes._nav import home_path
+from src.api.routes._nav import fapi_host, home_path
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
@@ -37,6 +37,8 @@ from src.pipeline.publish import (
     _build_client,
     _content_type,
     delete_staged_story,
+    list_orphan_story_dirs,
+    list_published_stories,
     publish_story,
     unpublish_story,
 )
@@ -85,9 +87,11 @@ Manager = Annotated[RunManager, Depends(get_run_manager)]
 
 
 def _base_ctx(settings: Settings, **extra: object) -> dict[str, object]:
-    """Every workshop template needs the Clerk publishable key (ClerkJS init)."""
+    """Every gated template needs its door, the FAPI host, and the key."""
     return {
-        "clerk_publishable_key": settings.clerk_publishable_key.get_secret_value(),
+        "door": "workshop",
+        "fapi_host": fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
         **extra,
     }
 
@@ -105,7 +109,7 @@ async def _scope(request: Request, settings: Settings) -> WorkshopScope | None:
 
 def _sign_in_page(request: Request, settings: Settings, status_code: int = 200) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "workshop/login.html", _base_ctx(settings), status_code=status_code
+        request, "auth/sign_in.html", _base_ctx(settings), status_code=status_code
     )
 
 
@@ -219,6 +223,36 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
             live=LIVE_STATES,
         ),
     )
+
+
+@router.get("/library", response_class=HTMLResponse)
+async def library(request: Request, settings: WorkshopSettings) -> Response:
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _to_login()
+    if not scope.is_operator:
+        return RedirectResponse(home_path(scope.is_operator), status_code=303)
+    stories = sorted(list_published_stories(settings), key=lambda s: (s.language, s.title))
+    return templates.TemplateResponse(
+        request,
+        "workshop/library.html",
+        _base_ctx(settings, stories=stories, orphans=list_orphan_story_dirs(settings)),
+    )
+
+
+@router.post("/stories/{story_id}/delete")
+async def delete_published_story(
+    request: Request, settings: WorkshopSettings, story_id: str
+) -> Response:
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _to_login()
+    if not scope.is_operator:
+        raise HTTPException(status_code=403)
+    unpublish_story(story_id, settings)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return RedirectResponse("/workshop/library", status_code=303)
 
 
 @router.post("/runs")
@@ -401,10 +435,12 @@ async def delete_staged_story_route(
     if not scope.is_operator:
         raise HTTPException(status_code=403)
     record = _story_record_or_404(manager, story_id)
-    if record.state in LIVE_STATES or record.state == "approved":
+    if record.state in LIVE_STATES:
         raise HTTPException(status_code=400)
-    if record.state not in {"staged", "failed"}:
+    if record.state not in {"staged", "failed", "rejected", "approved"}:
         raise HTTPException(status_code=400)
+    if record.state == "approved":
+        unpublish_story(story_id, settings)
     delete_staged_story(story_id, settings)
     shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
     updated = record.model_copy(

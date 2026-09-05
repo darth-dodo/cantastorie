@@ -99,7 +99,7 @@ flowchart TD
 
 ### Player state (`store.js`)
 
-The store is a plain object + listeners — five booleans/numbers, not a framework. Screens are one axis; the two overlays are independent flags on top of the `player` screen.
+The store is a plain object + listeners — seven booleans/numbers, not a framework. Screens are one axis; the two overlays are independent flags on top of the `player` screen.
 
 ```mermaid
 stateDiagram-v2
@@ -226,7 +226,7 @@ Every step's inputs — text, style prompt, sheet hash, model ID — hash into t
 
 The operator face (AI-388, [ADR-005](adr/)): start pack runs, watch progress, review staged stories, publish. Server-rendered Jinja2 + HTMX — the settled non-child pattern — with a vanilla-JS `workshop.js` for widgets.
 
-**Access is Clerk sign-in, not a shared secret (AI-426, [ADR-005](adr/)).** With Clerk unconfigured, every `/workshop` route answers 404 — the workshop does not exist. Each request resolves a `WorkshopScope` from the verified Clerk session JWT (`src/workshop/scope.py`): an **operator** (`public_metadata.role == "operator"`) works globally across all families; any other signed-in user is a **parent** scoped to their own `family_token` and, until the parent workshop views ship, sees a "coming soon" 403. ClerkJS loads on every workshop page to keep the short-lived `__session` JWT refreshed so HTMX polling does not 401 a minute after sign-in.
+**Access is Clerk sign-in, not a shared secret (AI-426, [ADR-005](adr/)).** With Clerk unconfigured, every `/workshop` route answers 404 — the workshop does not exist. Each request resolves a `WorkshopScope` from the verified Clerk session JWT (`src/workshop/scope.py`): an **operator** (`public_metadata.role == "operator"`) works globally across all families; any other signed-in user is a **parent** scoped to their own `family_token`. Post-sign-in navigation is role-dispatched (AI-430): every authed entry point serves its own role and 303-redirects the other (`_nav.py` → `home_path`) — operators land on `/workshop`, parents on their own `/parent` surface — so neither role meets a dead end or a redirect loop. ClerkJS loads on every workshop and parent page to keep the short-lived `__session` JWT refreshed so HTMX polling does not 401 a minute after sign-in.
 
 **Runs execute in-process.** `RunManager` runs `generate_story` as an asyncio background task in the same FastAPI process — `asyncio.to_thread` for the sync pipeline code, an `asyncio.Lock` for one-run-at-a-time. There is no queue framework.
 
@@ -277,6 +277,10 @@ The player template carries the three things the player boot needs: the design-s
 - **`parent.py`** — the provision endpoint is idempotent (a provisioned account gets its existing token back; rotation is a manual procedure). It links the browser's existing IndexedDB token when offered, otherwise mints 128 bits. The token pattern `^[0-9a-f]{32}$` is enforced strictly because the token becomes an R2 key prefix (`pending/{family_token}/…`) — posted strings must never smuggle path separators into bucket keys.
 
 The `/parent` pages — sign-in, the pack request form, and the my-packs list with HTMX progress polling and per-family run caps — ship in AI-411; the provision API mints the family token at first sign-in.
+
+### Published-story CRUD
+
+The operator library (`GET /workshop/library`, `POST /workshop/stories/{id}/delete`) lists everything published across all language manifests — flagging orphan story directories — and hard-deletes any story, launch content included. Parents get the same single destructive delete scoped to their own approved packs (`GET /parent/stories`, `POST /parent/stories/{id}/delete`). Both faces call `unpublish_story()`; listing comes from `list_published_stories()` and `list_orphan_story_dirs()`, all in [`src/pipeline/publish.py`](../src/pipeline/publish.py).
 
 ### Observability (`src/observability.py`)
 

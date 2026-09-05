@@ -9,6 +9,7 @@ seam and mint JWTs locally against a mock JWKS — zero network, no mocking of
 the code under test.
 """
 
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -53,7 +54,9 @@ def s3() -> Iterator[S3Client]:
 
 
 def _settings(tmp_path: Path) -> Settings:
-    s = clerk_settings()  # sets publishable_key + jwks_url + secret_key
+    # issuer set explicitly: gated pages run fapi_host, and pk_test_xxx is not
+    # valid base64 for the pk fallback.
+    s = clerk_settings(clerk_issuer="https://test.clerk.test")
     return s.model_copy(update={"r2_bucket": BUCKET, "content_dir": tmp_path / "content"})
 
 
@@ -130,6 +133,7 @@ class _Harness:
         payload.setdefault("iat", now())
         payload.setdefault("nbf", now())
         payload.setdefault("exp", now() + 3600)
+        payload.setdefault("iss", "https://test.clerk.test")
         token = mint_token(self.key, payload)
         self.client.cookies.set(SESSION_COOKIE, token)
 
@@ -147,7 +151,11 @@ def test_unauthenticated_workshop_shows_the_sign_in_page(tmp_path: Path, s3: S3C
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' in page.text
+    assert 'id="clerk-sign-in"' in page.text
+    assert 'data-auth-door="workshop"' in page.text
+    assert "test.clerk.test/npm/@clerk/ui@1" in page.text
+    assert "test.clerk.test/npm/@clerk/clerk-js@6" in page.text
+    assert "jsdelivr" not in page.text
     assert "workshop/login" not in page.text  # no secret form anymore
     assert "first_snow" not in page.text
 
@@ -159,7 +167,7 @@ def test_operator_session_sees_the_dashboard(tmp_path: Path, s3: S3Client) -> No
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' not in page.text  # not the sign-in page
+    assert 'id="clerk-sign-in"' not in page.text  # not the sign-in page
     assert 'action="/workshop/runs"' in page.text
 
 
@@ -182,7 +190,7 @@ def test_an_expired_session_falls_back_to_the_sign_in_page(tmp_path: Path, s3: S
     page = harness.client.get("/workshop")
 
     assert page.status_code == 200
-    assert 'id="clerk-signin"' in page.text
+    assert 'id="clerk-sign-in"' in page.text
 
 
 def test_every_workshop_page_loads_clerk_js(tmp_path: Path, s3: S3Client) -> None:
@@ -191,9 +199,9 @@ def test_every_workshop_page_loads_clerk_js(tmp_path: Path, s3: S3Client) -> Non
 
     page = harness.client.get("/workshop")
 
-    assert "clerk.browser.js" in page.text
-    assert 'name="clerk-publishable-key"' in page.text
-    assert "pk_test_xxx" in page.text  # the key from clerk_settings()
+    assert "npm/@clerk/clerk-js@6" in page.text
+    assert "npm/@clerk/ui@1" in page.text
+    assert 'data-clerk-publishable-key="pk_test_xxx"' in page.text
 
 
 def test_starting_a_run_requires_the_session(tmp_path: Path, s3: S3Client) -> None:
@@ -368,6 +376,23 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
     assert "Delete this story" in page.text
 
 
+def test_the_staged_story_page_shows_remove_from_shelf_when_approved(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+
+    page = harness.client.get(f"/workshop/staged/{story_id}?run={record.id}")
+
+    assert f'action="/workshop/staged/{story_id}/delete"' in page.text
+    assert "data-delete-btn" in page.text
+    assert "Remove from shelf" in page.text
+
+
 def test_staged_assets_are_served_and_traversal_is_blocked(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.sign_in()
@@ -472,7 +497,7 @@ def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
     assert reloaded.story_ids == []
 
 
-@pytest.mark.parametrize("state", ["queued", "running", "approved"])
+@pytest.mark.parametrize("state", ["queued", "running"])
 def test_deleting_a_story_from_a_protected_run_is_rejected(
     tmp_path: Path, s3: S3Client, state: str
 ) -> None:
@@ -495,6 +520,75 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
     assert response.status_code == 400
     assert _staged_keys(s3, story_id)
     assert harness.store.load("operator", record.id) == protected
+
+
+def test_deleting_an_approved_story_unpublishes_cleans_artifacts_and_updates_run(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    content_dir = harness.settings.content_dir / story_id
+    content_dir.mkdir(parents=True)
+    (content_dir / "checkpoint.json").write_text("checkpoint")
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+    unpublished: list[str] = []
+    monkeypatch.setattr(
+        "src.api.routes.workshop.unpublish_story",
+        lambda story_id, settings: unpublished.append(story_id),
+    )
+
+    response = harness.client.post(
+        f"/workshop/staged/{story_id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert unpublished == [story_id]
+    assert _staged_keys(s3, story_id) == []
+    assert not content_dir.exists()
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "approved"
+    assert reloaded.story_ids == []
+
+
+def test_deleting_a_rejected_story_cleans_artifacts_without_unpublish(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    content_dir = harness.settings.content_dir / story_id
+    content_dir.mkdir(parents=True)
+    (content_dir / "checkpoint.json").write_text("checkpoint")
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    rejected = record.advance("running").advance("staged", story_ids=[story_id]).advance("rejected")
+    harness.store.save(rejected)
+    unpublished: list[str] = []
+    monkeypatch.setattr(
+        "src.api.routes.workshop.unpublish_story",
+        lambda story_id, settings: unpublished.append(story_id),
+    )
+
+    response = harness.client.post(
+        f"/workshop/staged/{story_id}/delete",
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert unpublished == []
+    assert _staged_keys(s3, story_id) == []
+    assert not content_dir.exists()
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.story_ids == []
 
 
 def test_deleting_an_unknown_staged_story_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
@@ -578,6 +672,20 @@ def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
     assert _staged_keys(s3, story_id) == []
     assert not content_dir.exists()
     assert harness.store.load("operator", record.id) is None
+
+
+def test_approved_run_progress_links_its_published_stories(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    harness.store.save(approved)
+
+    progress = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    assert f'href="/workshop/staged/{story_id}?run={record.id}"' in progress.text
+    assert 'data-testid="review-link"' in progress.text
 
 
 def test_deleting_a_run_does_not_remove_shared_story_artifacts(
@@ -914,3 +1022,18 @@ def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3
 
     assert "La barchetta" in page.text or "Review" in page.text  # title or review button shown
     assert page.status_code == 200
+
+
+def test_no_stale_clerk_artifacts_survive() -> None:
+    """Phase 2 killed clerk-js@5, jsdelivr, the meta-tag key, and the old
+    mount id; nothing anywhere under src/ may bring them back."""
+    stale = re.compile(
+        r"clerk-js@5|cdn\.jsdelivr\.net/npm/@clerk|clerk-publishable-key\" *content=|"
+        r'id="clerk-signin"',
+    )
+    offenders = [
+        str(p)
+        for p in Path("src").rglob("*")
+        if p.suffix in {".html", ".js", ".py"} and stale.search(p.read_text())
+    ]
+    assert offenders == []

@@ -1,0 +1,24 @@
+{% extends "auth/base.html" %}
+{% block title %}Your stories{% endblock %}
+{% block content %}
+  <h1 class="ws-title">Your stories</h1>
+
+  {% if stories %}
+    {% for story in stories %}
+      <div class="ws-card" data-story-id="{{ story.id }}">
+        <img src="{{ story.cover }}" alt="" width="96" height="96" />
+        <div>{{ story.title }}</div>
+        <div>{{ story.language }}</div>
+        <button class="ws-pill ws-pill-primary"
+                hx-post="/parent/stories/{{ story.id }}/delete"
+                hx-target="closest [data-story-id]"
+                hx-swap="outerHTML"
+                hx-confirm="Delete &ldquo;{{ story.title }}&rdquo; forever? This cannot be undone.">Delete forever</button>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="ws-card"><p>No published stories yet.</p></div>
+  {% endif %}
+
+  <p><a href="/parent">Back to packs</a></p>
+{% endblock %}

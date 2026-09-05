@@ -7,7 +7,6 @@ pack request form, my-packs) arrive in the next step of the design.
 from __future__ import annotations
 
 import secrets
-from base64 import b64decode
 from pathlib import Path
 from typing import Annotated, get_args
 
@@ -26,13 +25,14 @@ from pydantic import BaseModel, Field
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
-from src.api.routes._nav import home_path
+from src.api.routes._nav import fapi_host, home_path
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
     get_run_manager,
 )
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Theme
+from src.pipeline.publish import list_published_stories, unpublish_story
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import PackRequest
 
@@ -40,6 +40,16 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 router = APIRouter(prefix="/parent")
+
+
+def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
+    return {
+        story_id
+        for record in manager.store.list_runs(family_token=family_token)
+        if record.state == "approved"
+        for story_id in record.story_ids
+    }
+
 
 Manager = Annotated[RunManager, Depends(get_run_manager)]
 
@@ -76,20 +86,6 @@ class ProvisionResponse(BaseModel):
     action: str  # "already" | "linked" | "minted"
 
 
-def _fapi_host(settings: Settings) -> str:
-    """Frontend-API host for the ClerkJS CDN script tags.
-
-    Prefer the configured issuer (it IS the frontend API origin); fall back to
-    decoding the publishable key (base64 of the host + '$', after the last '_').
-    """
-    if settings.clerk_issuer:
-        return settings.clerk_issuer.removeprefix("https://").removeprefix("http://")
-    pk = settings.clerk_publishable_key.get_secret_value()
-    encoded = pk.rsplit("_", 1)[-1]
-    padded = encoded + "=" * (-len(encoded) % 4)
-    return b64decode(padded).decode().rstrip("$")
-
-
 async def _page_identity(request: Request, settings: Settings) -> CandidateContext | None:
     """Candidate identity for page routes: 401 → None (render sign-in);
     404 (feature unset) and 403 (disabled) propagate unchanged."""
@@ -112,15 +108,16 @@ async def parent_home(
         # Superusers author in the workshop — they have no parent view here.
         return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
-        "fapi_host": _fapi_host(settings),
+        "door": "parent",
+        "fapi_host": fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),
     }
     if ctx is None:
-        return templates.TemplateResponse(request, "parent/signin.html", context)
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
     if ctx.family_token is None:
         # First sign-in: page JS POSTs /parent/api/provision then reloads.
         context["onboarding"] = True
-        return templates.TemplateResponse(request, "parent/signin.html", context)
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
     # Provisioned parents get the packs page with their own runs, newest first.
     runs = manager.store.list_runs(family_token=ctx.family_token)
     runs.sort(key=lambda r: r.created_at, reverse=True)
@@ -136,6 +133,47 @@ async def parent_home(
             "languages": LANGUAGES,
         },
     )
+
+
+@router.get("/stories", response_class=HTMLResponse)
+async def parent_stories(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    ctx = await _page_identity(request, settings)
+    if ctx is not None and ctx.is_operator:
+        return RedirectResponse(home_path(True), status_code=303)
+    context: dict[str, object] = {
+        "fapi_host": fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+    }
+    if ctx is None:
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    if ctx.family_token is None:
+        context["onboarding"] = True
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    owned = _owned_story_ids(manager, ctx.family_token)
+    stories = [s for s in list_published_stories(settings) if s.id in owned]
+    return templates.TemplateResponse(
+        request, "parent/stories.html", {**context, "stories": stories}
+    )
+
+
+@router.post("/stories/{story_id}/delete")
+async def delete_parent_story(
+    request: Request,
+    story_id: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    if story_id not in _owned_story_ids(manager, ctx.family_token):
+        raise HTTPException(status_code=404)
+    unpublish_story(story_id, settings)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return RedirectResponse("/parent/stories", status_code=303)
 
 
 @router.post("/packs")
@@ -155,7 +193,8 @@ async def request_pack(
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
         context: dict[str, object] = {
-            "fapi_host": _fapi_host(settings),
+            "door": "parent",
+            "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "runs": [],
             "cap_message": str(cap),
