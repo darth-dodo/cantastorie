@@ -33,7 +33,7 @@ A tap wakes the shelf, which greets the child aloud — *"Ciao! Quale storia asc
 
 ### Child-Steered Branches
 
-At fixed branch points the page dims behind two picture cards with spoken labels. The child taps one and the story follows — agency without reading. A child who drifts off mid-choice still gets a complete, gentle ending: after a spoken nudge and a short wait, the first option auto-continues. Replayability lives in the branches — the boat story again, then the other ending.
+At the branch point the page dims behind two picture cards with spoken labels. The child taps one and the story follows that arm to its own ending — agency without reading. A child who drifts off mid-choice still gets a complete, gentle ending: after a spoken nudge and a short wait, the first option auto-continues. Replayability lives in the branches — the boat story again, then the other ending.
 
 ### One Warm Narrator
 
@@ -144,9 +144,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Status
 
-The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and resume-from-exact-position state persisted in the browser. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story-pack requests under daily run caps, and per-family pack tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
+The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and resume-from-exact-position state persisted in the browser. Branching stories work end to end — the pipeline authors a shared opening, one picture-choice point, and two arms (each with watercolor choice cards and spoken labels), and the player follows the tapped arm to its own ending, with the chosen path persisted so resume replays it. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story-pack requests under daily run caps, and per-family pack tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
 
-What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the review queue (Phase 2), branching stories, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
+What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the review queue (Phase 2), and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
 
 ---
 

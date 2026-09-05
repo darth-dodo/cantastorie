@@ -165,6 +165,8 @@ Every generated artifact is keyed by a hash of its inputs:
 | Narration audio | page text + voice ID + model/settings |
 | Page image | page text + character sheet hash + style prompt + model |
 | Character sheet | story summary + style prompt + model |
+| Choice card image | option label + character sheet hash + card prompt + model |
+| Choice label audio | option label + voice ID + model/settings |
 | Gloss map | story text + model |
 
 Editing page 5's text and re-running regenerates page 5's audio and image — nothing else. Re-running an unchanged story costs zero API calls.
@@ -186,6 +188,10 @@ Exact model IDs live in `config.py`, chosen and re-benchmarked freely since Open
 The ten spoken prompts are first-class pipeline assets (generated, reviewed, published per language), not an afterthought — slice 1 already needs the shelf greeting and story start. They are narrated through the same `narrate` step and provider as story pages.
 
 Page timings, by contrast, are **not** produced day one: the narration provider returns audio without word timestamps, so `story.json` page timings stay empty until reading mode reconstructs them via the Deepgram STT pass. See [Narration / Audio](#narration--audio) for the trade-off and the path back to timings.
+
+### Branching stories
+
+A `shape` parameter (default `linear`, threaded from the CLI and the workshop form) runs the same pipeline for branching stories. The writer returns a shared opening plus two labelled arms; content validation checks every *heard path* (shared prefix + one arm) against the linear limits, so no single path runs long. Two extra assets are produced per choice: each option's **choice card** is illustrated against the same character sheet as the pages, and each option's **spoken label** is narrated through the same `narrate` step and cache. Assemble hashes both into `story.json` beside the page assets, and a choice page carries no `next_page` — continuations live on its options. One choice point per story at launch; the validation enumerates heard paths generically, so more become a writer change, not a contract change.
 
 ---
 
@@ -248,7 +254,11 @@ One module owns a single `AudioContext`. Everything else asks it to play things.
 
 ### Whole-story prefetch
 
-On cover tap, the player fetches every page's audio and image for the story (a few MB on home wifi) before and during page 1. Both branch options preload before each choice point, because children tap instantly. Mid-story network failures become nearly impossible — which is what "bucket-direct playback is already resilient" means in practice. The audio-retry and offline states remain for the truly bad night.
+On cover tap, the player fetches every page's audio and image for the story (a few MB on home wifi) before and during page 1. Both branch options — their pages, choice cards, and spoken labels — preload before the choice point, because children tap instantly. Mid-story network failures become nearly impossible — which is what "bucket-direct playback is already resilient" means in practice. The audio-retry and offline states remain for the truly bad night.
+
+### Branch following
+
+The loaded story exposes `pagesFrom(pageId)`, an ordered walk of one arm. When a child taps a card, the player extends the played path with that arm (`playback.extendPath`) **before** the store advances, so the next page turned is the arm's first page — the store stays a pure index machine and never learns the graph. The chosen option index is recorded in `store.state.choices`, persisted with progress, and replayed on resume so a branched story reopens on the right arm (a republished story whose graph no longer matches simply starts fresh — never a crash).
 
 ---
 
@@ -341,7 +351,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 |-------|--------------|----------------|
 | 1 — One story plays | Shelf (one cover), playback, auto page turns, end screen | CLI core: write → safety → narrate → illustrate → publish; one Italian story (no timings — slice 1 does not use them) |
 | 2 — Survives real life | Retry & offline states, IndexedDB progress, resume, goodnight sign-off | — |
-| 3 — The story branches | Choice overlay, nudge, auto-continue | Branching topology, choice-card images |
+| 3 — The story branches | Choice overlay, nudge, auto-continue, branch-following (`pagesFrom`/`extendPath`), resume across branches | Branching writer (`shape`), choice-card images, spoken labels |
 | 4 — Grown-ups arrive | Gate, settings, first-run rule, language chip | Second language (Spanish); all ten prompts per enabled language |
 | 5 — The full shelf | Empty-shelf state | Batch runs; 19 stories × 5 languages; audit script |
 | 6 — Reading mode | Text panel, karaoke, gloss bubbles | Gloss step; word timings reconstructed here via the Deepgram STT transcription pass (see [Narration / Audio](#narration--audio)), since narration ships without them |

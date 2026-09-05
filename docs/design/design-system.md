@@ -146,7 +146,7 @@ Captured from the running app with seeded runs (402×874, indigo default):
 | | |
 |---|---|
 | ![Login](journey/08-workshop-login.png) | **8 · The door.** Wordmark over *"the room behind the piazza"*, one secret, one Enter pill. No accounts — with no secret configured, the workshop answers 404 and does not exist. |
-| ![Bench](journey/09-workshop-dashboard.png) | **9 · The bench.** The start-a-run card (theme, premise, language, a stories stepper) over the run cards with their state chips and armed delete — and the palette switcher at the foot. |
+| ![Bench](journey/09-workshop-dashboard.png) | **9 · The bench.** The start-a-run card (theme, premise, language, shape, a stories stepper) over the run cards with their state chips and armed delete — and the palette switcher at the foot. |
 | ![Run](journey/10-workshop-run.png) | **10 · A run.** The bead card: six beads on the pipeline's step order with a state headline; while live the fragment re-polls itself every 2 s, and a staged run offers *Review N pages*. |
 | ![Rested](journey/12-workshop-rested.png) | **11 · Rested.** A failed run rests calmly — a terracotta ring on the step it stopped at, the note in a mono box, and a *Run it again* pill that submits a fresh run. |
 | ![Review](journey/11-workshop-review.png) | **12 · The review.** The staged story page by page — illustration, Literata text, the custom audio pill — with the *Approve & publish* / *Reject* footer: the parent-gate promise in operator form, everything seen before publish. |
