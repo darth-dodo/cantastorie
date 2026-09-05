@@ -1,99 +1,124 @@
 # Cantastorie
 
-> Bedtime stories your child steers, in the languages your family speaks. Told aloud, painted in watercolor, and approved by you before a single word reaches little ears.
+> **Bedtime stories your child steers, in the languages your family speaks.**
 
-[![CI](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/darth-dodo/cantastorie/graph/badge.svg)](https://codecov.io/gh/darth-dodo/cantastorie)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Cloudflare R2](https://img.shields.io/badge/Cloudflare-R2-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/r2/)
-[![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-cc785c?logo=anthropic&logoColor=white)](https://claude.ai)
+<p align="center">
+  <a href="https://cantastorie.onrender.com">
+    <img src="https://img.shields.io/badge/📖_Try_it_Live-cantastorie.onrender.com-C9714F?style=for-the-badge&labelColor=1a1a1a" alt="Live Demo">
+  </a>
+</p>
 
-The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived carefully: one warm narrator voice, soft watercolor pages, and a child's finger choosing the path — with a parent as the piazza's gatekeeper, seeing and hearing every word, picture, and sound before any child meets it.
-
-![A cantastorie storyteller in a moonlit piazza](docs/assets/cantastorie-hero.png)
+<p align="center">
+  <a href="https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml"><img src="https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/darth-dodo/cantastorie"><img src="https://codecov.io/gh/darth-dodo/cantastorie/graph/badge.svg" alt="Coverage"></a>
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/Python-3.12+-blue.svg?logo=python&logoColor=white" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Cloudflare-R2-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare R2">
+</p>
 
 ---
 
-## The Problem
+Told aloud, painted in watercolor, and approved by you before a single word reaches little ears. Cantastorie is a bedtime story app for pre-readers: voice carries the story, pictures carry the choices, and nothing on screen asks a child to read.
 
-Pre-readers cannot use story apps built on text, and screen apps built on taps train the wrong appetite at bedtime. Multilingual families juggle one-language apps with robotic voices in the smaller languages. And parents have no way to fully preview generated content before their child meets it.
+Whether your family speaks Italian, Spanish, English, Greek, German, Bulgarian, or Russian — every story is authored natively, narrated in one warm voice, and painted in soft watercolor, with a parent as the gatekeeper who sees and hears everything first.
 
-Cantastorie is built on one belief: **a bedtime app should wind a child down.** Voice carries the story, pictures carry the choices, and nothing on screen asks a pre-reader to read.
+---
+
+## The Cantastorie
+
+<p align="center">
+  <img src="docs/assets/cantastorie-hero.png" alt="A cantastorie storyteller in a moonlit piazza" width="320">
+</p>
+
+The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived: **one warm narrator identity** across every story and language, pointing at watercolor boards like the storyteller of old.
+
+> *"Ciao! Quale storia ascoltiamo oggi?"*
+
+A tap wakes the shelf and it greets your child aloud. Tap a cover, and page one begins.
 
 ---
 
 ## How It Works
 
-### Two Taps to a Story
+### 1. Two Taps to a Story
+A tap wakes the shelf and it greets your child aloud. Tap a cover, and page one begins. At most two taps and four seconds stand between opening the app and hearing a story. Watercolor pages turn themselves when the narration ends.
 
-A tap wakes the shelf, which greets the child aloud — *"Ciao! Quale storia ascoltiamo oggi?"* Tap a cover, *"Si parte!"*, and page one begins. At most two taps and four seconds stand between opening the app and hearing a story. Watercolor pages turn themselves when the narration ends; a large play-pause button is flanked by prev/next page buttons, and pausing resumes from the exact position.
+### 2. Choices Are Pictures
+At a branch, the page dims behind two watercolor cards with spoken labels. A finger picks the path — agency without reading. A child who drifts off mid-choice still gets a complete, gentle ending.
 
-### Child-Steered Branches
+### 3. One Warm Narrator
+A single storyteller voice across every story and language. Every child-facing prompt is recorded per language — zero required text in child mode.
 
-At the branch point the page dims behind two picture cards with spoken labels. The child taps one and the story follows that arm to its own ending — agency without reading. A child who drifts off mid-choice still gets a complete, gentle ending: after a spoken nudge and a short wait, the first option auto-continues. Replayability lives in the branches — the boat story again, then the other ending.
+### 4. Parent-Approved
+Every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf. A model mistake would need a human mistake on top of it to reach a child.
 
-### One Warm Narrator
+---
 
-The target is a single warm narrator identity across every story and language, like the piazza storyteller of old. Launch narration is generated by **Gemini TTS** (via OpenRouter) with one house voice pinned across every language; **family voice cloning** runs on **Voxtral via the Mistral API**, and **Deepgram** supplies word timings and the fallback voice bench now that ElevenLabs is retired. The trade-offs are recorded in [ADR-004](docs/adr/ADR-004-narration-deepgram-voxtral.md) and [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md). Every child-facing prompt is recorded per language — zero required text in child mode.
+## Features
 
-### Watercolor Boards
+| Feature | Description |
+|---------|-------------|
+| **Voice-first player** | Full-bleed watercolor pages, auto page-turns, gentle crossfades, exact-position resume |
+| **Picture-choice branching** | Tap a card and the story follows that arm to its own ending — replay for the other |
+| **One warm narrator** | A single pinned voice across every language; every prompt spoken, no required text |
+| **Seven languages** | Italian & Spanish flagship; English, Greek, German, Bulgarian, Russian — authored natively, never translated |
+| **Private family shelves** | Each family's approved packs publish to a private overlay only their child sees |
+| **Truly private** | No child accounts, no tracking; nothing about the child ever leaves the device |
+| **Parent-approved** | A machine safety gate plus a parent's review before any story reaches a shelf |
 
-Soft watercolor, warm palette, rounded characters, nothing frightening — bedtime, not Saturday cartoons. Images carry no text and nothing scary. Every story's final page lands on comfort or sleepiness.
+---
 
-### The Parent Gate (planned)
+## Screenshots
 
-Everything grown-up will sit behind a small, low-contrast corner of the shelf. The gate is a three-second hold followed by a two-integer addition on a keypad — no PIN, freshly random each time. Five failures lock it for five minutes, and the lockout survives reloads. Behind it: reading mode and export/import (with the dashboard and review queue arriving in Phase 2). Today the gate is not yet built — language and theme settings sit in an ungated settings overlay on the shelf.
+<p align="center">
+  <img src="docs/design/journey/01-shelf-light.png" alt="Shelf" width="200">
+  <img src="docs/design/journey/03-player-page1.png" alt="Player" width="200">
+  <img src="docs/design/journey/04-choice-overlay.png" alt="Choice overlay" width="200">
+</p>
 
-### The Workshop
+<p align="center">
+  <em>Pick a story • Listen along • Choose the path</em>
+</p>
 
-Behind Clerk operator sign-in, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. Runs execute in-process and survive restarts — the pipeline's filesystem checkpoints double as the resume mechanism, so a mid-run reboot re-buys zero API calls. The design is settled in [ADR-005](docs/adr/ADR-005-workshop-area.md).
+---
 
-### Reading Mode, Optional (planned)
+## Try It Now
 
-For reading-along parents and emerging readers, an optional text panel will show the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading. The pipeline's word-timing (Deepgram) and gloss steps ship with this slice.
+**[cantastorie.onrender.com](https://cantastorie.onrender.com)**
 
-### Seven Languages
-
-Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, German, Bulgarian, and Russian ride along. Stories are authored natively per language, never translated: an Italian story reaches for *biscotti della nonna*, a Spanish one for *magdalenas*.
-
-### Truly Private, Parent-Approved
-
-No child accounts, no tracking, no analytics. The child player is account-free — progress lives in the browser (localStorage today, IndexedDB when real stories land) and will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — at `/parent` they sign in to request story packs and follow their runs; the review queue arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no sign-up for the story. Just tap a cover and listen.
 
 ---
 
 ## For Developers
 
-Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area (`/parent` — Clerk sign-in, story-pack requests with daily run caps, and per-family pack status), and an operator workshop (`/workshop`, behind Clerk operator sign-in) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+<details>
+<summary><strong>Tech Stack & Architecture</strong></summary>
 
 ### Tech Stack
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| **Backend** | FastAPI | Async, Pydantic validation, HTMX-friendly SSR — hermano-proven |
+| **Backend** | FastAPI | Async, Pydantic validation, HTMX-friendly SSR |
 | **Player UI** | Vanilla ES modules + Web Audio API | Full-screen, audio-driven, FSM-managed; crossfades that work on iOS |
 | **Parent UI** | Jinja2 + HTMX + Tailwind | Server-driven UI, minimal JS |
 | **Pipeline** | Plain Python + Pydantic AI | Typed step functions, filesystem checkpoints, no graph framework |
-| **LLMs, images & narration** | OpenRouter | One gateway, per-step model choice; narration on Gemini 3.1 Flash TTS, word timings via Deepgram (ElevenLabs retired — [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) |
-| **Asset storage** | Cloudflare R2 | Zero egress fees, access logs off, bucket-direct playback |
-| **Hosting** | Render (Docker, `render.yaml`) | Hermano's deploy precedent |
-| **Child persistence** | localStorage (IndexedDB next) | Progress, settings, lockout, family token — nothing server-side |
-| **Testing** | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows in a real browser |
+| **LLMs, images & narration** | OpenRouter | One gateway; narration on Gemini 3.1 Flash TTS, word timings via Deepgram ([ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) |
+| **Asset storage** | Cloudflare R2 | Zero egress, access logs off, bucket-direct playback |
+| **Hosting** | Render (Docker, `render.yaml`) | |
 
 ### System Overview
 
-One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and local storage. The authoring pipeline runs either as a CLI or in-process via the workshop, sharing the same step functions. The app and the pipeline share only `src/config.py` and the `story.json` contract.
+One FastAPI app serves a static shell; everything the child experiences after page load happens in the browser, talking only to Cloudflare R2 and local storage. The authoring pipeline runs either as a CLI or in-process via the workshop, sharing the same step functions.
 
 ```mermaid
 graph LR
     B["Browser (child)<br/>ES modules + Web Audio + local state"]
     R2["Cloudflare R2<br/>audio · images · manifests"]
-    F["FastAPI on Render<br/>player · parent area · workshop"]
+    F["FastAPI on Render<br/>landing · player · parent · workshop"]
     P["Pipeline<br/>plain Python + Pydantic AI"]
-    OR["OpenRouter<br/>story · safety · glosses · images · narration"]
+    OR["OpenRouter<br/>story · safety · images · narration"]
 
     B -- "bucket-direct fetch" --> R2
     B -- "page load, parent HTMX" --> F
@@ -102,72 +127,77 @@ graph LR
     P --> OR
 ```
 
-For the code as built — module map, player and audio state machines, and the seams between them — see [docs/system-overview.md](docs/system-overview.md). For the settled design and its rationale, see [docs/architecture.md](docs/architecture.md).
+The authoring pipeline is a batch job, not an agent: **write → safety gate → revise → narrate → illustrate → assemble → publish**, with content-addressed caching so unchanged inputs cost zero API calls.
 
-### Project Structure
+### Codebase Health
 
-```
-src/
-├── config.py            Settings shared by app and pipeline (R2, keys, per-step models)
-├── api/                 FastAPI app factory, player route, parent area, workshop
-├── pipeline/            Authoring pipeline: typed steps, cache, providers, models
-│   └── steps/           write · safety · revise · gloss · narrate · illustrate · assemble
-├── workshop/            In-app authoring: run manager, run records, resume-on-boot
-├── templates/           Jinja2 (parent area + player shell + workshop)
-└── static/
-    ├── js/              Vanilla ES modules: fsm, audio engine, playback, screens, storage
-    └── css/             Player watercolor CSS; parent Tailwind
-
-content/                 Pipeline working folders (gitignored)
-staging/                 Staged stories for operator review
-tests/                   pytest + Vitest + Playwright
-docs/                    product.md, architecture.md, system-overview.md, setup.md, adr/
-```
+| Metric | Value |
+|--------|-------|
+| **Coverage** | Python ~92%, JS ~76% (Codecov) |
+| **Type checking** | Strict mypy |
+| **Linting** | Ruff + pre-commit hooks |
+| **Tests** | pytest · Vitest · Playwright (child flows in a real browser) |
 
 ### Quick Start
 
 Requires [uv](https://docs.astral.sh/uv/), Node.js 20+, and Python 3.12 (uv installs it automatically).
 
 ```bash
+git clone https://github.com/darth-dodo/cantastorie.git
+cd cantastorie
+
+cp .env.example .env
+# Only OPENROUTER_API_KEY is needed to run the default pipeline end to end
+
 make install        # uv sync + npm install
-make install-hooks  # pre-commit hooks (lint, format, types, secrets, commit style)
 make dev            # run the FastAPI app at http://localhost:8000
-make dev-css        # watch and compile Tailwind CSS (run alongside make dev)
-make test           # all tests (pytest + Vitest)
-make check          # lint + format check + strict mypy
-make help           # list every target
 ```
 
-Copy `.env.example` to `.env` for pipeline work. **Only `OPENROUTER_API_KEY` is needed to run the default pipeline end to end** — story, safety, glosses, images, and narration all run through OpenRouter. ElevenLabs is retired ([ADR-004](docs/adr/ADR-004-narration-deepgram-voxtral.md)). Two pipeline-only keys are the bounded exceptions: `DEEPGRAM_API_KEY` for the word-timing pass (OpenRouter does not carry the Deepgram models) and `MISTRAL_API_KEY` for voice cloning only ([ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)). The player needs no keys at story time.
+The player needs no keys at story time. Two pipeline-only exceptions: `DEEPGRAM_API_KEY` (word timings) and `MISTRAL_API_KEY` (voice cloning only). ElevenLabs is retired ([ADR-004](docs/adr/ADR-004-narration-deepgram-voxtral.md)).
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen via pre-commit. Every PR runs lint, format check, strict mypy, pytest, Vitest, a Bandit security scan, a Tailwind compile, and a Docker build ([ci.yml](.github/workflows/ci.yml)). Test coverage — Python **92%**, JS **76%** — uploads to [Codecov](https://codecov.io/gh/darth-dodo/cantastorie) on every run. Deployment targets Render via [render.yaml](render.yaml); the Cloudflare R2 bucket and Render setup are documented in [docs/setup.md](docs/setup.md).
-
-### Status
-
-The authoring pipeline is built end to end — write, safety gate, bounded revise, gloss, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and resume-from-exact-position state persisted in the browser. Branching stories work end to end — the pipeline authors a shared opening, one picture-choice point, and two arms (each with watercolor choice cards and spoken labels), and the player follows the tapped arm to its own ending, with the chosen path persisted so resume replays it. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story-pack requests under daily run caps, and per-family pack tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
-
-What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the review queue (Phase 2), and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
-
----
-
-## Documentation
+### Documentation
 
 - [Product Specification](docs/product.md) — vision, behaviors, content rules, decision log
-- [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, the authoring pipeline, and narration
-- [System Overview](docs/system-overview.md) — the code as built: module map, state machines, and seams
+- [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, the pipeline, and narration
+- [System Overview](docs/system-overview.md) — the code as built: module map, state machines, seams
 - [Setup & Deploy](docs/setup.md) — R2 bucket, CORS, and the Render blueprint
-- [Architecture Decision Records](docs/adr/) — settled decisions:
-  - [ADR-001: Technology Stack](docs/adr/ADR-001-technology-stack.md) — FastAPI, vanilla JS, plain-Python pipeline, OpenRouter, R2, Render
-  - [ADR-002: Narration Provider](docs/adr/ADR-002-narration-provider.md) — Voxtral via OpenRouter (superseded by ADR-004)
-  - [ADR-003: Parent Authentication via Clerk](docs/adr/ADR-003-parent-authentication-clerk.md) — accepted
-  - [ADR-004: Narration — Voxtral + Deepgram, ElevenLabs Retired](docs/adr/ADR-004-narration-deepgram-voxtral.md) — amended by ADR-008
-  - [ADR-005: Workshop Area](docs/adr/ADR-005-workshop-area.md) — in-app authoring with in-process pipeline runs
-  - [ADR-006: Nonna Narrates](docs/adr/ADR-006-family-voice-narration.md) — family voice cloning, proposed
-  - [ADR-007: LangSmith Observability](docs/adr/ADR-007-langsmith-observability.md) — app-wide tracing
-  - [ADR-008: Gemini TTS Defaults, Mistral Cloning](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) — default voices on Gemini via OpenRouter; cloning scoped to Voxtral on the Mistral API
+- [Architecture Decision Records](docs/adr/) — settled decisions and their rationale
+
+</details>
+
+<details>
+<summary><strong>Development Commands</strong></summary>
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install dependencies (uv + npm) |
+| `make dev` | Run the FastAPI app at http://localhost:8000 |
+| `make dev-css` | Watch and compile Tailwind CSS |
+| `make test` | Run all tests (pytest + Vitest) |
+| `make check` | Lint + format check + strict mypy |
+| `make help` | List every target |
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitizen. Every PR runs lint, format check, strict mypy, pytest, Vitest, a security scan, a Tailwind compile, and a Docker build.
+
+</details>
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <strong>Built with</strong><br/>
+  <a href="https://fastapi.tiangolo.com">FastAPI</a> •
+  Web Audio API •
+  <a href="https://openrouter.ai">OpenRouter</a> •
+  <a href="https://tailwindcss.com">Tailwind CSS</a> •
+  <a href="https://developers.cloudflare.com/r2/">Cloudflare R2</a>
+</p>
+
+<p align="center">
+  <a href="https://cantastorie.onrender.com"><strong>Try it Live →</strong></a>
+</p>
