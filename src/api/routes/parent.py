@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import secrets
 from pathlib import Path
-from typing import Annotated, get_args
+from typing import Annotated, Protocol, get_args
 
 from fastapi import (
     APIRouter,
@@ -32,7 +32,7 @@ from src.api.routes.workshop import (  # shared DI seam, overridable in tests
 )
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Theme
-from src.pipeline.publish import list_published_stories, unpublish_story
+from src.pipeline.publish import list_published_stories, publish_story, unpublish_story
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import PackRequest
 
@@ -52,6 +52,25 @@ def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
 
 
 Manager = Annotated[RunManager, Depends(get_run_manager)]
+
+
+class FamilyPublisher(Protocol):
+    def __call__(self, story_id: str, family_token: str) -> None: ...
+
+
+def get_family_publisher() -> FamilyPublisher:
+    """Publish a family's approved story to its private overlay lane.
+
+    The family_token is the tenancy boundary and the R2 prefix: publish_story
+    validates it before it becomes a key (src/pipeline/publish.py). Overridable
+    in tests, mirroring workshop.get_publisher.
+    """
+
+    def publish(story_id: str, family_token: str) -> None:
+        publish_story(story_id, get_settings(), family_token=family_token)
+
+    return publish
+
 
 # The form's theme/language choices come straight from the pipeline literals,
 # exactly like the workshop dashboard (routes/workshop.py builds these with
@@ -230,6 +249,36 @@ async def pack_progress(
             "is_operator": False,
         },
     )
+
+
+@router.post("/packs/{run_id}/approve")
+async def approve_pack(
+    request: Request,
+    run_id: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    manager: Manager,
+    publisher: Annotated[FamilyPublisher, Depends(get_family_publisher)],
+) -> Response:
+    """A family approves its own staged pack → publish to its private overlay.
+
+    Tenancy: the run is loaded family-scoped, so another family's run 404s.
+    There is no shared shelf here — every story lands under the family's own
+    overlay (published/families/{token}/…), reaching only that family's child.
+    """
+    record = manager.store.load(ctx.family_token, run_id)  # family-scoped load
+    if record is None:
+        raise HTTPException(status_code=404)
+    if record.state != "staged":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run is in {record.state} state, must be staged to approve",
+        )
+    for story_id in record.story_ids:
+        publisher(story_id, ctx.family_token)
+    manager.store.save(record.advance("approved"))
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return RedirectResponse("/parent", status_code=303)
 
 
 @router.post("/api/provision")
