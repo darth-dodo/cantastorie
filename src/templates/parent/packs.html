@@ -1,40 +1,74 @@
 {% extends "auth/base.html" %}
-{% block title %}Your story packs{% endblock %}
+{% block title %}Your shelf{% endblock %}
 {% block content %}
-  <h1 class="ws-title">Your story packs</h1>
-  <p><a href="/parent/stories">Your published stories</a></p>
+<div class="ws-page">
+  <div class="ws-bench-header">
+    <div class="ws-wordmark">Your shelf</div>
+    <div class="ws-tagline">stories made just for your family</div>
+  </div>
 
   {% if cap_message %}
     <div class="ws-card" data-cap-message>
+      <div class="ws-card-title">One story at a time</div>
       <p>{{ cap_message }}</p>
-      {% if cap_active %}<p>Your current pack is <strong>{{ cap_active.state }}</strong>.</p>{% endif %}
+      {% if cap_active %}<p>Your current story is <strong>{{ cap_active.state }}</strong>.</p>{% endif %}
     </div>
   {% endif %}
 
-  {% for record in runs %}
-    <div class="ws-card" data-run-id="{{ record.id }}">
-      <div>{{ record.request.count }} × {{ record.request.theme }} · {{ record.request.language }}</div>
-      <div hx-get="/parent/packs/{{ record.id }}/progress" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-  {% endfor %}
+  <div class="ws-card ws-start-card">
+    <div class="ws-card-title">Make a story</div>
+    <form method="post" action="/parent/packs" class="ws-run-form">
+      <div class="ws-field-grid">
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Theme</span>
+          <div class="ws-field-select-wrap">
+            <select name="theme" class="ws-field ws-select">
+              {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">A wish for the story (optional)</span>
+          <input name="premise" type="text" maxlength="300" class="ws-field" placeholder="a small boat wants to see the moon" />
+        </div>
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Language</span>
+          <div class="ws-field-select-wrap">
+            <select name="language" class="ws-field ws-select">
+              {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="ws-pill ws-pill-primary">Make our story</button>
+    </form>
+  </div>
 
-  <form method="post" action="/parent/packs" class="ws-card">
-    <label>Theme
-      <select name="theme">
-        {% for theme in themes %}<option value="{{ theme }}">{{ theme }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Language
-      <select name="language">
-        {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>How many stories
-      <select name="count"><option>1</option><option>2</option><option>3</option></select>
-    </label>
-    <label>A wish for the story (optional)
-      <input name="premise" maxlength="300" />
-    </label>
-    <button type="submit" class="ws-pill ws-pill-primary">Make our stories</button>
-  </form>
+  <div class="ws-section-head">Your stories</div>
+
+  <div class="ws-runs-list">
+    {% if runs %}
+      {% for record in runs %}
+        {% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
+        <div data-run-id="{{ record.id }}">
+          <div class="ws-run-title">{{ title }}</div>
+          <div hx-get="/parent/packs/{{ record.id }}/progress" hx-trigger="load" hx-swap="outerHTML"></div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="ws-card ws-empty-card">
+        <div class="ws-empty-title">No stories yet</div>
+        <div class="ws-empty-sub">make your family's first one above</div>
+      </div>
+    {% endif %}
+  </div>
+
+  <p><a href="/parent/stories">Your published stories →</a></p>
+
+  <div class="ws-palette-bar">
+    {% for name in ["warm", "indigo", "seaglass", "plum"] %}
+      <button class="ws-palette-dot ws-palette-dot--{{ name }}" data-palette-name="{{ name }}" title="{{ name }}"></button>
+    {% endfor %}
+  </div>
+</div>
 {% endblock %}

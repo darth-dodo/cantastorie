@@ -212,10 +212,11 @@ async def request_pack(
     background: BackgroundTasks,
     theme: Annotated[str, Form()],
     language: Annotated[str, Form()],
-    count: Annotated[int, Form()] = 1,
     premise: Annotated[str, Form()] = "",
 ) -> Response:
-    pack = PackRequest(theme=theme, language=language, count=count, premise=premise or None)  # type: ignore[arg-type]
+    # One story at a time: the parent surface never batches a pack, so count is
+    # fixed at 1 here rather than read from the form.
+    pack = PackRequest(theme=theme, language=language, count=1, premise=premise or None)  # type: ignore[arg-type]
     try:
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
