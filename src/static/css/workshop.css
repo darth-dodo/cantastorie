@@ -277,6 +277,15 @@ body {
   box-shadow: var(--card-shadow), 0 0 0 1.5px var(--info-ring);
 }
 
+/* Cover thumbnail on the parent's published-stories shelf. */
+.ws-story-cover {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
 .ws-run-card-link {
   flex: 1;
   display: flex;

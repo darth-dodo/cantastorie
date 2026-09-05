@@ -1,24 +1,37 @@
 {% extends "auth/base.html" %}
 {% block title %}Your stories{% endblock %}
 {% block content %}
-  <h1 class="ws-title">Your stories</h1>
+<div class="ws-page">
+  <div class="ws-bench-header">
+    <div class="ws-wordmark">Your stories</div>
+    <div class="ws-tagline">on your family's private shelf</div>
+  </div>
 
-  {% if stories %}
-    {% for story in stories %}
-      <div class="ws-card" data-story-id="{{ story.id }}">
-        <img src="{{ story.cover }}" alt="" width="96" height="96" />
-        <div>{{ story.title }}</div>
-        <div>{{ story.language }}</div>
-        <button class="ws-pill ws-pill-primary"
-                hx-post="/parent/stories/{{ story.id }}/delete"
-                hx-target="closest [data-story-id]"
-                hx-swap="outerHTML"
-                hx-confirm="Delete &ldquo;{{ story.title }}&rdquo; forever? This cannot be undone.">Delete forever</button>
+  <div class="ws-runs-list">
+    {% if stories %}
+      {% for story in stories %}
+        <div class="ws-card ws-run-card" data-story-id="{{ story.id }}">
+          <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="72" height="72" />
+          <div class="ws-run-card-body">
+            <div class="ws-run-title">{{ story.title }}</div>
+            <div class="ws-run-meta">{{ story.language }}</div>
+          </div>
+          <button class="ws-delete-btn"
+                  data-delete-btn
+                  hx-post="/parent/stories/{{ story.id }}/delete"
+                  hx-target="closest [data-story-id]"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete &ldquo;{{ story.title }}&rdquo; forever? This cannot be undone.">×</button>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="ws-card ws-empty-card">
+        <div class="ws-empty-title">No published stories yet</div>
+        <div class="ws-empty-sub">approve a story to add it to your shelf</div>
       </div>
-    {% endfor %}
-  {% else %}
-    <div class="ws-card"><p>No published stories yet.</p></div>
-  {% endif %}
+    {% endif %}
+  </div>
 
-  <p><a href="/parent">Back to packs</a></p>
+  <p><a href="/parent">← Back to making stories</a></p>
+</div>
 {% endblock %}
