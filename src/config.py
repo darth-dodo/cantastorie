@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     # the threshold must clear the slowest genuine run, never reap it.
     run_stale_after_seconds: int = 1800
 
+    # Reaper throttle: the run page polls progress every ~2s, and each poll used
+    # to trigger a full-store reap sweep (a LIST + a GET per record on R2). The
+    # reap only matters relative to run_stale_after_seconds (1800s), so sweeping
+    # more than once per this interval buys nothing. Gates reap_stale so the poll
+    # hot path can't hammer the store; well below the stale threshold, so a
+    # genuinely stranded run is still reaped promptly.
+    reap_min_interval_seconds: int = 30
+
     # Clerk parent auth (AI-409, ADR-003). Empty clerk_jwks_url means the
     # /parent area does not exist: every /parent route answers 404, exactly
     # like the workshop above. clerk_secret_key is reserved for the

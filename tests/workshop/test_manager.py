@@ -193,6 +193,64 @@ def test_reap_stale_retires_a_queued_run_that_never_started(s3: S3Client) -> Non
     assert retired.state == "failed"
 
 
+def _counting_store(store: RunStore) -> tuple[RunStore, "list[int]"]:
+    """Wrap store.list_runs to count how many full sweeps a call triggers.
+
+    Each list_runs() is one LIST + a GET per record on R2, so sweep count is the
+    hot-path cost we care about. Returns the store and a one-element counter.
+    """
+    calls = [0]
+    original = store.list_runs
+
+    def counted(*args: object, **kwargs: object) -> list[RunRecord]:
+        calls[0] += 1
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    store.list_runs = counted  # type: ignore[method-assign]
+    return store, calls
+
+
+def test_reap_stale_sweeps_the_store_only_once_per_call(s3: S3Client) -> None:
+    """Reap used to call list_runs twice (queued + running), each a full R2
+    sweep. It only needs one sweep, filtering states in memory."""
+    settings = _settings()
+    store, calls = _counting_store(RunStore(settings, client=s3))
+    store.save(_aged(new_run("family-abc", REQUEST).advance("running"), timedelta(hours=2)))
+    manager = RunManager(store, settings, generate_pack=_staged_pack)
+
+    manager.reap_stale()
+
+    assert calls[0] == 1
+
+
+def test_reap_stale_is_throttled_within_the_min_interval(s3: S3Client) -> None:
+    """Back-to-back reaps (the 2s poll) must not each sweep the store; only the
+    first within reap_min_interval_seconds does any work."""
+    settings = _settings()
+    store, calls = _counting_store(RunStore(settings, client=s3))
+    store.save(new_run("family-abc", REQUEST).advance("running"))  # fresh, not stale
+    manager = RunManager(store, settings, generate_pack=_staged_pack)
+
+    manager.reap_stale()
+    manager.reap_stale()
+    manager.reap_stale()
+
+    assert calls[0] == 1  # only the first reap swept the store
+
+
+def test_reap_stale_sweeps_again_after_the_min_interval_elapses(s3: S3Client) -> None:
+    """Once the throttle window passes, the next reap sweeps again."""
+    settings = Settings(_env_file=None, r2_bucket=BUCKET, reap_min_interval_seconds=0)
+    store, calls = _counting_store(RunStore(settings, client=s3))
+    store.save(new_run("family-abc", REQUEST).advance("running"))
+    manager = RunManager(store, settings, generate_pack=_staged_pack)
+
+    manager.reap_stale()
+    manager.reap_stale()
+
+    assert calls[0] == 2  # interval 0 means every call sweeps
+
+
 def test_reap_stale_leaves_an_old_staged_run_awaiting_review(s3: S3Client) -> None:
     settings = _settings()
     store = RunStore(settings, client=s3)
