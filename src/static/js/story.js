@@ -87,6 +87,10 @@ export async function loadStory(url, fetchFn) {
   };
 }
 
+export function coverSrc(entry) {
+  return entry?.cover ?? entry?.pages?.[0]?.image ?? null;
+}
+
 // Mock story data for the design shell — "La barchetta e la luna" outline
 // from docs/product.md. Real story.json arrives with the pipeline.
 

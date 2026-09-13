@@ -2,7 +2,7 @@
 // render() swaps what #app shows based on store state. No framework —
 // the whole child UI is four screens and two overlays.
 
-import { story, shelf } from "./story.js";
+import { story, shelf, coverSrc } from "./story.js";
 import { PAGE_COUNT } from "./store.js";
 
 // What the player screen shows for the open story. The mock backs covers
@@ -90,9 +90,10 @@ export function buildShelf(
       const name = entry.title ?? entry.label;
       const card = el("div", "cover-card");
       const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
-      if (entry.cover) {
+      const src = coverSrc(entry);
+      if (src) {
         const img = el("img", "cover-art");
-        img.src = entry.cover;
+        img.src = src;
         img.alt = "";
         img.loading = "lazy";
         cover.appendChild(img);
