@@ -39,12 +39,13 @@ const LANGS = [
   { code: "de", label: "Deutsch" },
   { code: "bg", label: "Български" },
   { code: "ru", label: "Русский" },
+  { code: "mr", label: "मराठी" },
 ];
 
-const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!", el: "Γεια σου!", de: "Hallo!", bg: "Здравей!", ru: "Привет!" };
-const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?", el: "Ποια ιστορία σήμερα;", de: "Welche Geschichte heute?", bg: "Коя история днес?", ru: "Какую историю сегодня?" };
-const RESUMES = { it: "Continua o ricomincia?", es: "¿Continuar o empezar de nuevo?", en: "Continue or start over?", el: "Συνέχεια ή από αρχή;", de: "Weiter oder von vorne?", bg: "Продължи или започни отначало?", ru: "Продолжить или начать заново?" };
-const ENDS = { it: { title: "Fine!", again: "Di nuovo!", prompt: "Un'altra storia?" }, es: { title: "¡Fin!", again: "¡Otra vez!", prompt: "¿Otra historia?" }, en: { title: "The End!", again: "Again!", prompt: "Another story?" }, el: { title: "Τέλος!", again: "Ξανά!", prompt: "Άλλη ιστορία;" }, de: { title: "Ende!", again: "Nochmal!", prompt: "Eine andere Geschichte?" }, bg: { title: "Край!", again: "Отново!", prompt: "Друга история?" }, ru: { title: "Конец!", again: "Ещё раз!", prompt: "Другая история?" } };
+const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!", el: "Γεια σου!", de: "Hallo!", bg: "Здравей!", ru: "Привет!", mr: "नमस्कार!" };
+const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?", el: "Ποια ιστορία σήμερα;", de: "Welche Geschichte heute?", bg: "Коя история днес?", ru: "Какую историю сегодня?", mr: "आज कोणती गोष्ट?" };
+const RESUMES = { it: "Continua o ricomincia?", es: "¿Continuar o empezar de nuevo?", en: "Continue or start over?", el: "Συνέχεια ή από αρχή;", de: "Weiter oder von vorne?", bg: "Продължи или започни отначало?", ru: "Продолжить или начать заново?", mr: "पुढे चालू ठेवायचे की पुन्हा सुरू करायचे?" };
+const ENDS = { it: { title: "Fine!", again: "Di nuovo!", prompt: "Un'altra storia?" }, es: { title: "¡Fin!", again: "¡Otra vez!", prompt: "¿Otra historia?" }, en: { title: "The End!", again: "Again!", prompt: "Another story?" }, el: { title: "Τέλος!", again: "Ξανά!", prompt: "Άλλη ιστορία;" }, de: { title: "Ende!", again: "Nochmal!", prompt: "Eine andere Geschichte?" }, bg: { title: "Край!", again: "Отново!", prompt: "Друга история?" }, ru: { title: "Конец!", again: "Ещё раз!", prompt: "Другая история?" }, mr: { title: "समाप्त!", again: "पुन्हा!", prompt: "आणखी एक गोष्ट?" } };
 
 function pickTheme(params, hour) {
   const forced = params.get("theme");

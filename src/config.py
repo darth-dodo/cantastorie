@@ -42,6 +42,7 @@ class Settings(BaseSettings):
         "de": "Kore",
         "bg": "Kore",
         "ru": "Kore",
+        "mr": "Kore",
     }
     narration_response_format: str = "pcm"
 
