@@ -172,6 +172,50 @@ def _upload_if_new(
     return True
 
 
+def _copy_if_new(
+    client: S3Client,
+    *,
+    source_bucket: str,
+    source_key: str,
+    source_etag: str,
+    dest_bucket: str,
+    dest_key: str,
+    content_type: str,
+    cache_control: str,
+) -> bool:
+    """Copy pending → published server-side, skipping when the destination
+    already holds identical bytes.
+
+    Assets are content-hashed and staged with single-part PUTs, so their ETags
+    are plain MD5s that compare directly against the source ETag from the object
+    listing — no body is pulled through the process (the download+reupload this
+    replaces made the approve request block on every asset). MetadataDirective
+    REPLACE re-stamps content-type and the immutable Cache-Control, which the
+    pending object does not carry.
+    """
+    if source_etag.strip('"') and _dest_matches(client, dest_bucket, dest_key, source_etag):
+        return False
+    client.copy_object(
+        Bucket=dest_bucket,
+        Key=dest_key,
+        CopySource={"Bucket": source_bucket, "Key": source_key},
+        ContentType=content_type,
+        CacheControl=cache_control,
+        MetadataDirective="REPLACE",
+    )
+    return True
+
+
+def _dest_matches(client: S3Client, bucket: str, key: str, source_etag: str) -> bool:
+    try:
+        head = client.head_object(Bucket=bucket, Key=key)
+    except ClientError as error:
+        if not _missing(error):
+            raise
+        return False
+    return head["ETag"].strip('"') == source_etag.strip('"')
+
+
 def _load_manifest(
     client: S3Client, bucket: str, language: str, root: str = PUBLISHED_PREFIX
 ) -> tuple[dict[str, Any], str | None]:
@@ -336,6 +380,25 @@ def publish_story(
         )
         target.append(key)
 
+    def copy(source_key: str, source_etag: str, dest_key: str, content_type: str) -> None:
+        # Assets and prompts are content-hashed, hence always immutable — never
+        # the manifest, so the immutable Cache-Control is unconditional here.
+        target = (
+            uploaded
+            if _copy_if_new(
+                client,
+                source_bucket=pending_bucket,
+                source_key=source_key,
+                source_etag=source_etag,
+                dest_bucket=bucket,
+                dest_key=dest_key,
+                content_type=content_type,
+                cache_control="public, max-age=31536000, immutable",
+            )
+            else skipped
+        )
+        target.append(dest_key)
+
     paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=pending_bucket, Prefix=f"{staged_prefix}/"):
         for obj in page.get("Contents", []):
@@ -343,12 +406,7 @@ def publish_story(
             name = key.removeprefix(f"{staged_prefix}/")
             if name == STORY_FILE:
                 continue
-            body = client.get_object(Bucket=pending_bucket, Key=key)["Body"].read()
-            send(
-                f"{root}/stories/{story_id}/{name}",
-                body,
-                _content_type(name),
-            )
+            copy(key, obj.get("ETag", ""), f"{root}/stories/{story_id}/{name}", _content_type(name))
     send(f"{root}/stories/{story_id}/{STORY_FILE}", story_bytes, "application/json")
 
     prompt_prefix = f"{STAGED_PREFIX}/prompts/{language}"
@@ -357,12 +415,7 @@ def publish_story(
         for obj in page.get("Contents", []):
             key = obj["Key"]
             name = key.removeprefix(f"{prompt_prefix}/")
-            body = client.get_object(Bucket=pending_bucket, Key=key)["Body"].read()
-            send(
-                f"{root}/prompts/{language}/{name}",
-                body,
-                _content_type(name),
-            )
+            copy(key, obj.get("ETag", ""), f"{root}/prompts/{language}/{name}", _content_type(name))
             manifest_key = MANIFEST_PROMPT_KEYS.get(name.split(".")[0])
             if manifest_key is not None:
                 prompt_urls[manifest_key] = f"{public_base}/prompts/{language}/{name}"

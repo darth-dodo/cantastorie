@@ -187,6 +187,56 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
     }
 
 
+def test_publish_copies_assets_server_side_without_downloading_their_bodies(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Publish must not pull every asset body through the process (the approve
+    request used to block on ~1 GET + 1 PUT per asset). Assets move pending →
+    published via server-side copy, so only story.json and the manifest are read.
+    """
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    stage_story(assembled, settings, client=s3)
+    _stage_prompts(s3)
+    story_id = assembled.story.id
+
+    fetched: list[str] = []
+    original_get = s3.get_object
+
+    def recording_get_object(**kwargs: Any) -> Any:
+        fetched.append(str(kwargs["Key"]))
+        return original_get(**kwargs)
+
+    s3.get_object = recording_get_object  # type: ignore[method-assign]
+
+    publish_story(story_id, settings, client=s3)
+
+    # story.json is read (id validation); asset and prompt bodies never are.
+    asset_bodies = [
+        key
+        for key in fetched
+        if key.startswith(f"{STAGED_PREFIX}/") and not key.endswith("/story.json")
+    ]
+    assert asset_bodies == []
+
+
+def test_published_assets_keep_immutable_cache_control_and_bytes(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """The server-side copy must still stamp the immutable Cache-Control (via
+    MetadataDirective=REPLACE) and preserve the asset bytes exactly."""
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    stage_story(assembled, settings, client=s3)
+
+    publish_story(assembled.story.id, settings, client=s3)
+
+    name, source = next(iter(assembled.assets.items()))
+    published = s3.get_object(Bucket=BUCKET, Key=f"published/stories/{assembled.story.id}/{name}")
+    assert published["CacheControl"] == "public, max-age=31536000, immutable"
+    assert published["Body"].read() == source.read_bytes()
+
+
 def test_publish_rejects_a_staged_story_with_a_different_id(tmp_path: Path, s3: S3Client) -> None:
     settings = _settings(tmp_path)
     assembled = _assembled(tmp_path, story_id="actual-story")
