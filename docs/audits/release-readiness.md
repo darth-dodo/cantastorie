@@ -5,19 +5,20 @@
 **Base**: `main` @ `722eefc` (post language-roster merge, #91)
 **Method**: five parallel specialist review streams — security/tenancy, operations/cost, child-safety/content, frontend quality, code-quality/docs — with every finding below re-verified against the code by hand
 **Scope**: `src/`, `tests/`, `docs/`, `Dockerfile`, `render.yaml`, `.github/workflows/`
-**Out of scope**: the child player's UX polish and the documentation-drift sweep — those two streams had not reported when this document was written (see [Coverage gaps](#coverage-gaps))
+**Out of scope**: the code-quality and documentation-drift sweep — that stream had not reported when this document was written (see [Coverage gaps](#coverage-gaps))
 
 ---
 
 ## Verdict
 
-**No-go for general release**, on three independent grounds:
+**No-go for general release**, on four independent grounds:
 
 1. A single unset environment variable publishes unreviewed children's content and every family's tenancy secret to a world-readable bucket — and the control the documentation names as the safety net for exactly this does not exist in code.
 2. The family lane's approve button publishes to a child with no human having seen the story, directly beneath UI copy asserting the opposite.
 3. Generated images — the part a pre-reader actually consumes — are never checked, by a safety rule that is structurally incapable of checking them.
+4. Three ordinary bedtime events — closing the tab mid-story, a slow-but-alive network, and the device going to sleep — each leave the child stuck, silent, or in a story that does not exist. The default language ships zero spoken prompts, so every failure message falls back to text a four-year-old cannot read.
 
-None of these is a deep design flaw. The tenancy model, the safety gate, and the publish lanes are well built and hold up under adversarial reading. What is missing is the operational envelope around them, plus two places where the interface promises a protection the code does not implement.
+None of these is a deep design flaw. The tenancy model, the safety gate, the publish lanes, and the audio engine are well built and hold up under adversarial reading. What is missing is the operational envelope around them, the handling of ordinary interruption, and two places where the interface promises a protection the code does not implement.
 
 The engineering core is sound. The release surface is not.
 
@@ -165,6 +166,61 @@ Every other blocker in this document becomes materially harder to detect and dia
 
 ---
 
+### B7 — Closing the tab mid-story boots the child into a story that does not exist
+
+```
+src/static/js/main.js:364      function render(state) { save(state); ...   # persists screen
+src/static/js/storage.js:13    return saved && typeof saved.screen === "string" ? { choices: [], ...saved } : null;
+src/static/js/screens.js:11-15 mockView fallback when view is undefined
+```
+
+`render()` writes the whole state object, `screen` included, on every transition; `load()` restores it verbatim with no normalization. Closing the tablet while a story is playing — the ordinary way bedtime ends — persists `screen: "player"`.
+
+On next launch `activeStory` is `null`, so the player builds from `mockView`: generic gradient washes, no art, no audio. `playback.hasStory()` is false, so the fallback page timer advances every few seconds to "The End!". A saved `resumeOpen` shows a resume overlay for a story that no longer exists; a saved `audioError` shows the sleeping bird on boot.
+
+The child opens the app and is dropped into a silent, nameless slideshow that ends in about thirty seconds. They never reach the shelf and never choose a story. No error is shown.
+
+The player tests seed `{ screen: "shelf" }` explicitly, with a comment noting it is "the reopen path" — so the real persisted value is never exercised.
+
+**Fix**: normalize on load. Persist progress only and always boot to the shelf; the resume overlay already reconstructs the rest.
+
+---
+
+### B8 — No timeout on any player fetch, so a slow-but-alive network is a permanent blank screen
+
+```
+src/static/js/main.js:61-72, :240, :270-291    no AbortController, no AbortSignal
+src/static/js/story.js:28-30                   no timeout
+src/static/css/player.css:298-314              .cover.loading shimmer — never applied by any JS
+```
+
+There is no abort or timeout anywhere in the player's fetch paths. `init()` awaits the manifest before the first `render()`, so `#app` is empty for the entire duration.
+
+The existing `catch` only fires on rejection. A network that accepts the connection and never answers — captive portal, hotel Wi-Fi, a device waking with a half-dead radio — leaves the promise pending forever, so the offline screen is never reached: it runs only when the manifest is `null`.
+
+The same gap exists on the cover tap. A hung `story.json` means the child taps a cover and nothing happens at all — no screen change, no spinner, no error — and repeated taps hit the same cached pending promise, so they are equally inert. A `.cover.loading` shimmer was designed in CSS and never wired to anything.
+
+The failure-state e2e tests use `route.abort()`, which rejects instantly; no test covers a slow or hanging response.
+
+**Fix**: wrap both fetches in `AbortSignal.timeout(...)` — the codebase already uses this pattern for the story-start prompt — falling into the existing offline screen and page-timer fallbacks.
+
+---
+
+### B9 — Narration dies permanently when the device sleeps
+
+```
+src/static/js/main.js:331    { capture: true, once: true }
+src/static/js/*.js           no visibilitychange, no pagehide, no focus handler anywhere
+```
+
+The AudioContext is unlocked by the first pointer event of the page's life and never again. Mobile browsers suspend the context when the tab is backgrounded or the device locks — which is precisely the most likely event in this app's life: the tablet is set down, the screen sleeps, the child picks it back up.
+
+On return the context is suspended, so `start()` schedules nothing audible and `onended` never fires. The narrate promise already resolved, so the error path never runs and the sleeping-bird retry never appears. Nothing re-renders. The story freezes on the page, silent, with no watchdog and no recovery short of a reload.
+
+**Fix**: make unlock idempotent and re-run it on `visibilitychange`; add a narration watchdog that flips to the existing audio-error state if playback position stops advancing.
+
+---
+
 ## High
 
 ### H1 — Staged content is keyed globally; approved bytes need not be reviewed bytes
@@ -232,6 +288,47 @@ The manifest is the index of an entire shelf and the code's own docstring calls 
 
 **Fix**: route every manifest write through the existing optimistic-concurrency helper.
 
+### H6 — The default language ships zero spoken prompts
+
+Measured from the shipped content directories:
+
+| Language | Prompts | Stories |
+|----------|---------|---------|
+| `en` (default) | **0** | 3 |
+| `it` | 5 | 5 |
+| `mr` | **0** | **0** |
+
+Only `it` has a `prompts/` directory on disk. `pickLang` defaults to `en`, so for the default language the first tap is silent, the story-start fanfare is skipped, the end prompt is skipped, and — most seriously — the audio-failure state renders the sleeping bird with no voice and the unread text "Oh! The story is taking a nap."
+
+The offline prompt is deliberately same-origin (`src/static/js/main.js:245`) and so cannot fall back to R2; it 404s for every language but Italian.
+
+This contradicts the product's non-reader premise directly: every failure state falls back to text a four-year-old cannot read. Marathi was added to the roster in the tip commit with no content and no prompts behind it, so selecting it yields an empty shelf captioned "Which story today?".
+
+**Fix**: ship the prompt set for every language in the selector, or gate the selector to languages that have one.
+
+### H7 — The unauthenticated content proxy has no path validation and no tests
+
+```
+src/api/routes/published.py:43   key = f"published/{path}"        # no validation
+src/api/routes/workshop.py:507   if "/" in name or ".." in name: raise HTTPException(404)   # authenticated sibling
+```
+
+The **unauthenticated** route has *less* path validation than the operator-gated one beside it. `/published/{path:path}` is the route the child player fetches every manifest, story, image and audio file through when `ASSET_BASE=/published`, and no test in the repository exercises it — coverage 40%, with the entire route body among the missing lines.
+
+Whether the storage edge normalizes dot segments is an untested assumption, and because `pending_bucket` falls back to `r2_bucket` (B1), the blast radius in a single-bucket deployment is unapproved staged content. The route also returns `str(exc)` to anonymous callers, buffers whole objects into memory, and discards the `immutable` cache headers that `publish_story` carefully writes.
+
+**Fix**: allowlist the path shape, narrow the exception, re-emit the upstream cache headers, and add tests.
+
+### H8 — Authorization denials are untested on six destructive or paid workshop routes
+
+Coverage on `src/api/routes/workshop.py` shows the non-operator branch missing on lines 280, 353, 355, 376, 397, 412 and 442 — `POST /workshop/runs` (spends money), `/runs/{id}/approve` (publishes to the shared shelf), `/reject`, `/again` (spends money), `/runs/{id}/delete` and `/staged/{id}/delete` (both destructive).
+
+Removing the `if not scope.is_operator` guard from all six would leave the full Python suite green. The pattern *is* tested on the two routes that got a dedicated spec; it was never applied to the older ones.
+
+Relatedly, the path-traversal test at `tests/workshop/test_routes.py:396-404` asserts nothing useful: the HTTP client normalizes the dot segments before sending, so the request 404s at the router and the guard is never reached — confirmed by line 508 appearing in the missing-lines list. Deleting the guard would not fail that test.
+
+**Fix**: one parametrised test posting to each of the six routes as a non-operator and asserting 403; send the encoded form in the traversal test so the guard is actually exercised.
+
 ---
 
 ## Medium
@@ -256,6 +353,41 @@ The manifest is the index of an entire shelf and the code's own docstring calls 
 | M16 | No security response headers anywhere (CSP, X-Frame-Options, nosniff, Referrer-Policy) | `src/` |
 | M17 | Italian spoken prompts are story-independent but cached per-story, so they are re-bought every Italian run | `src/pipeline/generate.py:85-92` |
 | M18 | Per-run `get_object` on the event loop; the operator dashboard degrades non-linearly with run count | `src/workshop/records.py:196-204` |
+| M19 | Decoded audio buffers are never evicted; three stories browsed ≈ 110 MB of live PCM, enough to have the tab killed on a budget tablet | `src/static/js/audio-engine.js:26,125-143` |
+| M20 | No visible focus indicator anywhere in the player — `all: unset` on `button` removes it; WCAG 2.4.7 fails outright | `src/static/css/player.css:49-52` |
+| M21 | Whole-story prefetch fires ~20 unthrottled requests with no prioritization, starving page 1's narration | `src/static/js/prefetch.js:41-60` |
+| M22 | Two different day/night rules; between midnight and 07:00 the theme flashes bright before settling to dusk | `src/static/js/palette.js:25` vs `src/static/js/main.js:53` |
+| M23 | Playback instances leak on language switch; a stale instance speaks the end prompt in the previous language | `src/static/js/playback.js:123` |
+| M24 | `<html lang>` is hardcoded `en` and never updated, so screen readers voice Greek/Russian/Marathi with an English voice | `src/templates/index.html:2` |
+| M25 | Overlays have no dialog semantics, no focus management, no Escape, and there is no live region for page turns | `src/static/js/screens.js:188-237,323-400` |
+| M26 | Cover captions fail AA contrast in both themes (≈4.24:1 light, ≈3.49:1 dusk at 11px/600) | `src/static/css/player.css:222-235` |
+| M27 | Prev/next chevrons clip off-screen below 336px viewport width — and they are the only escape when narration stalls | `src/static/css/player.css:796-831` |
+| M28 | Resumed branching story skips its second branch and cuts to the end screen; latent until the pipeline emits a twice-branching story | `src/static/js/main.js:186-199` |
+| M29 | Three duplicated boto3 client builders that differ subtly — one omits the `or None` fallback, so an empty key blocks environment credentials | `src/api/routes/published.py:26` |
+| M30 | `WorkshopScope.publish_target` is security-shaped dead code, read by nothing; lane selection is implicit in the router | `src/workshop/scope.py:24` |
+| M31 | Auto-continue on the choice overlay is specified and skipped in e2e but never wired, so a hands-off child waits indefinitely | `tests/e2e/branching.spec.js:159` |
+
+---
+
+## Documentation accuracy
+
+Verified claim-by-claim against the code. The documentation is good in substance and stale in specifics; these are the ones that would mislead someone acting on them.
+
+| Claim | Reality |
+|-------|---------|
+| `docs/setup.md:51` — the audit fails on any `pending/` object in the public bucket | It never lists `pending/` (B1) |
+| `docs/setup.md:11` — "the running site needs no secrets" | Generation runs in-process; the container needs the provider key and R2 credentials |
+| `Dockerfile:9-11`, `render.yaml:9` — the app needs no API keys | Same contradiction, repeated in the deploy artifacts; `Dockerfile:10` still names a retired provider |
+| `docs/system-overview.md:234`, `docs/adr/ADR-005:12,70` — runs resume on startup | `resume_on_boot()` is never called (B5) |
+| `docs/architecture.md:88`, `docs/system-overview.md:27,265` — the player is at `/` | The player is at `/play`; `/` is the landing page, which appears in no document |
+| `README.md:114`, `docs/architecture.md:105,143-148` — `gloss.py` is a pipeline step | No such file; the steps are write, safety, revise, narrate, illustrate, assemble |
+| `README.md:141`, `docs/architecture.md:74`, `docs/setup.md:11` — two further API keys are required | Neither exists in `src/config.py` nor anywhere in `src/` |
+| ADR-005 — the operator face is guarded by a shared env-var secret | Superseded in practice by Clerk; the ADR is unmarked and `docs/design/design-system.md` repeats the stale claim |
+| Language count | Code has 8; README and architecture say seven; product says five |
+| `docs/product.md:92` — parent dashboard "in progress" | Shipped. The status table also omits the landing page, the operator library, and observability |
+| `docs/architecture.md:71`, `AGENTS.md:70` — child state is in IndexedDB | `storage.js` is explicit that progress is localStorage; only the family token is in IndexedDB |
+
+Verified clean: every relative markdown link resolves, every documented `make` target, npm script and CLI command exists, the ADR supersession chain is correctly recorded, and `docs/setup.md`'s R2 section is accurate. `docs/system-overview.md` is the most accurate document in the repository — where it and the others disagree, it is the one that is right.
 
 ---
 
@@ -283,6 +415,12 @@ Stated plainly, because a release decision needs the positives as much as the de
 
 **The cross-tenant audit is genuinely thorough** where it does apply — shared→family, family→shared and family-A→family-B URL leakage each have a dedicated test. Its one gap is the stray-object case in B1.
 
+**The audio engine is the strongest code in the repository.** A play-epoch counter correctly discards voices that decode late, pause handles the ducked / still-loading / playing cases separately, a failed load evicts its own cache entry so one flaky request cannot silence a page for the session, and the start prompt races a timeout so a hung fetch frees the story rather than freezing it mute. Fifteen unit tests pin the contract. B9 is a gap in *when* the engine is unlocked, not in the engine.
+
+**Failure-state art direction is thoughtful.** The offline illustration is bundled same-origin precisely so it does not depend on the network it is reacting to. Rapid double-taps on one cover are deduplicated by caching the promise itself, and `prefers-reduced-motion` covers every keyframe animation without exception.
+
+**Code hygiene is unusually disciplined.** Strict mypy with no escape hatches outside three annotated form coercions, zero TODO/FIXME/HACK markers anywhere in `src/`, `tests/` or `scripts/`, no commented-out code, no debug logging, and only eight broad `except` clauses — none of them a silent `except: pass`. The repository is clean for a public release: no secrets, no personal paths, MIT licence present, `detect-secrets` wired into pre-commit.
+
 ---
 
 ## Pre-launch checklist
@@ -295,8 +433,14 @@ Ordered by risk reduction per unit of effort.
 - [ ] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
 - [ ] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)
-- [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan` (B5)
+- [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
+- [ ] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
+- [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
+- [ ] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
+- [ ] Spoken prompts shipped for every language in the selector, or the selector gated to complete languages (H6)
+- [ ] Path allowlist and tests on `/published/{path}` (H7)
+- [ ] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
 - [ ] `premise` capped server-side on `PackRequest` (H2)
 - [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3)
@@ -309,11 +453,15 @@ Ordered by risk reduction per unit of effort.
 
 ---
 
-## Coverage gaps
+## Limits of this audit
 
-Two of the five review streams had not reported when this document was written: **frontend quality** (player robustness under rapid input, audio unlock, accessibility, mobile) and **code quality / documentation drift** (test gaps, dead code, doc-versus-reality accuracy). Findings from those streams are not represented here, and this document should be treated as incomplete in those two areas rather than as a clean bill of health for them.
+All five review streams reported and every finding above was re-verified against the code. Three limits are worth stating so the document is not read as more than it is.
 
-Separately, three documentation claims were found to contradict the code during this audit — `docs/setup.md:51` on the audit's `pending/` coverage, `docs/system-overview.md:234` on boot-time resume, and `docs/setup.md` on the running site needing no API keys (untrue since generation moved in-process). That pattern suggests the documentation-drift stream is likely to find more, and its absence here is a real gap rather than a formality.
+**Nothing was executed against real infrastructure.** No live bucket was inspected, no deploy was performed, no browser session was driven on a physical device. B1's impact is derived from configuration and code, not from observing an exposed object; the production environment may well have `R2_PENDING_BUCKET` set correctly today. The finding is that nothing in code, CI, or the audit tool would tell you if it were not.
+
+**Two frontend risks could not be confirmed without a device** and are recorded as arithmetic rather than observation: the primary play control may sit under mobile Safari's bottom toolbar, and the choice overlay may clip on very short landscape viewports. Both are flagged in the frontend stream with the measurements shown.
+
+**Severity reflects a general-release context** — unsupervised children, real spend, a public repository. Several findings would be reasonable trade-offs in a private beta and are marked no higher than Medium for that reason.
 
 ---
 
