@@ -35,6 +35,7 @@ Small, local, easily-reversed choices do not need an ADR. When in doubt, prefer 
 | [ADR-006](ADR-006-family-voice-narration.md) | Nonna Narrates (family voice narration) | Proposed | 2026-07-11 |
 | [ADR-007](ADR-007-langsmith-observability.md) | LangSmith App-Wide Observability | Accepted | 2026-07-12 |
 | [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md) | Default Voices on Gemini TTS, Cloning Scoped to Mistral | Accepted | 2026-07-11 |
+| [ADR-009](ADR-009-language-packs.md) | Language Packs — a Registry for Per-Language Content | Proposed | 2026-09-06 |
 
 > **Renumbering note (2026-07-12)**: two ADRs were originally filed as ADR-004. The workshop-area ADR is now ADR-005, which shifted Nonna Narrates to ADR-006 and LangSmith observability to ADR-007. File history is preserved via `git mv`.
 
