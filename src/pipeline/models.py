@@ -95,6 +95,7 @@ class Story(BaseModel):
     shape: Literal["linear", "branching"]
     pages: list[Page] = Field(min_length=1)
     gloss: dict[str, str] | None = None  # None for English stories
+    cover: str | None = None
 
 
 class SafetyVerdict(BaseModel):
