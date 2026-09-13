@@ -101,7 +101,7 @@ function mergeOverlay(manifest, overlay) {
     prompts: { ...(overlay.prompts ?? {}), ...(manifest.prompts ?? {}) },
   };
   const seen = new Set((manifest.stories ?? []).map((s) => s.id));
-  const extra = (overlay.stories ?? []).filter((s) => !seen.has(s.id));
+  const extra = (overlay.stories ?? []).filter((s) => !seen.has(s.id)).map((s) => ({ ...s, isFamily: true }));
   merged.stories = [...(manifest.stories ?? []), ...extra];
   return merged;
 }
@@ -385,6 +385,8 @@ export async function init(
             (entry) => {
               openCover(entry).catch((err) => console.warn("cover tap failed", err));
             },
+            lang,
+            (newLang) => switchLanguage(newLang),
           ),
         );
         if (settingsOpen) {

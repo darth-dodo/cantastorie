@@ -60,6 +60,14 @@ export function sortShelf(entries) {
   return [...family, ...shared];
 }
 
+const LANG_ORDER = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru'];
+const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ' };
+
+export function cycleLanguage(current) {
+  const idx = LANG_ORDER.indexOf(current);
+  return LANG_ORDER[(idx + 1) % LANG_ORDER.length];
+}
+
 export function buildShelf(
   store,
   greeting,
@@ -67,12 +75,17 @@ export function buildShelf(
   stories = shelf,
   onOpenSettings = () => {},
   onOpen = () => store.openStory(),
+  lang = 'en',
+  onCycleLanguage = () => {},
 ) {
   const screen = el("div", "screen shelf");
 
   const header = el("div", "greeting");
   const mascot = el("div", "mascot");
   mascot.appendChild(el("div", "smile"));
+  mascot.appendChild(el("div", "crater-a"));
+  mascot.appendChild(el("div", "crater-b"));
+  mascot.appendChild(el("div", "crater-c"));
   const text = el("div");
   const hello = el("h1");
   hello.textContent = greeting;
@@ -113,20 +126,23 @@ export function buildShelf(
     });
   }
 
+  // Language sticker — CSS shape, one tap cycles language
+  const sticker = el("button", "lang-sticker", { "aria-label": "Change language" });
+  const stickerLabel = el("span", "lang-sticker-label");
+  stickerLabel.textContent = LANG_LABELS[lang] ?? lang.toUpperCase();
+  sticker.appendChild(stickerLabel);
+  sticker.addEventListener("click", () => onCycleLanguage(cycleLanguage(lang)));
+
+  // Settings button — 2×2 CSS dots, replaces GEAR_SVG
   const gear = el("button", "settings-gear", { "aria-label": "Settings" });
-  gear.innerHTML = GEAR_SVG;
+  const dotsGrid = el("div", "settings-dots");
+  for (let i = 0; i < 4; i++) dotsGrid.appendChild(el("div", "settings-dot"));
+  gear.appendChild(dotsGrid);
   gear.addEventListener("click", onOpenSettings);
 
-  const parent = el("a", "parent-corner");
-  parent.href = "/parent";
-  parent.textContent = "parent";
-
-  screen.append(header, covers, gear, parent);
+  screen.append(header, covers, sticker, gear);
   return screen;
 }
-
-const GEAR_SVG =
-  '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>';
 
 function buildSelect({ options, current, onChange, menuDir = "down" }) {
   const wrap = el("div", "settings-select", { "data-menu-dir": menuDir });

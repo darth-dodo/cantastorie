@@ -103,22 +103,25 @@ button.presses:active {
   color: var(--greeting-sub);
 }
 
-/* Sun mascot (light) / sleepy moon (dusk) */
+/* Sun mascot (light) / sphere-lit moon (dusk) */
 .mascot {
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #f5dfa8, #e8b44c 75%);
-  box-shadow: 0 0 0 10px rgba(232, 180, 76, 0.15);
+  background: radial-gradient(circle at 34% 30%, #f7e8b0, #e8b44c 55%, #c98a1a 100%);
+  box-shadow:
+    0 0 0 10px rgba(232, 180, 76, 0.15),
+    inset -7px -5px 14px rgba(120, 70, 0, 0.28);
   position: relative;
   flex: none;
 }
 
+/* Eyes */
 .mascot::before,
 .mascot::after {
   content: "";
   position: absolute;
-  top: 24px;
+  top: 22px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -126,17 +129,17 @@ button.presses:active {
 }
 
 .mascot::before {
-  left: 17px;
+  left: 16px;
 }
 
 .mascot::after {
-  right: 17px;
+  right: 15px;
 }
 
 .mascot .smile {
   position: absolute;
-  top: 34px;
-  left: 50%;
+  top: 33px;
+  left: 52%;
   transform: translateX(-50%);
   width: 20px;
   height: 10px;
@@ -144,11 +147,46 @@ button.presses:active {
   background: #4a3b2e;
 }
 
-[data-theme="dusk"] .mascot {
-  background: radial-gradient(circle at 62% 38%, #f7e7c3, #e8c27a 75%);
-  box-shadow: 0 0 28px 8px rgba(242, 216, 167, 0.22);
+/* Crater discs — purely decorative */
+.mascot .crater-a,
+.mascot .crater-b,
+.mascot .crater-c {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(120, 70, 0, 0.14);
+  pointer-events: none;
 }
 
+.mascot .crater-a {
+  width: 8px;
+  height: 8px;
+  top: 10px;
+  right: 14px;
+}
+
+.mascot .crater-b {
+  width: 6px;
+  height: 6px;
+  bottom: 16px;
+  right: 10px;
+}
+
+.mascot .crater-c {
+  width: 4px;
+  height: 4px;
+  bottom: 12px;
+  right: 22px;
+}
+
+/* Dusk: sphere-lit moon — radial highlight from upper-left, terminator shadow */
+[data-theme="dusk"] .mascot {
+  background: radial-gradient(circle at 34% 30%, #f7e7c3 0%, #d4ae70 50%, #8a6530 85%, #5c421e 100%);
+  box-shadow:
+    0 0 28px 8px rgba(242, 216, 167, 0.22),
+    inset -7px -5px 14px rgba(40, 20, 0, 0.55);
+}
+
+/* Moon eyes — narrow slit at dusk */
 [data-theme="dusk"] .mascot::before,
 [data-theme="dusk"] .mascot::after {
   top: 27px;
@@ -158,11 +196,11 @@ button.presses:active {
 }
 
 [data-theme="dusk"] .mascot::before {
-  left: 16px;
+  left: 13px;
 }
 
 [data-theme="dusk"] .mascot::after {
-  right: 16px;
+  right: 12px;
 }
 
 [data-theme="dusk"] .mascot .smile {
@@ -170,6 +208,13 @@ button.presses:active {
   width: 14px;
   height: 7px;
   border-radius: 0 0 14px 14px;
+}
+
+/* Moon craters slightly more visible at dusk */
+[data-theme="dusk"] .mascot .crater-a,
+[data-theme="dusk"] .mascot .crater-b,
+[data-theme="dusk"] .mascot .crater-c {
+  background: rgba(40, 20, 0, 0.22);
 }
 
 .covers {
@@ -295,8 +340,6 @@ button.presses:active {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 0;
-  height: 0;
   /* CSS star via clip-path — no SVG, no hex */
   clip-path: polygon(
     50% 0%, 61% 35%, 98% 35%, 68% 57%,
@@ -437,12 +480,24 @@ button.presses:active {
 }
 
 .settings-gear,
-.parent-corner {
+.lang-sticker {
   z-index: 1;
 }
 
-.settings-gear svg {
-  display: block;
+/* 2×2 CSS dots replace the gear SVG */
+.settings-dots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  width: 20px;
+  height: 20px;
+}
+
+.settings-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .settings-gear:active {
@@ -618,24 +673,48 @@ button.presses:active {
   }
 }
 
-.parent-corner {
+.lang-sticker {
   position: absolute;
   right: 20px;
-  bottom: 38px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(74, 59, 46, 0.05);
+  bottom: 28px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50% 46% 54% 50% / 50% 54% 46% 50%;
+  background: var(--sticker);
+  transform: rotate(2deg);
+  box-shadow: 0 8px 18px rgba(74, 59, 46, 0.14), 0 0 0 4px rgba(127, 166, 168, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  font: 9px ui-monospace, Menlo, monospace;
-  color: rgba(74, 59, 46, 0.3);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-[data-theme="dusk"] .parent-corner {
-  background: rgba(243, 233, 218, 0.05);
-  color: rgba(243, 233, 218, 0.26);
+.lang-sticker-label {
+  font: 700 11px/1 var(--font-app);
+  color: var(--ink);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.lang-sticker:active {
+  transform: rotate(2deg) scale(0.95);
+}
+
+@media (hover: hover) {
+  .lang-sticker:hover {
+    transform: rotate(2deg) scale(1.06);
+    box-shadow: 0 10px 22px rgba(74, 59, 46, 0.2), 0 0 0 4px rgba(127, 166, 168, 0.35);
+  }
+}
+
+[data-theme="dusk"] .lang-sticker {
+  background: rgba(243, 233, 218, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(127, 166, 168, 0.3), 0 0 24px rgba(127, 166, 168, 0.1);
+}
+
+[data-theme="dusk"] .lang-sticker-label {
+  color: #f3e9da;
 }
 
 /* Stars (dusk shelf, player, end) */
