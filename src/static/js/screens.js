@@ -475,7 +475,10 @@ export function buildSettingsOverlay({
   const lockShackle = el("div", "settings-lock-shackle");
   lockIcon.append(lockShackle, lockBody);
   workshopRow.append(workshopLabel, lockIcon);
-  workshopRow.addEventListener("click", () => onWorkshop());
+  workshopRow.addEventListener("click", () => {
+    const gate = buildGate({ lang: currentLang, onPass: () => { gate.remove(); onWorkshop(); } });
+    (doc?.body ?? globalThis.document.body).appendChild(gate);
+  });
 
   grownupsSection.append(grownupsHeading, rwmRow, workshopRow);
 
@@ -670,6 +673,76 @@ export function buildAudioError(store) {
   overlay.append(bird, prompt);
   overlay.addEventListener("click", () => store.retryAudio());
   return overlay;
+}
+
+// ── Math gate (AI-444) ───────────────────────────────────────────────────────
+// gateOptions(a, b) → { options: number[3], answer: number }
+// answer === a+b; options contains the answer and two distractors, no dupes.
+export function gateOptions(a, b) {
+  const answer = a + b;
+  const distractors = new Set();
+  const offsets = [1, 2, 3, 4, 5];
+  for (const d of offsets) {
+    if (distractors.size >= 2) break;
+    if (answer - d !== answer) distractors.add(answer - d);
+    if (distractors.size >= 2) break;
+    if (answer + d !== answer) distractors.add(answer + d);
+  }
+  const arr = [answer, ...Array.from(distractors).slice(0, 2)];
+  // Shuffle with a stable, non-random approach seeded by answer so tests are
+  // deterministic, but still different from the sorted order.
+  arr.sort((x, y) => ((x * 7 + answer) % 13) - ((y * 7 + answer) % 13));
+  return { options: arr, answer };
+}
+
+// checkGate(choice, answer, onPass): calls onPass only if choice === answer.
+export function checkGate(choice, answer, onPass) {
+  if (choice === answer) onPass();
+}
+
+// buildGate({ lang, onPass }) → detached modal element.
+// The gate is not dismissible on wrong answer; only the Back link exits.
+// onPass is called when the correct sum is tapped.
+export function buildGate({ lang = 'en', onPass = () => {} } = {}) {
+  const copy = settingsCopy(lang);
+  const { options, answer } = gateOptions(7, 6);
+
+  const backdrop = el('div', 'gate-backdrop');
+
+  const modal = el('div', 'gate-modal');
+
+  const heading = el('h2', 'gate-heading');
+  heading.textContent = copy.gateHeading;
+
+  const equationRow = el('div', 'gate-equation');
+  equationRow.textContent = '7 + 6 = ?';
+
+  const wrongMsg = el('p', 'gate-wrong');
+  wrongMsg.textContent = copy.gateWrong;
+  wrongMsg.setAttribute('aria-live', 'polite');
+  wrongMsg.setAttribute('aria-hidden', 'true');
+
+  const choicesRow = el('div', 'gate-choices');
+  options.forEach((num) => {
+    const btn = el('button', 'gate-choice', { 'aria-label': String(num) });
+    btn.textContent = num;
+    btn.addEventListener('click', () => {
+      checkGate(num, answer, onPass);
+      if (num !== answer) {
+        wrongMsg.removeAttribute('aria-hidden');
+        wrongMsg.classList.add('gate-wrong--visible');
+      }
+    });
+    choicesRow.appendChild(btn);
+  });
+
+  const backBtn = el('button', 'gate-back');
+  backBtn.textContent = copy.gateBack;
+  backBtn.addEventListener('click', () => backdrop.remove());
+
+  modal.append(heading, equationRow, choicesRow, wrongMsg, backBtn);
+  backdrop.appendChild(modal);
+  return backdrop;
 }
 
 export function buildEnd(store, endText = { title: "The End!", again: "Again!", prompt: "Another story?" }) {
