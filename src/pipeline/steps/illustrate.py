@@ -143,6 +143,9 @@ def _cover_prompt(title: str) -> str:
         f"{STYLE_PROMPT} Using the attached character reference sheet, keep "
         "every character exactly as drawn there and paint a warm, inviting "
         f"cover illustration for the bedtime story titled: {title}. "
+        "Frame this image for a tall portrait tile (5:6 aspect ratio): "
+        "fill the vertical space with the characters and scene, leaving "
+        "comfortable margins on the sides. "
         "The title itself must not appear — no text at all."
     )
 

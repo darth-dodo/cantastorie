@@ -169,4 +169,18 @@ def assemble_story(story: Story, illustrations: IllustrationSet) -> AssembledSto
 
         assembled_pages.append(page.model_copy(update=update))
 
-    return AssembledStory(story=story.model_copy(update={"pages": assembled_pages}), assets=assets)
+    # Wire the portrait cover: hash the cover bytes into a published filename
+    # following the same pattern as page images (content-hash prefix). The cover
+    # file lives in IllustrationSet.cover; it must exist for a complete assembly.
+    cover_src = illustrations.cover
+    if not cover_src.exists():
+        raise MissingAssetError("cover", "cover", cover_src)
+    cover_bytes = cover_src.read_bytes()
+    cover_digest = hashlib.sha256(cover_bytes).hexdigest()[:CONTENT_HASH_LENGTH]
+    cover_name = f"cover.{cover_digest}{IMAGE_SUFFIX}"
+    assets[cover_name] = cover_src
+
+    return AssembledStory(
+        story=story.model_copy(update={"pages": assembled_pages, "cover": cover_name}),
+        assets=assets,
+    )

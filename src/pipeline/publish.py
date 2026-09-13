@@ -192,7 +192,11 @@ def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> N
         "title": story.title,
         "wash": THEME_WASH[story.theme],
         "story": f"{public_base}/stories/{story.id}/{STORY_FILE}",
-        "cover": f"{public_base}/stories/{story.id}/{story.pages[0].image}",
+        "cover": (
+            f"{public_base}/stories/{story.id}/{story.cover}"
+            if story.cover is not None
+            else f"{public_base}/stories/{story.id}/{story.pages[0].image}"
+        ),
     }
     stories: list[dict[str, Any]] = manifest.setdefault("stories", [])
     for index, existing in enumerate(stories):

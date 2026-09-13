@@ -130,7 +130,7 @@ def test_stage_uploads_story_json_and_every_asset_to_r2(tmp_path: Path, s3: S3Cl
     staged_names = {k.rsplit("/", 1)[-1] for k in staged_keys}
     assert "story.json" in staged_names
     assert staged_names == {"story.json", *assembled.assets.keys()}
-    assert len(assembled.assets) == 20
+    assert len(assembled.assets) == 21  # 10 audio + 10 images + 1 cover
 
 
 def test_restaging_a_story_removes_stale_objects(tmp_path: Path, s3: S3Client) -> None:
@@ -178,6 +178,7 @@ def test_publish_uploads_the_story_its_assets_and_writes_the_manifest(
     assert entry["story"] == f"{PUBLIC_BASE}/stories/{story_id}/story.json"
     assert entry["wash"] == "wash-barchetta"
     assert set(entry) == {"id", "title", "wash", "story", "cover"}
+    assert entry["cover"] == f"{PUBLIC_BASE}/stories/{story_id}/{assembled.story.cover}"
     assert manifest["prompts"] == {
         "greeting": f"{PUBLIC_BASE}/prompts/it/shelf_greeting.0123456789abcdef.mp3",
         "story_start": f"{PUBLIC_BASE}/prompts/it/story_start.0123456789abcdef.mp3",
