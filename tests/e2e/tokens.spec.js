@@ -19,3 +19,14 @@ for (const palette of PALETTES) {
     });
   }
 }
+
+for (const theme of ['light', 'dusk']) {
+  test(`warm --rest differs from --primary (${theme})`, async ({ page }) => {
+    await page.goto(`/play?palette=warm&theme=${theme}`);
+    const [rest, primary] = await page.evaluate(() => {
+      const s = getComputedStyle(document.documentElement);
+      return [s.getPropertyValue('--rest').trim(), s.getPropertyValue('--primary').trim()];
+    });
+    expect(rest).not.toBe(primary);
+  });
+}

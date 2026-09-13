@@ -119,9 +119,9 @@
   --info-text: #4E7A7C;
   --info-ring: rgba(127,166,168,.40);
 
-  --rest:      #C9714F;
-  --rest-text: #B05A3A;
-  --rest-16:   rgba(201,113,79,.16);
+  --rest:      #C08087;
+  --rest-text: #A86870;
+  --rest-16:   rgba(192,128,135,.16);
 
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(242,217,160,.40), transparent 70%);
 }
@@ -163,9 +163,9 @@
   --info-text: #9FC0C1;
   --info-ring: rgba(127,166,168,.45);
 
-  --rest:      #D98B66;
-  --rest-text: #E09A76;
-  --rest-16:   rgba(217,139,102,.18);
+  --rest:      #D0989E;
+  --rest-text: #B88088;
+  --rest-16:   rgba(208,152,158,.18);
 
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(245,223,174,.13), transparent 70%);
 }
