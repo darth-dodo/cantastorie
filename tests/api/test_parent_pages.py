@@ -231,6 +231,24 @@ def test_my_packs_lists_only_this_familys_runs(monkeypatch: pytest.MonkeyPatch) 
     assert other.id not in response.text
 
 
+def test_packs_page_seeds_the_session_family_token_for_same_device_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The packs page emits the family token so a same-device child player adopts
+    it (IndexedDB) and merges the family overlay. The token is the SESSION token,
+    never a form value — same tenancy boundary as everything else here."""
+    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _packs_client(monkeypatch, manager)
+
+    response = client.get("/parent")
+
+    assert response.status_code == 200
+    assert f'<meta name="family-token" content="{VALID_TOKEN}"' in response.text
+    assert "/static/js/family-adopt.js" in response.text
+
+
 def test_cross_tenant_progress_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
     """THE tenancy test: family A cannot view family B's run — by URL guessing either."""
     others = new_run("f" * 32, PackRequest(theme="the_sleepy_sea", language="it", count=1))

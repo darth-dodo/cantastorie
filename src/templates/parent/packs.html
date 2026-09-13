@@ -1,5 +1,13 @@
 {% extends "auth/base.html" %}
 {% block title %}Your shelf{% endblock %}
+{% block head %}
+  {% if family_token %}
+    {# Same-device overlay bridge: seed the family token into IndexedDB so a
+       child player opened on this device merges the family's private overlay. #}
+    <meta name="family-token" content="{{ family_token }}" />
+    <script type="module" src="/static/js/family-adopt.js"></script>
+  {% endif %}
+{% endblock %}
 {% block content %}
 <div class="ws-page">
   <div class="ws-bench-header">
