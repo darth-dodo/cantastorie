@@ -63,9 +63,9 @@
   --confirm-text: #4C7560;
   --confirm-22:   rgba(94,138,114,.22);
 
-  --accent:      #D9A441;
-  --accent-text: #9A7326;
-  --accent-22:   rgba(217,164,65,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #6C93B8;
   --info-20:   rgba(108,147,184,.20);
@@ -110,9 +110,9 @@
   --confirm-text: #5E7350;
   --confirm-22:   rgba(143,163,126,.22);
 
-  --accent:      #E8B44C;
-  --accent-text: #A87A28;
-  --accent-22:   rgba(232,180,76,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #7FA6A8;
   --info-20:   rgba(127,166,168,.20);
@@ -154,9 +154,9 @@
   --confirm-text: #A9B892;
   --confirm-22:   rgba(152,165,131,.22);
 
-  --accent:      #E8B75A;
-  --accent-text: #E0B36A;
-  --accent-22:   rgba(232,183,90,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #7FA6A8;
   --info-20:   rgba(127,166,168,.22);
@@ -198,9 +198,9 @@
   --confirm-text: #9FC4AC;
   --confirm-22:   rgba(127,169,141,.22);
 
-  --accent:      #E4B75E;
-  --accent-text: #E5C078;
-  --accent-22:   rgba(228,183,94,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #7FA0C4;
   --info-20:   rgba(127,160,196,.22);
@@ -244,9 +244,9 @@
   --confirm-text: #59825B;
   --confirm-22:   rgba(109,155,111,.22);
 
-  --accent:      #E0B15C;
-  --accent-text: #9C752B;
-  --accent-22:   rgba(224,177,92,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #66889E;
   --info-20:   rgba(102,136,158,.20);
@@ -288,9 +288,9 @@
   --confirm-text: #ABCBAD;
   --confirm-22:   rgba(143,181,145,.22);
 
-  --accent:      #E6C077;
-  --accent-text: #E7CA8C;
-  --accent-22:   rgba(230,192,119,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #83A3B8;
   --info-20:   rgba(131,163,184,.22);
@@ -334,9 +334,9 @@
   --confirm-text: #5C7B64;
   --confirm-22:   rgba(111,144,120,.22);
 
-  --accent:      #E2A93F;
-  --accent-text: #9C7223;
-  --accent-22:   rgba(226,169,63,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #8A7FB8;
   --info-20:   rgba(138,127,184,.20);
@@ -378,9 +378,9 @@
   --confirm-text: #ACC8B3;
   --confirm-22:   rgba(143,174,151,.22);
 
-  --accent:      #E8BC5F;
-  --accent-text: #EAC77A;
-  --accent-22:   rgba(232,188,95,.22);
+  --accent:      #A88BE0;
+  --accent-text: #BFA8EB;
+  --accent-22:   rgba(168,139,224,.22);
 
   --info:      #A79BD0;
   --info-20:   rgba(167,155,208,.22);
@@ -405,8 +405,8 @@
   --ink-soft: #9E8D77;
   --primary:  #D98B66;
   --confirm:  #98A583;
-  --accent:   #E8B75A;
-  --accent-text: #E0B36A;
+  --accent:   #A88BE0;
+  --accent-text: #BFA8EB;
   --info:     #7FA6A8;
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(245,223,174,.13), transparent 70%);
 }
@@ -417,8 +417,8 @@
   --ink-soft: #97A0B5;
   --primary:  #8B9AD6;
   --confirm:  #7FA98D;
-  --accent:   #E4B75E;
-  --accent-text: #E5C078;
+  --accent:   #A88BE0;
+  --accent-text: #BFA8EB;
   --info:     #7FA0C4;
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(228,183,94,.12), transparent 70%);
 }
@@ -429,8 +429,8 @@
   --ink-soft: #8FA6A3;
   --primary:  #7FB5BA;
   --confirm:  #8FB591;
-  --accent:   #E6C077;
-  --accent-text: #E7CA8C;
+  --accent:   #A88BE0;
+  --accent-text: #BFA8EB;
   --info:     #83A3B8;
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(230,192,119,.12), transparent 70%);
 }
@@ -441,8 +441,8 @@
   --ink-soft: #9C90AB;
   --primary:  #A98BC0;
   --confirm:  #8FAE97;
-  --accent:   #E8BC5F;
-  --accent-text: #EAC77A;
+  --accent:   #A88BE0;
+  --accent-text: #BFA8EB;
   --info:     #A79BD0;
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(232,188,95,.12), transparent 70%);
 }
@@ -470,7 +470,7 @@
      In light mode the warm/indigo/seaglass/plum accent at 45% opacity; in dusk
      also uses the dusk accent value.  The pattern-matched rgba below is
      palette-specific but the alias name stays stable. */
-  --karaoke: rgba(232,180,76,.45);   /* warm light default; overridden below */
+  --karaoke: rgba(168,139,224,.45);  /* orchid default; overridden below */
 
   /* --prompt used in .night / player overlays */
   --prompt: var(--accent-text);
@@ -479,22 +479,22 @@
   --sticker-ring: 0 0 0 7px var(--sticker);
 }
 
-/* Per-palette karaoke (accent at .45 / dusk .45) */
-[data-palette="warm"]     { --karaoke: rgba(232,180,76,.45); }
+/* Per-palette karaoke (orchid accent at .45 — same across all palettes/themes) */
+[data-palette="warm"]     { --karaoke: rgba(168,139,224,.45); }
 [data-palette="warm"][data-theme="dusk"],
-[data-palette="warm"] .night { --karaoke: rgba(232,183,90,.45); }
+[data-palette="warm"] .night { --karaoke: rgba(168,139,224,.45); }
 
-[data-palette="indigo"]   { --karaoke: rgba(217,164,65,.45); }
+[data-palette="indigo"]   { --karaoke: rgba(168,139,224,.45); }
 [data-palette="indigo"][data-theme="dusk"],
-[data-palette="indigo"] .night { --karaoke: rgba(228,183,94,.45); }
+[data-palette="indigo"] .night { --karaoke: rgba(168,139,224,.45); }
 
-[data-palette="seaglass"] { --karaoke: rgba(224,177,92,.45); }
+[data-palette="seaglass"] { --karaoke: rgba(168,139,224,.45); }
 [data-palette="seaglass"][data-theme="dusk"],
-[data-palette="seaglass"] .night { --karaoke: rgba(230,192,119,.45); }
+[data-palette="seaglass"] .night { --karaoke: rgba(168,139,224,.45); }
 
-[data-palette="plum"]     { --karaoke: rgba(226,169,63,.45); }
+[data-palette="plum"]     { --karaoke: rgba(168,139,224,.45); }
 [data-palette="plum"][data-theme="dusk"],
-[data-palette="plum"] .night { --karaoke: rgba(232,188,95,.45); }
+[data-palette="plum"] .night { --karaoke: rgba(168,139,224,.45); }
 
 /* dusk sticker-ring (translucent) — mirrors the original tokens.css behaviour */
 [data-theme="dusk"],
