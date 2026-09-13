@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     }
     narration_response_format: str = "pcm"
 
+    # Independent per-page narration and per-image illustration calls fan out
+    # through a small thread pool instead of running one at a time — the media
+    # calls don't depend on each other (page images need only the character
+    # sheet), and the artifact cache is safe for concurrent writes (atomic
+    # temp-rename). Kept modest to respect OpenRouter rate limits.
+    pipeline_media_concurrency: int = 4
+
     content_dir: Path = Path("content")
 
     # Where the player fetches published story assets. Local dev serves them

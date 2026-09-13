@@ -7,7 +7,10 @@ first-class assets (docs/product.md **Spoken Prompts**). Every OpenRouter
 interaction is served by httpx.MockTransport — zero network.
 """
 
+import json
 import re
+import threading
+from collections import Counter
 from pathlib import Path
 
 import httpx
@@ -113,7 +116,9 @@ def test_editing_one_page_resynthesizes_only_that_page(tmp_path: Path) -> None:
     edited = [pages[0], pages[1].model_copy(update={"text": "La luna sorride."})]
     narrate_pages(edited, "it", settings, cache, client)
 
-    assert calls == ["Il mare dorme.", "La luna guarda.", "La luna sorride."]
+    # Order-independent: pages narrate concurrently, so call order is not
+    # deterministic — the contract is which/how-many calls, not their sequence.
+    assert Counter(calls) == Counter(["Il mare dorme.", "La luna guarda.", "La luna sorride."])
 
 
 def test_a_different_voice_or_model_never_reuses_cached_audio(tmp_path: Path) -> None:
@@ -134,6 +139,32 @@ def test_a_different_voice_or_model_never_reuses_cached_audio(tmp_path: Path) ->
         narrate_pages(pages, "it", settings, cache, _client(settings, calls))
 
     assert len(calls) == 2
+
+
+def test_pages_are_narrated_concurrently(tmp_path: Path) -> None:
+    """Given a multi-page story,
+    When the narrate step runs,
+    Then pages are synthesized in parallel — proven by a barrier that only trips
+    if every page's TTS call is in flight at once. Serial narration would block
+    the first call until the barrier times out.
+    """
+    settings = _settings()  # pipeline_media_concurrency defaults to 4
+    pages = [Page(id=f"p{i}", text=f"pagina numero {i}") for i in range(4)]
+    barrier = threading.Barrier(len(pages), timeout=5)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        text = json.loads(request.content)["input"]
+        barrier.wait()  # BrokenBarrierError (→ test failure) if calls are serial
+        return httpx.Response(
+            200,
+            content=f"pcm:{text}".encode(),
+            headers={"Content-Type": "audio/pcm;rate=24000;channels=1"},
+        )
+
+    client = NarrationClient(settings, transport=httpx.MockTransport(handler))
+    narrated = narrate_pages(pages, "it", settings, ArtifactCache(tmp_path / "story-1"), client)
+
+    assert [p.id for p in narrated] == ["p0", "p1", "p2", "p3"]  # order preserved
 
 
 # ---------------------------------------------------------------------------
