@@ -175,7 +175,7 @@ button.presses:active {
 .covers {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 18px 16px;
   padding: 6px 4px 0;
   flex: 1 1 auto;
   min-height: 0;
@@ -220,7 +220,7 @@ button.presses:active {
 }
 
 .cover-caption {
-  font: 600 11px/1.2 var(--font-app, system-ui);
+  font: 700 14px/1.2 var(--font-app, system-ui);
   text-align: center;
   color: rgba(74, 59, 46, 0.7);
   max-width: 100%;
@@ -235,6 +235,7 @@ button.presses:active {
 }
 
 .cover {
+  aspect-ratio: 5 / 6;
   box-shadow: var(--sticker-ring), var(--card-shadow);
   display: flex;
   flex-direction: column;
@@ -257,23 +258,10 @@ button.presses:active {
   object-fit: cover;
 }
 
-.cover span {
-  flex: 0 0 auto;
-  display: block;
-  padding: 6px 8px 8px;
-  font: 600 11px/1.2 var(--font-app, system-ui);
-  text-align: center;
-  color: rgba(74, 59, 46, 0.7);
-}
-
-[data-theme="dusk"] .cover span {
-  color: rgba(243, 233, 218, 0.42);
-}
-
 /* Wobble — four cover shapes, alternating tilt */
 .cover:nth-child(4n+1) {
   border-radius: 58% 42% 55% 45% / 52% 48% 40% 60%;
-  transform: rotate(-2.5deg);
+  transform: rotate(-2deg);
 }
 
 .cover:nth-child(4n+2) {
@@ -289,6 +277,36 @@ button.presses:active {
 .cover:nth-child(4n+4) {
   border-radius: 52% 48% 58% 42% / 50% 50% 45% 55%;
   transform: rotate(-1.5deg);
+}
+
+/* Family covers — violet ring + CSS star badge */
+.cover--family {
+  box-shadow: 0 0 0 3px var(--accent), var(--card-shadow);
+}
+
+@media (hover: hover) {
+  .cover--family:hover {
+    box-shadow: 0 0 0 3px var(--accent), 0 14px 30px rgba(74, 59, 46, 0.22);
+  }
+}
+
+.cover--family::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 0;
+  height: 0;
+  /* CSS star via clip-path — no SVG, no hex */
+  clip-path: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%,
+    79% 91%, 50% 70%, 21% 91%, 32% 57%,
+    2% 35%, 39% 35%
+  );
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  pointer-events: none;
 }
 
 .cover:active {

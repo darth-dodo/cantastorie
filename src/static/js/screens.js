@@ -54,6 +54,12 @@ function iconShelf() {
   return grid;
 }
 
+export function sortShelf(entries) {
+  const family = entries.filter((e) => e.isFamily === true);
+  const shared = entries.filter((e) => e.isFamily !== true);
+  return [...family, ...shared];
+}
+
 export function buildShelf(
   store,
   greeting,
@@ -86,10 +92,11 @@ export function buildShelf(
     meadow.appendChild(note);
     covers.appendChild(meadow);
   } else {
-    stories.forEach((entry) => {
+    sortShelf(stories).forEach((entry) => {
       const name = entry.title ?? entry.label;
       const card = el("div", "cover-card");
-      const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
+      const familyClass = entry.isFamily ? " cover--family" : "";
+      const cover = el("button", `cover ${entry.wash}${familyClass}`, { "aria-label": name });
       const src = coverSrc(entry);
       if (src) {
         const img = el("img", "cover-art");
