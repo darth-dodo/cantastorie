@@ -23,8 +23,9 @@ from pydantic import BaseModel, Field
 
 from src.config import Settings
 from src.observability import typed_traceable
+from src.pipeline._parallel import parallel_map
 from src.pipeline.cache import ArtifactCache, cache_key, run_step
-from src.pipeline.models import Story
+from src.pipeline.models import ChoiceOption, Page, Story
 
 # The locked style (docs/product.md → decision log "Style", **Watercolor
 # boards**, **Calm pictures**). A module-level constant so it is diffable and
@@ -198,10 +199,10 @@ def illustrate_story(
         )
         sheet_hash = hashlib.sha256(sheet).hexdigest()
 
-        # 2. Every page gets the same sheet as reference — never the
-        #    previous page's image.
-        page_images: dict[str, Path] = {}
-        for page in story.pages:
+        # 2. Every page gets the same sheet as reference — never the previous
+        #    page's image. Pages are independent given the sheet, so they fan
+        #    out through the bounded pool instead of one slow call at a time.
+        def _render_page(page: Page) -> tuple[str, Path]:
             page_inputs = {
                 "page_text": page.text,
                 "character_sheet_hash": sheet_hash,
@@ -215,30 +216,41 @@ def illustrate_story(
                 functools.partial(_generate_page, client, page.text, sheet),
                 suffix=IMAGE_SUFFIX,
             )
-            page_images[page.id] = _artifact_path(cache, page_inputs)
+            return page.id, _artifact_path(cache, page_inputs)
+
+        page_images: dict[str, Path] = dict(
+            parallel_map(_render_page, story.pages, settings.pipeline_media_concurrency)
+        )
 
         # 3. Every choice option gets a card, drawn against the same sheet.
         #    Keyed f"{page_id}:{index}" so Task 7 can address each option.
-        card_images: dict[str, Path] = {}
-        for page in story.pages:
-            if page.choice is None:
-                continue
-            for index, option in enumerate(page.choice.options):
-                card_inputs = {
-                    "label": option.label,
-                    "character_sheet_hash": sheet_hash,
-                    "style_prompt": STYLE_PROMPT,
-                    "card_prompt": CARD_PROMPT,
-                    "model": settings.image_model,
-                }
-                run_step(
-                    cache,
-                    STEP_NAME,
-                    card_inputs,
-                    functools.partial(_generate_card, client, option.label, sheet),
-                    suffix=IMAGE_SUFFIX,
-                )
-                card_images[f"{page.id}:{index}"] = _artifact_path(cache, card_inputs)
+        def _render_card(item: tuple[str, int, ChoiceOption]) -> tuple[str, Path]:
+            page_id, index, option = item
+            card_inputs = {
+                "label": option.label,
+                "character_sheet_hash": sheet_hash,
+                "style_prompt": STYLE_PROMPT,
+                "card_prompt": CARD_PROMPT,
+                "model": settings.image_model,
+            }
+            run_step(
+                cache,
+                STEP_NAME,
+                card_inputs,
+                functools.partial(_generate_card, client, option.label, sheet),
+                suffix=IMAGE_SUFFIX,
+            )
+            return f"{page_id}:{index}", _artifact_path(cache, card_inputs)
+
+        card_work = [
+            (page.id, index, option)
+            for page in story.pages
+            if page.choice is not None
+            for index, option in enumerate(page.choice.options)
+        ]
+        card_images: dict[str, Path] = dict(
+            parallel_map(_render_card, card_work, settings.pipeline_media_concurrency)
+        )
 
         # 4. The cover derives from the same sheet.
         cover_inputs = {
