@@ -211,6 +211,7 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
         }
         for r in runs
     }
+    debug = request.query_params.get("debug") == "1"
     return templates.TemplateResponse(
         request,
         "workshop/dashboard.html",
@@ -221,6 +222,7 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
             themes=get_args(Theme),
             languages=get_args(Language),
             live=LIVE_STATES,
+            debug=debug,
         ),
     )
 
