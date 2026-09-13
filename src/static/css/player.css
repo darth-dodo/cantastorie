@@ -714,7 +714,7 @@ button.presses:active {
 }
 
 [data-theme="dusk"] .lang-sticker-label {
-  color: #f3e9da;
+  color: var(--ink);
 }
 
 /* Stars (dusk shelf, player, end) */
