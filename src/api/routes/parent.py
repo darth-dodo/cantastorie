@@ -145,6 +145,7 @@ async def parent_home(
         "parent/packs.html",
         {
             **context,
+            "family_token": ctx.family_token,  # seeds same-device overlay adoption
             "runs": runs,
             "cap_message": None,
             "live": ["queued", "running"],
@@ -224,6 +225,7 @@ async def request_pack(
             "door": "parent",
             "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+            "family_token": ctx.family_token,  # seeds same-device overlay adoption
             "runs": [],
             "cap_message": str(cap),
             "cap_active": cap.active,
