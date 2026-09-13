@@ -392,17 +392,17 @@ export async function init(
         if (settingsOpen) {
           app.appendChild(
             buildSettingsOverlay({
-              langs: LANGS,
               currentLang: lang,
               onLangChange: (newLang) => switchLanguage(newLang),
-              palettes: VALID_PALETTES,
-              paletteLabels: PALETTE_LABELS,
-              currentPalette: root.documentElement.getAttribute("data-palette") || "indigo",
               onPaletteChange: (name) => {
                 if (globalThis.cantastoriePalette) globalThis.cantastoriePalette.set(name);
                 else root.documentElement.setAttribute("data-palette", name);
               },
               onClose: () => closeSettings(),
+              onWorkshop: () => {
+                // Task 10 will wire the gate; no-op for now.
+              },
+              doc: root,
             }),
           );
         }
