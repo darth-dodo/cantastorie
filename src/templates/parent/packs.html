@@ -7,8 +7,14 @@
     <div class="ws-tagline">stories made just for your family</div>
   </div>
 
+  {# ── Tab shell ──────────────────────────────────────────────────────── #}
+  <nav class="ws-tabs" aria-label="Parent area">
+    <a href="/parent/stories" class="ws-tab">Your stories</a>
+    <a href="/parent" class="ws-tab ws-tab--active" aria-current="page">Being made</a>
+  </nav>
+
   {% if cap_message %}
-    <div class="ws-card" data-cap-message>
+    <div class="ws-card ws-card--rest" data-cap-message>
       <div class="ws-card-title">One story at a time</div>
       <p>{{ cap_message }}</p>
       {% if cap_active %}<p>Your current story is <strong>{{ cap_active.state }}</strong>.</p>{% endif %}
@@ -17,19 +23,22 @@
 
   <div class="ws-card ws-start-card">
     <div class="ws-card-title">Make a story</div>
-    <form method="post" action="/parent/packs" class="ws-run-form">
+    <form method="post" action="/parent/packs"
+          class="ws-run-form{% if cap_message %} ws-form--capped{% endif %}">
       <div class="ws-field-grid">
         <div class="ws-field-block ws-field-full">
           <span class="ws-field-label">Theme</span>
           <div class="ws-field-select-wrap">
-            <select name="theme" class="ws-field ws-select">
+            <select name="theme" class="ws-field ws-select" data-custom-theme>
               {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
+              <option value="custom">Custom…</option>
             </select>
           </div>
         </div>
-        <div class="ws-field-block ws-field-full">
-          <span class="ws-field-label">A wish for the story (optional)</span>
-          <input name="premise" type="text" maxlength="300" class="ws-field" placeholder="a small boat wants to see the moon" />
+        <div class="ws-field-block ws-field-full" data-custom-premise hidden>
+          <span class="ws-field-label">Your story</span>
+          <input name="premise" type="text" maxlength="300" class="ws-field"
+                 placeholder="a small boat wants to see the moon" />
         </div>
         <div class="ws-field-block ws-field-full">
           <span class="ws-field-label">Language</span>
@@ -40,11 +49,11 @@
           </div>
         </div>
       </div>
-      <button type="submit" class="ws-pill ws-pill-primary">Make our story</button>
+      <p class="ws-form-note">This takes about four minutes — feel free to come back when it's ready.</p>
+      <button type="submit" class="ws-pill ws-pill-primary"
+              {% if cap_message %}disabled{% endif %}>Make our story</button>
     </form>
   </div>
-
-  <div class="ws-section-head">Your stories</div>
 
   <div class="ws-runs-list">
     {% if runs %}
@@ -57,13 +66,11 @@
       {% endfor %}
     {% else %}
       <div class="ws-card ws-empty-card">
-        <div class="ws-empty-title">No stories yet</div>
+        <div class="ws-empty-title">No stories being made</div>
         <div class="ws-empty-sub">make your family's first one above</div>
       </div>
     {% endif %}
   </div>
-
-  <p><a href="/parent/stories">Your published stories →</a></p>
 
   <div class="ws-palette-bar">
     {% for name in ["warm", "indigo", "seaglass", "plum"] %}
@@ -71,4 +78,21 @@
     {% endfor %}
   </div>
 </div>
+
+<script>
+(function () {
+  "use strict";
+  var sel = document.querySelector("[data-custom-theme]");
+  var box = document.querySelector("[data-custom-premise]");
+  if (!sel || !box) return;
+  function sync() {
+    var isCustom = sel.value === "custom";
+    box.hidden = !isCustom;
+    var inp = box.querySelector("input");
+    if (inp) inp.disabled = !isCustom;
+  }
+  sel.addEventListener("change", sync);
+  sync();
+})();
+</script>
 {% endblock %}

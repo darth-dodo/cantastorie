@@ -3,9 +3,15 @@
 {% block content %}
 <div class="ws-page">
   <div class="ws-bench-header">
-    <div class="ws-wordmark">Your stories</div>
+    <div class="ws-wordmark">Your shelf</div>
     <div class="ws-tagline">on your family's private shelf</div>
   </div>
+
+  {# ── Tab shell ──────────────────────────────────────────────────────── #}
+  <nav class="ws-tabs" aria-label="Parent area">
+    <a href="/parent/stories" class="ws-tab ws-tab--active" aria-current="page">Your stories</a>
+    <a href="/parent" class="ws-tab">Being made</a>
+  </nav>
 
   <div class="ws-runs-list">
     {% if stories %}
@@ -31,7 +37,5 @@
       </div>
     {% endif %}
   </div>
-
-  <p><a href="/parent">← Back to making stories</a></p>
 </div>
 {% endblock %}

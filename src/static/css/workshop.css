@@ -732,3 +732,56 @@ body {
 .ws-start-card + .ws-section-head {
   padding-top: 20px;
 }
+
+/* ── Parent tab shell ────────────────────────────────────────────────── */
+.ws-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 2px 16px;
+}
+
+.ws-tab {
+  flex: 1;
+  text-align: center;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--ghost);
+  color: var(--ink-soft);
+  font: 600 14px var(--font-app);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms, color 120ms;
+}
+
+.ws-tab--active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--card-shadow);
+}
+
+/* ── Rest card (cap state) ───────────────────────────────────────────── */
+.ws-card--rest {
+  background: var(--rest-16);
+  color: var(--rest-text);
+  margin-bottom: 12px;
+}
+
+.ws-card--rest .ws-card-title {
+  color: var(--rest-text);
+}
+
+/* ── Capped form (dim + inert) ───────────────────────────────────────── */
+.ws-form--capped {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── Four-minute note ────────────────────────────────────────────────── */
+.ws-form-note {
+  font: 500 13px var(--font-app);
+  color: var(--ink-soft);
+  margin: 0;
+  text-align: center;
+}
