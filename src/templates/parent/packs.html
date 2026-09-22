@@ -47,7 +47,7 @@
           <span class="ws-field-label">Language</span>
           <div class="ws-field-select-wrap">
             <select name="language" class="ws-field ws-select">
-              {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+              {% for language in languages %}<option value="{{ language }}">{{ language | language_name }}</option>{% endfor %}
             </select>
           </div>
         </div>
@@ -70,7 +70,7 @@
           <div class="ws-run-card">
             <div class="ws-run-card-body">
               <div class="ws-run-title">{{ title }}</div>
-              <div class="ws-run-meta">{{ record.request.language }}</div>
+              <div class="ws-run-meta">{{ record.request.language | language_name }}</div>
             </div>
             <div class="ws-chip ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
           </div>

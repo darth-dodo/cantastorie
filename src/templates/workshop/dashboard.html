@@ -28,7 +28,7 @@
           <span class="ws-field-label">Language</span>
           <div class="ws-field-select-wrap">
             <select name="language" class="ws-field ws-select">
-              {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+              {% for language in languages %}<option value="{{ language }}">{{ language | language_name }}</option>{% endfor %}
             </select>
           </div>
         </div>
@@ -72,7 +72,7 @@
           <a href="{{ href }}" class="ws-run-card-link">
             <div class="ws-run-card-body">
               <div class="ws-run-title">{{ title }}</div>
-              <div class="ws-run-meta">{{ run.request.language }} · {{ run.request.count }} stor{{ "y" if run.request.count == 1 else "ies" }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
+              <div class="ws-run-meta">{{ run.request.language | language_name }} · {{ run.request.count }} stor{{ "y" if run.request.count == 1 else "ies" }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
             </div>
             <div class="ws-chip ws-state-{{ run.state }}">{{ chip_labels.get(run.state, run.state) }}</div>
           </a>

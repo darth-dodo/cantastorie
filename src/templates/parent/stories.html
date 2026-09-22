@@ -23,7 +23,7 @@
       <button type="button"
               class="ws-filter-pill{% if active_lang %} ws-filter-pill--active{% endif %}"
               data-filter-toggle>
-        {% if active_lang %}{{ active_lang }}{% else %}All languages{% endif %} ▾
+        {% if active_lang %}{{ active_lang | language_name }}{% else %}All languages{% endif %} ▾
       </button>
       <div class="ws-filter-panel" data-filter-panel hidden>
         <a href="/parent/stories{% if sort != 'newest' %}?sort={{ sort }}{% endif %}"
@@ -34,7 +34,7 @@
         {% for lg, count in lang_counts | dictsort %}
           <a href="/parent/stories?lang={{ lg }}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}"
              class="ws-filter-row{% if active_lang == lg %} ws-filter-row--selected{% endif %}">
-            <span class="ws-filter-name">{{ lg }}</span>
+            <span class="ws-filter-name">{{ lg | language_name }}</span>
             <span class="ws-filter-count">{{ count }}</span>
           </a>
         {% endfor %}
@@ -61,7 +61,7 @@
           <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="72" height="72" />
           <div class="ws-run-card-body">
             <div class="ws-run-title">{{ story.title }}</div>
-            <div class="ws-run-meta">{{ story.language }}</div>
+            <div class="ws-run-meta">{{ story.language | language_name }}</div>
           </div>
           {# Two-step delete: first tap arms; second tap fires the POST #}
           <div class="ws-delete-armed-wrap" data-arm-wrap>

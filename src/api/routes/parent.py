@@ -7,7 +7,6 @@ pack request form, my-packs) arrive in the next step of the design.
 from __future__ import annotations
 
 import secrets
-from pathlib import Path
 from typing import Annotated, Protocol, get_args
 
 from fastapi import (
@@ -20,12 +19,12 @@ from fastapi import (
     Response,
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
 from src.api.routes._nav import fapi_host, home_path
+from src.api.routes._templates import templates
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
     get_run_manager,
@@ -35,9 +34,6 @@ from src.pipeline.models import Language, Theme
 from src.pipeline.publish import list_published_stories, publish_story, unpublish_story
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import PackRequest
-
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 router = APIRouter(prefix="/parent")
 

@@ -10,7 +10,7 @@
     {% endif %}
     <div class="ws-run-head-text">
       <div class="ws-run-head-title">{{ story.title }}</div>
-      <div class="ws-run-head-meta">{{ story.language }} · {{ story.shape }} · {{ story.pages | length }} pages</div>
+      <div class="ws-run-head-meta">{{ story.language | language_name }} · {{ story.shape }} · {{ story.pages | length }} pages</div>
     </div>
     {% if record %}
       {% set chip_labels = {"failed": "rested", "staged": "staged — review"} %}

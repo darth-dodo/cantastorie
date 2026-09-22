@@ -8,7 +8,7 @@
   </div>
 
   {% for language, rows in stories | groupby("language") %}
-    <div class="ws-section-head">{{ language }}</div>
+    <div class="ws-section-head">{{ language | language_name }}</div>
     {% for story in rows %}
       <div class="ws-run-card" data-story-card="{{ story.id }}">
         <a href="{{ story.cover }}" target="_blank" rel="noopener" class="ws-run-card-link">
