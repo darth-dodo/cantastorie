@@ -587,7 +587,7 @@ git commit -m "feat(parent): tabs, Custom disclosure, 4-min note, capped form st
 
 ---
 
-## Task 12: Parent — filter/sort pills, run labels, approve redirect, delete/hide, exit
+## Task 12: Parent — filter/sort pills, run labels, approve redirect, delete (no hide), exit
 
 **Linear:** AI-445 (Phase 4)
 
@@ -597,7 +597,7 @@ git commit -m "feat(parent): tabs, Custom disclosure, 4-min note, capped form st
 
 **Interfaces:**
 - Consumes: published stories list (with `family_token` ownership), run states.
-- Produces: sort param cycling Newest→A–Z→Hidden-last; language filter param; family-vs-shared delete affordances.
+- Produces: sort param cycling Newest→A–Z; language filter param; family hard-delete arming affordance (no hide).
 
 - [ ] **Step 1: Write failing tests**
 
@@ -611,12 +611,13 @@ def test_approve_lands_on_your_stories(client_authed, staged_run):
 def test_staged_label_reads_needs_your_eyes(client_authed, staged_run):
     r = client_authed.get("/parent")
     assert "needs your eyes" in r.text
-def test_shared_story_cannot_delete(client_authed, shared_story):
-    r = client_authed.get("/parent/stories")
-    assert "no delete — you don't own it" in r.text
 def test_family_story_delete_arms(client_authed, family_story):
     r = client_authed.get("/parent/stories")
-    assert "Delete for good?" in r.text
+    assert "Delete for good?" in r.text  # two-step arming on the destructive delete
+def test_delete_rejects_non_owned_story(client_authed, shared_story_id):
+    # the delete route already guards ownership; deleting a non-owned id must not succeed
+    r = client_authed.post(f"/parent/stories/{shared_story_id}/delete", follow_redirects=False)
+    assert r.status_code in (403, 404)
 ```
 
 - [ ] **Step 2: Run to verify they fail**
@@ -624,7 +625,7 @@ def test_family_story_delete_arms(client_authed, family_story):
 Run: `uv run pytest tests/test_parent_stories.py tests/test_parent_approve_redirect.py -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement.** Two 36px pills on Your stories: `All languages ▾` (opens list panel: flag, name, count; pill turns accent when active) + `Sort: Newest ▾` (cycles Newest→A–Z→Hidden last); quiet result count. Change `staged` display label to "needs your eyes" (`_progress.html`, `dashboard.html` chip_labels). Beads: ensure current-bead halo is steady (no `transition`/animation that loops within the 2s swap). Approve redirect `/parent`→`/parent/stories` (parent.py:290). Delete/hide: family = hide/unhide + hard delete arming (`×`→"Delete for good?"); shared = hide only + inline "no delete — you don't own it." Add "Child's shelf →" `--confirm` pill to the workshop header.
+- [ ] **Step 3: Implement.** Two 36px pills on Your stories: `All languages ▾` (opens list panel: flag, name, count; pill turns accent when active) + `Sort: Newest ▾` (cycles Newest→A–Z→Hidden last); quiet result count. Change `staged` display label to "needs your eyes" (`_progress.html`, `dashboard.html` chip_labels). Beads: ensure current-bead halo is steady (no `transition`/animation that loops within the 2s swap). Approve redirect `/parent`→`/parent/stories` (in `approve_pack`, currently returns `/parent`). Delete (no hide): family stories get a hard-delete that arms first (`×`→"Delete for good?") on the existing `delete_parent_story` route; NO hide/unhide feature. Shared stories aren't listed in the family view and the delete route already rejects non-owned ids — leave that guard. Add "Child's shelf →" `--confirm` pill to the workshop header. Sort cycles Newest→A–Z only (no Hidden-last).
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -635,7 +636,7 @@ Expected: PASS.
 
 ```bash
 git add src/templates/parent/ src/templates/workshop/_progress.html src/api/routes/parent.py src/static/css/workshop.css tests/test_parent_stories.py tests/test_parent_approve_redirect.py
-git commit -m "feat(parent): filter/sort, friendly labels, approve redirect, delete-vs-hide, exit (AI-445)"
+git commit -m "feat(parent): filter/sort, friendly labels, approve redirect, delete + exit (AI-445)"
 ```
 
 ---
@@ -739,7 +740,7 @@ git commit -m "test(e2e): full overhaul flow + per-palette pass (AI-441)"
 **Files:**
 - Modify: `docs/design/design-system.md`
 
-- [ ] **Step 1: Update** the design-system doc to reflect orchid accent, the `--rest` warm fix, portrait covers, the four settings sections, run-state labels, and delete-vs-hide rules. Follow `documentation-conventions`.
+- [ ] **Step 1: Update** the design-system doc to reflect orchid accent, the `--rest` warm fix, portrait covers, the four settings sections, run-state labels, and the family hard-delete (no hide) rule. Follow `documentation-conventions`.
 
 - [ ] **Step 2: Commit**
 

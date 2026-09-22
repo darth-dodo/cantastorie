@@ -38,7 +38,7 @@ Already in place (no or low work): the token *schema* (all semantic vars exist),
 | Child shelf | sphere-lit moon (terminator shadow + 3 craters), grid `gap:18px 16px`, title below `700 14px`, family violet-ring+star & family-first sort, language sticker, gear SVG→CSS dots | JS+CSS |
 | Settings sheet | 2 dropdowns → 4 tile sections (flags / Light / For-grown-ups w/ "Read with me" + workshop lock) + `--primary` pill + drag handle; `border-radius:30px 30px 0 0`; full localization | JS+CSS |
 | Math gate | does not exist — localized `7+6`, three options, wrong answers stay put | JS+CSS |
-| Parent workshop | tab shell; `Custom…` disclosure + 4-min note; `_enforce_caps` designed state (dim `.45` + inert submit); filter/sort pills; `staged`→"needs your eyes"; approval redirect `/parent`→`/parent/stories`; hide/unhide + family-vs-shared delete rules; "Child's shelf →" exit | Jinja+HTMX+CSS |
+| Parent workshop | tab shell; `Custom…` disclosure + 4-min note; `_enforce_caps` designed state (dim `.45` + inert submit); filter/sort pills; `staged`→"needs your eyes"; approval redirect `/parent`→`/parent/stories`; family hard-delete (arms first, no hide); "Child's shelf →" exit | Jinja+HTMX+CSS |
 | Pipeline/art | no dedicated portrait cover (reuses `pages[0].image`); `Story` has no `cover` field | Pipeline+data |
 | i18n | raw language codes leak in parent/workshop Jinja templates | UI |
 
@@ -76,10 +76,10 @@ Already in place (no or low work): the token *schema* (all semantic vars exist),
 - **Tab shell** over the two existing routes: "Your stories" (`/parent/stories`) and "Being made" (`/parent/packs`).
 - **Make a story:** Theme gains `Custom…` → reveals a single "Your story" free-text field (posts as `premise`), replacing the always-visible wish — three fields, not four; same disclosure as operator bench. Add "This takes about four minutes" note before the button, with explicit permission to leave.
 - **One story at a time:** `_enforce_caps` gets a designed state — a `--rest` card above the form, form dimmed to `.45`, submit inert. Not a bare error.
-- **Filter & sort (Your stories):** two equal-width pills in one fixed 36px row — `All languages ▾` (opens a list panel: flag, name, count per row; pill turns accent when active) and `Sort: Newest ▾` (cycles Newest → A–Z → Hidden last). Quiet result count below. Not chips.
+- **Filter & sort (Your stories):** two equal-width pills in one fixed 36px row — `All languages ▾` (opens a list panel: flag, name, count per row; pill turns accent when active) and `Sort: Newest ▾` (cycles Newest → A–Z; the "Hidden last" state is dropped along with the hide feature). Quiet result count below. Not chips.
 - **Run states:** display labels only — `failed`→"rested", `staged`→"needs your eyes", `approved`→"on the shelf". Beads: settled sage, current accent + steady halo, future faint, rested hollow w/ `--rest` inset ring. No looping animations. "Run it again" starts a fresh run.
 - **Review:** page cards (art on top, Literata text, audio pill on p1); sticky footer `Approve & publish` (confirm) + `Reject` (rest); **approving lands on "Your stories"** (redirect `/parent`→`/parent/stories`).
-- **Delete vs hide:** family stories — hide, unhide, hard delete (arms first: `×` → "Delete for good?"); shared stories — hide only, inline reason "no delete — you don't own it."
+- **Delete (no hide):** family stories — hard delete only, which arms first (`×` → "Delete for good?"). There is no hide/unhide (decided 2026-09-21 — hiding a *shared* story would need per-family hidden-state persistence that does not exist, and the family view lists only owned stories anyway). Shared stories are not deletable by families; the delete route already rejects non-owned ids.
 - **Way out:** a `--confirm` pill in the header — "Child's shelf →".
 
 ### Phase 5 — i18n cleanup
