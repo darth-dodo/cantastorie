@@ -159,6 +159,8 @@ async def parent_stories(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
     manager: Manager,
+    lang: str | None = None,
+    sort: str | None = None,
 ) -> Response:
     ctx = await _page_identity(request, settings)
     if ctx is not None and ctx.is_operator:
@@ -175,13 +177,37 @@ async def parent_stories(
     owned = _owned_story_ids(manager, ctx.family_token)
     # A family sees only its own overlay lane — never the shared shelf, never
     # another family's overlay. list_published_stories tags each row's owner.
-    stories = [
+    all_stories = [
         s
         for s in list_published_stories(settings)
         if s.family_token == ctx.family_token and s.id in owned
     ]
+    # Collect available languages with counts for the filter panel.
+    lang_counts: dict[str, int] = {}
+    for s in all_stories:
+        lang_counts[s.language] = lang_counts.get(s.language, 0) + 1
+    # Apply language filter.
+    active_lang = lang if lang and lang in lang_counts else None
+    stories = [s for s in all_stories if active_lang is None or s.language == active_lang]
+    # Apply sort: "az" = A-Z by title; default/anything else = newest first
+    # (list_published_stories sorts by (family_token, language, id) which is
+    # effectively insertion order; reverse gives newest-first as a proxy).
+    if sort == "az":
+        stories = sorted(stories, key=lambda s: s.title.lower())
+    else:
+        # Keep the default order — stories were appended in publish order,
+        # reversing gives newest first.
+        stories = list(reversed(stories))
     return templates.TemplateResponse(
-        request, "parent/stories.html", {**context, "stories": stories}
+        request,
+        "parent/stories.html",
+        {
+            **context,
+            "stories": stories,
+            "lang_counts": lang_counts,
+            "active_lang": active_lang,
+            "sort": sort or "newest",
+        },
     )
 
 
@@ -287,7 +313,7 @@ async def approve_pack(
     manager.store.save(record.advance("approved"))
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
-    return RedirectResponse("/parent", status_code=303)
+    return RedirectResponse("/parent/stories", status_code=303)
 
 
 @router.post("/api/provision")

@@ -59,7 +59,7 @@
 
   <div class="ws-runs-list">
     {% if runs %}
-      {% set chip_labels = {"failed": "rested", "staged": "staged — review"} %}
+      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes"} %}
       {% for run in runs %}
         {% set extras = run_extras[run.id] %}
         {% set title = run.request.premise if run.request.premise else run.request.theme.replace("_", " ") %}

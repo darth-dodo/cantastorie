@@ -13,6 +13,47 @@
     <a href="/parent" class="ws-tab">Being made</a>
   </nav>
 
+  {# ── Exit: child's shelf ─────────────────────────────────────────────── #}
+  <a href="/play" class="ws-pill ws-pill-confirm ws-pill--shelf-exit">Child's shelf →</a>
+
+  {# ── Filter / sort bar ───────────────────────────────────────────────── #}
+  <div class="ws-filter-bar">
+    {# Language filter pill #}
+    <div class="ws-filter-wrap" data-filter-wrap>
+      <button type="button"
+              class="ws-filter-pill{% if active_lang %} ws-filter-pill--active{% endif %}"
+              data-filter-toggle>
+        {% if active_lang %}{{ active_lang }}{% else %}All languages{% endif %} ▾
+      </button>
+      <div class="ws-filter-panel" data-filter-panel hidden>
+        <a href="/parent/stories{% if sort != 'newest' %}?sort={{ sort }}{% endif %}"
+           class="ws-filter-row{% if not active_lang %} ws-filter-row--selected{% endif %}">
+          <span class="ws-filter-name">All languages</span>
+          <span class="ws-filter-count">{{ stories | length if not active_lang else (lang_counts.values() | sum) }}</span>
+        </a>
+        {% for lg, count in lang_counts | dictsort %}
+          <a href="/parent/stories?lang={{ lg }}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}"
+             class="ws-filter-row{% if active_lang == lg %} ws-filter-row--selected{% endif %}">
+            <span class="ws-filter-name">{{ lg }}</span>
+            <span class="ws-filter-count">{{ count }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Sort pill — cycles Newest → A–Z #}
+    {% if sort == "az" %}
+      <a href="/parent/stories{% if active_lang %}?lang={{ active_lang }}{% endif %}"
+         class="ws-filter-pill">Sort: A–Z ▾</a>
+    {% else %}
+      <a href="/parent/stories?sort=az{% if active_lang %}&lang={{ active_lang }}{% endif %}"
+         class="ws-filter-pill">Sort: Newest ▾</a>
+    {% endif %}
+  </div>
+
+  {# ── Result count ─────────────────────────────────────────────────────── #}
+  <div class="ws-stories-count">{{ stories | length }} {{ "story" if stories | length == 1 else "stories" }}</div>
+
   <div class="ws-runs-list">
     {% if stories %}
       {% for story in stories %}
@@ -22,12 +63,20 @@
             <div class="ws-run-title">{{ story.title }}</div>
             <div class="ws-run-meta">{{ story.language }}</div>
           </div>
-          <button class="ws-delete-btn"
-                  data-delete-btn
-                  hx-post="/parent/stories/{{ story.id }}/delete"
-                  hx-target="closest [data-story-id]"
-                  hx-swap="outerHTML"
-                  hx-confirm="Delete &ldquo;{{ story.title }}&rdquo; forever? This cannot be undone.">×</button>
+          {# Two-step delete: first tap arms; second tap fires the POST #}
+          <div class="ws-delete-armed-wrap" data-arm-wrap>
+            <button type="button"
+                    class="ws-delete-btn"
+                    data-arm-trigger>×</button>
+            <form method="post"
+                  action="/parent/stories/{{ story.id }}/delete"
+                  class="ws-arm-confirm"
+                  data-arm-confirm
+                  hidden>
+              <button type="submit"
+                      class="ws-delete-btn ws-delete-btn--wide ws-delete-btn--armed">Delete for good?</button>
+            </form>
+          </div>
         </div>
       {% endfor %}
     {% else %}
@@ -38,4 +87,31 @@
     {% endif %}
   </div>
 </div>
+
+<script>
+(function () {
+  "use strict";
+  // Filter panel toggle
+  document.querySelectorAll("[data-filter-wrap]").forEach(function (wrap) {
+    var btn = wrap.querySelector("[data-filter-toggle]");
+    var panel = wrap.querySelector("[data-filter-panel]");
+    if (!btn || !panel) return;
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      panel.hidden = !panel.hidden;
+    });
+    document.addEventListener("click", function () { panel.hidden = true; });
+  });
+  // Two-step delete arming
+  document.querySelectorAll("[data-arm-wrap]").forEach(function (wrap) {
+    var trigger = wrap.querySelector("[data-arm-trigger]");
+    var confirm = wrap.querySelector("[data-arm-confirm]");
+    if (!trigger || !confirm) return;
+    trigger.addEventListener("click", function () {
+      trigger.hidden = true;
+      confirm.hidden = false;
+    });
+  });
+})();
+</script>
 {% endblock %}

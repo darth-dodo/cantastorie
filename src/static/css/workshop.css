@@ -445,7 +445,7 @@ body {
 }
 
 .ws-bead--done    { background: var(--confirm); }
-.ws-bead--current { width: 24px; height: 24px; background: var(--accent); box-shadow: 0 0 0 5px var(--accent-22), 0 0 22px 2px var(--accent-22); }
+.ws-bead--current { width: 24px; height: 24px; background: var(--accent); box-shadow: 0 0 0 5px var(--accent-22), 0 0 22px 2px var(--accent-22); transition: none; }
 .ws-bead--rest    { background: var(--card); box-shadow: inset 0 0 0 3px var(--rest); }
 .ws-bead--future  { background: var(--line-10); }
 
@@ -784,4 +784,108 @@ body {
   color: var(--ink-soft);
   margin: 0;
   text-align: center;
+}
+
+/* ── Shelf exit pill ─────────────────────────────────────────────────── */
+.ws-pill--shelf-exit {
+  margin-bottom: 12px;
+}
+
+/* ── Filter / sort bar ───────────────────────────────────────────────── */
+.ws-filter-bar {
+  display: flex;
+  gap: 8px;
+  height: 36px;
+  align-items: center;
+  padding: 0 2px 0;
+  margin-bottom: 4px;
+}
+
+.ws-filter-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.ws-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-radius: 999px;
+  font: 600 13px var(--font-app);
+  color: var(--ink-soft);
+  background: var(--ghost);
+  border: none;
+  cursor: pointer;
+  padding: 0 14px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 120ms, color 120ms;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ws-filter-pill--active {
+  background: var(--accent-22);
+  color: var(--accent-text);
+}
+
+.ws-filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow), 0 0 0 1.5px var(--line-12);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.ws-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  text-decoration: none;
+  color: var(--ink);
+  font: 500 13px var(--font-app);
+  gap: 12px;
+  transition: background 80ms;
+}
+
+.ws-filter-row:hover { background: var(--ghost); }
+
+.ws-filter-row--selected { color: var(--accent-text); font-weight: 700; }
+
+.ws-filter-name { flex: 1; }
+
+.ws-filter-count {
+  font: 600 12px var(--font-app);
+  color: var(--ink-faint);
+}
+
+/* ── Result count ────────────────────────────────────────────────────── */
+.ws-stories-count {
+  font: 500 12px var(--font-app);
+  color: var(--ink-faint);
+  padding: 0 4px 10px;
+}
+
+/* ── Armed-delete wrap ───────────────────────────────────────────────── */
+.ws-delete-armed-wrap {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.ws-arm-confirm {
+  margin: 0;
+}
+
+.ws-delete-btn--armed {
+  background: var(--rest);
+  color: #FFFDF7;
+  font-size: 12px;
+  white-space: nowrap;
 }

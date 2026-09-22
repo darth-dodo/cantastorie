@@ -13,6 +13,9 @@
     <a href="/parent" class="ws-tab ws-tab--active" aria-current="page">Being made</a>
   </nav>
 
+  {# ── Exit: child's shelf ─────────────────────────────────────────────── #}
+  <a href="/play" class="ws-pill ws-pill-confirm ws-pill--shelf-exit">Child's shelf →</a>
+
   {% if cap_message %}
     <div class="ws-card ws-card--rest" data-cap-message>
       <div class="ws-card-title">One story at a time</div>
@@ -57,11 +60,20 @@
 
   <div class="ws-runs-list">
     {% if runs %}
+      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes"} %}
       {% for record in runs %}
         {% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
-        <div data-run-id="{{ record.id }}">
-          <div class="ws-run-title">{{ title }}</div>
-          <div hx-get="/parent/packs/{{ record.id }}/progress" hx-trigger="load" hx-swap="outerHTML"></div>
+        <div data-run-id="{{ record.id }}"
+             hx-get="/parent/packs/{{ record.id }}/progress"
+             hx-trigger="load"
+             hx-swap="outerHTML">
+          <div class="ws-run-card">
+            <div class="ws-run-card-body">
+              <div class="ws-run-title">{{ title }}</div>
+              <div class="ws-run-meta">{{ record.request.language }}</div>
+            </div>
+            <div class="ws-chip ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
+          </div>
         </div>
       {% endfor %}
     {% else %}
