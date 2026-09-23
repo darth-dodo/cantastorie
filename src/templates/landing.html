@@ -9,6 +9,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&display=swap" rel="stylesheet" />
   <script src="/static/js/palette.js"></script>
+  <!-- AI-451: Landing defaults to dusk regardless of time.
+       palette.js already ran and set data-theme (time-based).
+       Override to dusk UNLESS the visitor passed ?theme=light explicitly. -->
+  <script>
+    (function () {
+      var t = new URLSearchParams(location.search).get("theme");
+      if (t !== "light" && t !== "dusk") {
+        document.documentElement.setAttribute("data-theme", "dusk");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/landing.css" />
 </head>
@@ -91,7 +102,7 @@
           </div>
         </div>
         <div class="l-step">
-          <div class="l-step-art l-step-art-placeholder" role="img" aria-label="Parent reviewing a story page"></div>
+          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-review.png)" role="img" aria-label="Parent reviewing a story page"></div>
           <div class="l-step-body">
             <h3 class="l-step-h3">You read it first</h3>
             <p class="l-step-p">Every story waits for a grown-up before it reaches the shelf.</p>
@@ -132,6 +143,22 @@
         <p class="l-pipeline-note">Nothing is published automatically. The last bead is a person.</p>
       </div>
       <a class="l-ghost-btn" href="https://github.com/darth-dodo/cantastorie" rel="noopener">View the code on GitHub →</a>
+    </div>
+  </section>
+  <!-- AI-452: 5th frame — family stories + library management -->
+  <section class="l-section l-section-family" aria-labelledby="family-stories-h">
+    <div class="l-section-inner l-section-inner-family">
+      <div class="l-family-copy">
+        <p class="l-eyebrow">Your family's stories</p>
+        <h2 id="family-stories-h" class="l-section-h2">A shelf full of stories you made together.</h2>
+        <p class="l-section-sub">Stories your family creates get a starred spot on your child's shelf — marked with a violet ring so they know it came from home. You're in charge: approve every story before it lands, and remove anything that no longer fits.</p>
+        <a class="l-ghost-btn" href="/parent" style="margin-top:8px">Manage your library →</a>
+      </div>
+      <div class="l-family-visual" aria-hidden="true">
+        <div class="l-family-cover">
+          <img src="/static/img/landing-family-cover.png" alt="A family's own story, starred on the shelf" class="l-family-cover-img" />
+        </div>
+      </div>
     </div>
   </section>
   </main>
