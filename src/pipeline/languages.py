@@ -15,6 +15,7 @@ LANGUAGE_NAMES: dict[str, str] = {
     "de": "Deutsch",
     "bg": "Български",
     "ru": "Русский",
+    "mr": "मराठी",
 }
 
 
