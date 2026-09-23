@@ -20,6 +20,15 @@ def test_landing_links_into_the_player() -> None:
     assert 'href="/play"' in response.text
 
 
+def test_landing_is_wired_to_tokens() -> None:
+    # The landing must track the shared palette: it loads tokens.css and
+    # palette.js (the same theme-resolution the player uses), not a
+    # standalone hardcoded palette.
+    response = client.get("/")
+    assert "/static/css/tokens.css" in response.text
+    assert "/static/js/palette.js" in response.text
+
+
 def test_player_shell_moved_to_play() -> None:
     response = client.get("/play")
     assert response.status_code == 200

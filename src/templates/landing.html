@@ -5,68 +5,143 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cantastorie: bedtime stories your child steers</title>
   <meta name="description" content="Bedtime stories your child steers, painted in watercolor, in your family's languages. You approve every story before your child hears it." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&display=swap" rel="stylesheet" />
+  <script src="/static/js/palette.js"></script>
+  <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/landing.css" />
 </head>
 <body data-page="landing">
-  <nav class="nav">
-    <span class="brand">Cantastorie<span class="dot">.</span></span>
-    <a href="/parent">For parents →</a>
-  </nav>
 
-  <header class="hero wrap">
-    <span class="eyebrow">Bedtime, the piazza way</span>
-    <img class="hero-art" src="/static/img/landing-hero.png" alt="A cantastorie storyteller in a moonlit piazza" />
-    <h1>Bedtime stories your&nbsp;child steers.</h1>
-    <p class="lede">Painted in watercolor, in your family's languages. You approve every story first.</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="/play"><svg class="i solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start listening</a>
-      <a class="btn btn-ghost" href="/parent">I'm a parent</a>
+  <header class="l-hero">
+    <nav class="l-nav" aria-label="Site navigation">
+      <div class="l-nav-brand">
+        <div class="l-moon" aria-hidden="true">
+          <div class="l-moon-crater l-moon-crater-a"></div>
+          <div class="l-moon-crater l-moon-crater-b"></div>
+          <div class="l-moon-eye l-moon-eye-l"></div>
+          <div class="l-moon-eye l-moon-eye-r"></div>
+          <div class="l-moon-mouth"></div>
+        </div>
+        <span class="l-brand">Cantastorie<span class="l-brand-dot">.</span></span>
+      </div>
+      <a class="l-nav-parents" href="/parent">For parents →</a>
+    </nav>
+
+    <div class="l-hero-bg" aria-hidden="true">
+      <img class="l-hero-img" src="/static/img/landing-hero.png" alt="" />
+      <div class="l-hero-vignette"></div>
     </div>
-    <div class="trust">
-      <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> <b>No child accounts</b></span>
-      <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg> <b>You approve everything</b></span>
-      <span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg> <b>7 languages</b></span>
+
+    <div class="l-hero-content">
+      <p class="l-eyebrow">Bedtime, the piazza way</p>
+      <h1 class="l-hero-h1">Bedtime stories your&nbsp;child steers.</h1>
+      <p class="l-hero-lede">Painted in watercolor, in your family's languages. You approve every story first.</p>
+      <div class="l-cta">
+        <a class="l-btn l-btn-primary" href="/play">
+          <span class="l-play-icon" aria-hidden="true"></span>Start listening
+        </a>
+        <a class="l-btn l-btn-ghost" href="/parent">I'm a parent</a>
+      </div>
+      <ul class="l-trust" aria-label="Key features">
+        <li class="l-trust-pill">
+          <span class="l-trust-dot l-trust-dot-confirm" aria-hidden="true"></span>
+          No child accounts
+        </li>
+        <li class="l-trust-pill">
+          <span class="l-trust-dot l-trust-dot-accent" aria-hidden="true"></span>
+          You approve everything
+        </li>
+        <li class="l-trust-pill">
+          <span class="l-trust-dot l-trust-dot-info" aria-hidden="true"></span>
+          7 languages
+        </li>
+      </ul>
     </div>
   </header>
 
-  <section class="wrap">
-    <div class="center">
-      <span class="eyebrow">How it works</span>
-      <h2 class="sec">A bedtime app that winds a child <em>down</em>.</h2>
-    </div>
-    <div class="steps">
-      <div class="step">
-        <div class="ico"><img src="/static/img/landing-spot-taps.png" alt="" /></div>
-        <div><h3>Two taps to a story</h3><p>A tap greets your child. Tap a cover; pages turn themselves.</p></div>
+  <section class="l-section l-section-how-works" aria-labelledby="how-works-h">
+    <div class="l-section-inner">
+      <div class="l-section-head">
+        <p class="l-eyebrow">How it works</p>
+        <h2 id="how-works-h" class="l-section-h2">A bedtime app that winds a child <em>down</em>.</h2>
       </div>
-      <div class="step">
-        <div class="ico"><img src="/static/img/landing-spot-choice.png" alt="" /></div>
-        <div><h3>Choices are pictures</h3><p>Two picture cards, spoken labels. A finger picks the path.</p></div>
-      </div>
-      <div class="step">
-        <div class="ico"><img src="/static/img/landing-spot-narrator.png" alt="" /></div>
-        <div><h3>One warm narrator</h3><p>One voice across every language. Every prompt is spoken.</p></div>
+      <div class="l-steps">
+        <div class="l-step">
+          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-taps.png)" role="img" aria-label="Child tapping a story cover"></div>
+          <div class="l-step-body">
+            <h3 class="l-step-h3">Two taps to a story</h3>
+            <p class="l-step-p">A tap greets your child. Tap a cover; pages turn themselves.</p>
+          </div>
+        </div>
+        <div class="l-step">
+          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-choice.png)" role="img" aria-label="Two picture choice cards"></div>
+          <div class="l-step-body">
+            <h3 class="l-step-h3">Choices are pictures</h3>
+            <p class="l-step-p">Two picture cards, spoken labels. A finger picks the path.</p>
+          </div>
+        </div>
+        <div class="l-step">
+          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-narrator.png)" role="img" aria-label="Warm narrator voice waveform"></div>
+          <div class="l-step-body">
+            <h3 class="l-step-h3">One warm narrator</h3>
+            <p class="l-step-p">One voice across every language. Every prompt is spoken.</p>
+          </div>
+        </div>
+        <div class="l-step">
+          <div class="l-step-art l-step-art-placeholder" role="img" aria-label="Parent reviewing a story page"></div>
+          <div class="l-step-body">
+            <h3 class="l-step-h3">You read it first</h3>
+            <p class="l-step-p">Every story waits for a grown-up before it reaches the shelf.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="wrap center">
-    <span class="eyebrow">How it's made</span>
-    <h2 class="sec">Written, narrated, and painted by AI.</h2>
-    <p class="sec-sub">An AI pipeline drafts each story, judges it against nine safety rules, narrates it in one warm voice, and paints every page. A parent approves it before any child hears it.</p>
-    <ol class="pipeline">
-      <li><span class="dot">1</span>Write</li>
-      <li><span class="dot">2</span>Safety</li>
-      <li><span class="dot">3</span>Narrate</li>
-      <li><span class="dot">4</span>Paint</li>
-      <li><span class="dot">5</span>Approve</li>
-    </ol>
-    <a class="ghost-link" href="https://github.com/darth-dodo/cantastorie">View the code on GitHub →</a>
+  <section class="l-section l-section-how-made" aria-labelledby="how-made-h">
+    <div class="l-section-inner l-section-inner-centered">
+      <p class="l-eyebrow">How it's made</p>
+      <h2 id="how-made-h" class="l-section-h2">Written, narrated, and painted by AI.</h2>
+      <p class="l-section-sub">An AI pipeline drafts each story, judges it against nine safety rules, narrates it in one warm voice, and paints every page. A parent approves it before any child hears it.</p>
+      <div class="l-pipeline" role="list" aria-label="Story pipeline steps">
+        <div class="l-pipeline-row">
+          <div class="l-pipeline-step" role="listitem">
+            <div class="l-bead l-bead-confirm" aria-hidden="true"></div>
+            <span class="l-bead-label">Write</span>
+          </div>
+          <div class="l-pipeline-step" role="listitem">
+            <div class="l-bead l-bead-confirm" aria-hidden="true"></div>
+            <span class="l-bead-label">Safety</span>
+          </div>
+          <div class="l-pipeline-step" role="listitem">
+            <div class="l-bead l-bead-confirm" aria-hidden="true"></div>
+            <span class="l-bead-label">Narrate</span>
+          </div>
+          <div class="l-pipeline-step" role="listitem">
+            <div class="l-bead l-bead-confirm" aria-hidden="true"></div>
+            <span class="l-bead-label">Paint</span>
+          </div>
+          <div class="l-pipeline-step" role="listitem">
+            <div class="l-bead l-bead-accent l-bead-accent-halo" aria-hidden="true"></div>
+            <span class="l-bead-label l-bead-label-accent">Approve</span>
+          </div>
+        </div>
+        <p class="l-pipeline-note">Nothing is published automatically. The last bead is a person.</p>
+      </div>
+      <a class="l-ghost-btn" href="https://github.com/darth-dodo/cantastorie" rel="noopener">View the code on GitHub →</a>
+    </div>
   </section>
 
-  <footer>
-    <p><a href="/play">Start listening</a> · <a href="/parent">For parents</a></p>
-    <p class="colophon">Open source (MIT) · Built with <svg class="i solid heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> for little ones</p>
+  <footer class="l-footer">
+    <p class="l-footer-tagline">Goodnight, love.</p>
+    <div class="l-footer-cta">
+      <a class="l-btn l-btn-primary" href="/play">Start listening</a>
+      <a class="l-btn l-btn-ghost" href="/parent">For parents</a>
+    </div>
+    <p class="l-colophon">Open source (MIT) · Built with <span class="l-heart" aria-label="love">♥</span> for little ones</p>
   </footer>
+
 </body>
 </html>
