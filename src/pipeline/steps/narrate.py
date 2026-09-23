@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Literal
 
+from src.pipeline._parallel import parallel_map
 from src.pipeline.cache import ArtifactCache, cache_key, run_step
 from src.pipeline.models import Language, Page, PageAudio
 from src.pipeline.providers import NarrationClient
@@ -100,12 +101,13 @@ def narrate_pages(
     at slice 6). Unchanged page text is a pure cache lookup — zero TTS calls.
     """
     client = client or NarrationClient(settings)
-    narrated: list[Page] = []
-    for page in pages:
+
+    def narrate_one(page: Page) -> Page:
         audio_path = _synthesize_cached(page.text, language, settings, client, cache, PAGE_STEP)
-        audio = PageAudio(file=str(audio_path), timings=[])
-        narrated.append(page.model_copy(update={"audio": audio}))
-    return narrated
+        return page.model_copy(update={"audio": PageAudio(file=str(audio_path), timings=[])})
+
+    # Independent per page; fan out through the bounded pool (order preserved).
+    return parallel_map(narrate_one, pages, settings.pipeline_media_concurrency)
 
 
 def narrate_choice_labels(

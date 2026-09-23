@@ -83,6 +83,10 @@ class RunManager:
         self._settings = settings
         self._generate_pack = generate_pack or _generate_pack
         self._lock = asyncio.Lock()
+        # Throttle state for reap_stale: the progress poll calls it every ~2s,
+        # but a sweep only matters relative to run_stale_after_seconds. None means
+        # "never reaped", so the first call always runs.
+        self._last_reap_at: datetime | None = None
 
     @property
     def store(self) -> RunStore:
@@ -134,9 +138,22 @@ class RunManager:
         to a process that is still alive — a deploy or crash left them stranded
         (AI-417). Each transitions to failed with INTERRUPTED_NOTE. Terminal and
         review-waiting states (staged/approved/rejected/failed) are never swept.
-        The threshold is generous by design so a genuinely-slow run is safe."""
-        cutoff = datetime.now(UTC) - timedelta(seconds=self._settings.run_stale_after_seconds)
-        live = self._store.list_runs(state="queued") + self._store.list_runs(state="running")
+        The threshold is generous by design so a genuinely-slow run is safe.
+
+        Throttled by reap_min_interval_seconds: the progress poll calls this every
+        ~2s, so without a gate the store is swept continuously. Skipping a sweep
+        returns an empty list (no callers use the return on the poll path)."""
+        now = datetime.now(UTC)
+        if self._last_reap_at is not None and (now - self._last_reap_at) < timedelta(
+            seconds=self._settings.reap_min_interval_seconds
+        ):
+            return []
+        self._last_reap_at = now
+        cutoff = now - timedelta(seconds=self._settings.run_stale_after_seconds)
+        # One sweep, filtered in memory: list_runs already fetches every record
+        # and filters state in Python, so two state-filtered calls doubled the
+        # R2 round-trips for no gain.
+        live = [r for r in self._store.list_runs() if r.state in ("queued", "running")]
         reaped: list[RunRecord] = []
         for record in live:
             updated = record.updated_at
@@ -149,5 +166,5 @@ class RunManager:
         return reaped
 
     async def resume_on_boot(self) -> list[RunRecord]:
-        pending = self._store.list_runs(state="queued") + self._store.list_runs(state="running")
+        pending = [r for r in self._store.list_runs() if r.state in ("queued", "running")]
         return [await self.execute(record) for record in pending]
