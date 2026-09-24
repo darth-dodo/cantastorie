@@ -267,44 +267,122 @@ body {
   max-width: 46ch;
 }
 
-/* Steps */
+/* ─── Steps grid ─────────────────────────────────────────────────── */
+
+/* Default: 4-up on wide desktop */
 .l-steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: clamp(18px, 3vw, 30px);
 }
-.l-step { display: flex; align-items: flex-start; gap: 16px; }
+
+/* Tablet: 2-up */
+@media (max-width: 860px) {
+  .l-steps { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Mobile: 1-up */
+@media (max-width: 480px) {
+  .l-steps { grid-template-columns: 1fr; }
+}
+
+/* Individual step: art on top, copy below (column layout) */
+.l-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Wrapper that positions the number badge relative to the art frame */
+.l-step-art-wrap {
+  position: relative;
+  align-self: flex-start;
+  width: 120px;
+}
+
+/* Step number badge — CSS shape, token colours only */
+.l-step-num {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #FFFDF7;
+  font-family: var(--font-app);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 26px;
+  text-align: center;
+  box-shadow: 0 0 0 2.5px var(--surface), 0 2px 6px var(--accent-22);
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Art frame: portrait ratio ~9:16, slightly larger for visibility */
 .l-step-art {
-  width: 96px;
-  height: 172px;
+  width: 120px;
+  height: 214px;
   flex: none;
   border-radius: 14px;
   background-color: var(--field);
   background-size: cover;
-  background-position: center;
+  background-position: center top;
   box-shadow: 0 0 0 1.5px var(--accent-22), var(--card-shadow);
 }
+
 .l-step-art-placeholder {
   background-image: radial-gradient(120% 80% at 50% 20%, var(--accent-22), transparent 70%);
 }
+
 .l-step-body {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding-top: 6px;
 }
 .l-step-h3 {
   font-family: var(--font-app);
   font-weight: 700;
-  font-size: 19px;
+  font-size: 17px;
   color: var(--ink);
 }
 .l-step-p {
   font-family: var(--font-app);
   font-weight: 400;
-  font-size: 14.5px;
+  font-size: 14px;
   line-height: 1.62;
   color: var(--ink-soft);
+}
+
+/* ─── Scroll reveal (one-shot, no loop) ──────────────────────────── */
+.l-step-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 480ms ease,
+    transform 480ms ease;
+}
+/* Stagger via nth-child so each step arrives a beat after the previous */
+.l-step-reveal:nth-child(1) { transition-delay:   0ms; }
+.l-step-reveal:nth-child(2) { transition-delay:  80ms; }
+.l-step-reveal:nth-child(3) { transition-delay: 160ms; }
+.l-step-reveal:nth-child(4) { transition-delay: 240ms; }
+
+.l-step-reveal--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced-motion: skip the animation; show immediately */
+@media (prefers-reduced-motion: reduce) {
+  .l-step-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 /* Pipeline card */

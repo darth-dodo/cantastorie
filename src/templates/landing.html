@@ -22,6 +22,25 @@
   </script>
   <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/landing.css" />
+  <script>
+    /* One-shot scroll reveal for .l-step-reveal — no loop, no polling.
+       Guarded against environments where IntersectionObserver is absent. */
+    document.addEventListener("DOMContentLoaded", function () {
+      if (!("IntersectionObserver" in window)) return;
+      var mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      if (mq && mq.matches) return;
+      var items = document.querySelectorAll(".l-step-reveal");
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add("l-step-reveal--visible");
+            io.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      items.forEach(function (el) { io.observe(el); });
+    });
+  </script>
 </head>
 <body data-page="landing">
 
@@ -80,29 +99,41 @@
         <h2 id="how-works-h" class="l-section-h2">A bedtime app that winds a child <em>down</em>.</h2>
       </div>
       <div class="l-steps">
-        <div class="l-step">
-          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-taps.png)" role="img" aria-label="Child tapping a story cover"></div>
+        <div class="l-step l-step-reveal">
+          <div class="l-step-art-wrap">
+            <span class="l-step-num" aria-hidden="true">1</span>
+            <div class="l-step-art" style="background-image:url(/static/img/landing-spot-taps.png)" role="img" aria-label="Child tapping a story cover"></div>
+          </div>
           <div class="l-step-body">
             <h3 class="l-step-h3">Two taps to a story</h3>
             <p class="l-step-p">A tap greets your child. Tap a cover; pages turn themselves.</p>
           </div>
         </div>
-        <div class="l-step">
-          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-choice.png)" role="img" aria-label="Two picture choice cards"></div>
+        <div class="l-step l-step-reveal">
+          <div class="l-step-art-wrap">
+            <span class="l-step-num" aria-hidden="true">2</span>
+            <div class="l-step-art" style="background-image:url(/static/img/landing-spot-choice.png)" role="img" aria-label="Two picture choice cards"></div>
+          </div>
           <div class="l-step-body">
             <h3 class="l-step-h3">Choices are pictures</h3>
             <p class="l-step-p">Two picture cards, spoken labels. A finger picks the path.</p>
           </div>
         </div>
-        <div class="l-step">
-          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-narrator.png)" role="img" aria-label="Warm narrator voice waveform"></div>
+        <div class="l-step l-step-reveal">
+          <div class="l-step-art-wrap">
+            <span class="l-step-num" aria-hidden="true">3</span>
+            <div class="l-step-art" style="background-image:url(/static/img/landing-spot-narrator.png)" role="img" aria-label="Warm narrator voice waveform"></div>
+          </div>
           <div class="l-step-body">
             <h3 class="l-step-h3">One warm narrator</h3>
             <p class="l-step-p">One voice across every language. Every prompt is spoken.</p>
           </div>
         </div>
-        <div class="l-step">
-          <div class="l-step-art" style="background-image:url(/static/img/landing-spot-review.png)" role="img" aria-label="Parent reviewing a story page"></div>
+        <div class="l-step l-step-reveal">
+          <div class="l-step-art-wrap">
+            <span class="l-step-num" aria-hidden="true">4</span>
+            <div class="l-step-art" style="background-image:url(/static/img/landing-spot-review.png)" role="img" aria-label="Parent reviewing a story page"></div>
+          </div>
           <div class="l-step-body">
             <h3 class="l-step-h3">You read it first</h3>
             <p class="l-step-p">Every story waits for a grown-up before it reaches the shelf.</p>
