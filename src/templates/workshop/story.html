@@ -13,8 +13,8 @@
       <div class="ws-run-head-meta">{{ story.language | language_name }} · {{ story.shape }} · {{ story.pages | length }} pages</div>
     </div>
     {% if record %}
-      {% set chip_labels = {"failed": "rested", "staged": "staged — review"} %}
-      <div class="ws-chip ws-state-{{ record.state }}" style="flex:none">{{ chip_labels.get(record.state, record.state) }}</div>
+      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes", "approved": "on the shelf"} %}
+      <div class="ws-chip ws-chip--fixed ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
     {% endif %}
   </div>
 

@@ -243,6 +243,11 @@ body {
   white-space: nowrap;
 }
 
+/* Replaces ad-hoc style="flex:none" on header chips */
+.ws-chip--fixed {
+  flex: none;
+}
+
 .ws-state-queued   { background: var(--accent-22);   color: var(--accent-text); }
 .ws-state-running  { background: var(--accent-22);   color: var(--accent-text); }
 .ws-state-staged   { background: var(--info-20);     color: var(--info-text); }
@@ -689,6 +694,11 @@ body {
 /* ── Start card spacing ──────────────────────────────────────────────── */
 .ws-start-card + .ws-section-head {
   padding-top: 20px;
+}
+
+/* ── Library link (below start card, above runs) ─────────────────────── */
+.ws-pill--library-link {
+  margin-top: 12px;
 }
 
 /* ── Parent tab shell ────────────────────────────────────────────────── */
