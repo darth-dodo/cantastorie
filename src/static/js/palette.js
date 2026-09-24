@@ -6,7 +6,7 @@
    This file inlines equivalent logic so it can run as a plain sync <script>. */
 
 (function () {
-  var VALID_PALETTES = ["warm", "indigo", "seaglass", "plum"];
+  var VALID_PALETTES = ["indigo"];
   var LS_KEY = "cantastorie-palette";
 
   function resolvePalette(search, stored) {

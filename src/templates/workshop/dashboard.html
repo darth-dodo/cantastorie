@@ -93,12 +93,5 @@
     {% endif %}
   </div>
 
-  {% if debug %}
-  <div class="ws-palette-bar">
-    {% for name in ["warm", "indigo", "seaglass", "plum"] %}
-      <button class="ws-palette-dot ws-palette-dot--{{ name }}" data-palette-name="{{ name }}" title="{{ name }}"></button>
-    {% endfor %}
-  </div>
-  {% endif %}
 </div>
 {% endblock %}

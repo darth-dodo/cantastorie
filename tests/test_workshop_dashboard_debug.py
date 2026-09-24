@@ -1,4 +1,4 @@
-"""Gate the palette bar behind ?debug=1 on the operator dashboard (AI-442)."""
+"""Dashboard renders without a palette bar (AI-453: single indigo palette)."""
 
 from pathlib import Path
 
@@ -18,7 +18,7 @@ def s3() -> S3Client:
         yield client
 
 
-def test_palette_bar_hidden_by_default(tmp_path: Path, s3: S3Client) -> None:
+def test_palette_bar_absent_by_default(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.sign_in()
 
@@ -28,11 +28,12 @@ def test_palette_bar_hidden_by_default(tmp_path: Path, s3: S3Client) -> None:
     assert "ws-palette-bar" not in r.text
 
 
-def test_palette_bar_shown_with_debug(tmp_path: Path, s3: S3Client) -> None:
+def test_palette_bar_absent_with_debug(tmp_path: Path, s3: S3Client) -> None:
+    """Palette bar is removed entirely — even ?debug=1 no longer renders it."""
     harness = _Harness(tmp_path, s3)
     harness.sign_in()
 
     r = harness.client.get("/workshop?debug=1")
 
     assert r.status_code == 200
-    assert "ws-palette-bar" in r.text
+    assert "ws-palette-bar" not in r.text

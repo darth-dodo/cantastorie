@@ -1,7 +1,7 @@
 /* palette-resolve.js — pure palette/theme resolution logic.
    Importable ES module; used by palette.js (inline) and tested by vitest. */
 
-export const VALID_PALETTES = ["warm", "indigo", "seaglass", "plum"];
+export const VALID_PALETTES = ["indigo"];
 
 /**
  * Resolve the active palette name.

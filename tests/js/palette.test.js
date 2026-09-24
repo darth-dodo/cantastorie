@@ -8,34 +8,36 @@ describe("resolvePalette", () => {
     expect(resolvePalette("?foo=bar", null)).toBe("indigo");
   });
 
-  it("uses the ?palette= param when valid", () => {
-    expect(resolvePalette("?palette=warm", null)).toBe("warm");
-    expect(resolvePalette("?palette=seaglass", null)).toBe("seaglass");
-    expect(resolvePalette("?palette=plum", null)).toBe("plum");
+  it("uses the ?palette=indigo param when valid", () => {
     expect(resolvePalette("?palette=indigo", null)).toBe("indigo");
   });
 
-  it("ignores unknown ?palette= values and falls back", () => {
+  it("ignores unknown ?palette= values (warm/seaglass/plum/rainbow) and falls back to indigo", () => {
     expect(resolvePalette("?palette=rainbow", null)).toBe("indigo");
-    expect(resolvePalette("?palette=rainbow", "warm")).toBe("warm");
+    expect(resolvePalette("?palette=warm", null)).toBe("indigo");
+    expect(resolvePalette("?palette=seaglass", null)).toBe("indigo");
+    expect(resolvePalette("?palette=plum", null)).toBe("indigo");
   });
 
-  it("uses stored value when no valid param is present", () => {
-    expect(resolvePalette("", "seaglass")).toBe("seaglass");
-    expect(resolvePalette("?theme=dusk", "plum")).toBe("plum");
+  it("uses stored indigo value when no valid param is present", () => {
+    expect(resolvePalette("", "indigo")).toBe("indigo");
+    expect(resolvePalette("?theme=dusk", "indigo")).toBe("indigo");
   });
 
-  it("param takes precedence over stored value", () => {
-    expect(resolvePalette("?palette=seaglass", "warm")).toBe("seaglass");
+  it("?palette=indigo param takes precedence over stored (no-op with single palette)", () => {
+    expect(resolvePalette("?palette=indigo", "indigo")).toBe("indigo");
   });
 
   it("ignores stored values that are not valid palette names", () => {
     expect(resolvePalette("", "rainbow")).toBe("indigo");
+    expect(resolvePalette("", "warm")).toBe("indigo");
+    expect(resolvePalette("", "seaglass")).toBe("indigo");
+    expect(resolvePalette("", "plum")).toBe("indigo");
     expect(resolvePalette("", "")).toBe("indigo");
   });
 
-  it("valid palettes are warm, indigo, seaglass, plum", () => {
-    expect(VALID_PALETTES).toEqual(["warm", "indigo", "seaglass", "plum"]);
+  it("valid palettes is indigo only", () => {
+    expect(VALID_PALETTES).toEqual(["indigo"]);
   });
 });
 

@@ -20,7 +20,7 @@
 
 import { test, expect } from '@playwright/test';
 
-const PALETTES = ['indigo', 'warm', 'seaglass', 'plum'];
+const PALETTES = ['indigo'];
 
 // ── Helper ──────────────────────────────────────────────────────────────────
 
