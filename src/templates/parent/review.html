@@ -1,0 +1,53 @@
+{% extends "auth/base.html" %}
+{% block title %}Review: {{ story.title }}{% endblock %}
+{% block content %}
+<div class="ws-page">
+  <div class="ws-run-header">
+    <a href="/parent" class="ws-back-btn">‹</a>
+    <div class="ws-run-head-text">
+      <div class="ws-run-head-title">{{ story.title }}</div>
+      <div class="ws-run-head-meta">{{ story.language | language_name }} · {{ story.pages | length }} pages</div>
+    </div>
+    <div class="ws-chip ws-state-staged" style="flex:none">needs your eyes</div>
+  </div>
+
+  <div class="ws-story-pages">
+    {% for page in story.pages %}
+      <div class="ws-page-card ws-card">
+        <div class="ws-page-art-wrap">
+          {% if page.image %}
+            <img class="ws-page-art" src="/parent/staged/{{ story.id }}/assets/{{ page.image }}" alt="Illustration for page {{ loop.index }}" loading="lazy" />
+          {% else %}
+            <div class="ws-page-art ws-page-art-fallback"></div>
+          {% endif %}
+          <div class="ws-page-num">{{ loop.index }}</div>
+        </div>
+        <div class="ws-page-body">
+          <p class="ws-page-text">{{ page.text }}</p>
+          {% if page.audio %}
+            <div class="ws-audio-pill" data-audio-pill>
+              <button class="ws-audio-play" data-audio-play aria-label="Play">▶</button>
+              <div class="ws-audio-track">
+                <div class="ws-audio-progress" data-audio-progress></div>
+              </div>
+              <span class="ws-audio-time" data-audio-time>0:00</span>
+              <audio preload="none" src="/parent/staged/{{ story.id }}/assets/{{ page.audio.file }}" data-audio-src></audio>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if record and record.state == "staged" %}
+    <div class="ws-review-footer">
+      <form method="post" action="{{ base_url }}/{{ record.id }}/approve">
+        <button type="submit" class="ws-pill ws-pill-confirm">Approve &amp; publish</button>
+      </form>
+      <form method="post" action="{{ base_url }}/{{ record.id }}/reject">
+        <button type="submit" class="ws-pill ws-pill-rest">Reject</button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
