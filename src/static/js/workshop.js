@@ -113,32 +113,6 @@
     });
   }
 
-  // ── Palette switcher ───────────────────────────────────────────────────
-  // Persistence lives in palette.js (localStorage "cantastorie-palette");
-  // this file only reflects and forwards the choice.
-  function updateActiveDot() {
-    var current = document.documentElement.getAttribute("data-palette") || "indigo";
-    document.querySelectorAll("[data-palette-name]").forEach(function (dot) {
-      if (dot.dataset.paletteName === current) {
-        dot.setAttribute("data-active", "1");
-      } else {
-        dot.removeAttribute("data-active");
-      }
-    });
-  }
-
-  document.addEventListener("click", function (e) {
-    var dot = e.target.closest("[data-palette-name]");
-    if (!dot) return;
-    var name = dot.dataset.paletteName;
-    if (window.cantastoriePalette) {
-      window.cantastoriePalette.set(name);
-    } else {
-      document.documentElement.setAttribute("data-palette", name);
-    }
-    updateActiveDot();
-  });
-
   // ── Init ───────────────────────────────────────────────────────────────
   function initAll(root) {
     root = root || document;
@@ -146,7 +120,6 @@
       initStepper(el);
     });
     root.querySelectorAll("[data-audio-pill]").forEach(initAudioPill);
-    updateActiveDot();
   }
 
   document.addEventListener("DOMContentLoaded", function () {

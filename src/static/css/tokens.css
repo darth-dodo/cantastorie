@@ -121,7 +121,7 @@
   --rest-text: #D0959C;
   --rest-16:   rgba(192,128,135,.18);
 
-  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(228,183,94,.12), transparent 70%);
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(168,139,224,.12), transparent 70%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -138,7 +138,7 @@
   --accent:   #A88BE0;
   --accent-text: #BFA8EB;
   --info:     #7FA0C4;
-  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(228,183,94,.12), transparent 70%);
+  --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(168,139,224,.12), transparent 70%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
