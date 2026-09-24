@@ -20,13 +20,17 @@ export function resolvePalette(search, stored) {
 /**
  * Resolve the active theme.
  * @param {string} search - location.search string
- * @param {number} [hour] - current hour (0–23); defaults to new Date().getHours()
+ * @param {number} [hour] - current hour (0–23); only used when mode === "auto"
+ * @param {"auto"|null} [mode] - pass "auto" to use the time-based rule (for "By itself")
  * @returns {"light"|"dusk"}
  */
-export function resolveTheme(search, hour) {
+export function resolveTheme(search, hour, mode) {
   const params = new URLSearchParams(search || "");
   const t = params.get("theme");
   if (t === "light" || t === "dusk") return t;
-  const h = hour !== undefined ? hour : new Date().getHours();
-  return h >= 19 ? "dusk" : "light";
+  if (mode === "auto") {
+    const h = hour !== undefined ? hour : new Date().getHours();
+    return h >= 19 ? "dusk" : "light";
+  }
+  return "dusk";
 }

@@ -47,21 +47,34 @@ describe("resolveTheme", () => {
     expect(resolveTheme("?theme=light", 22)).toBe("light");
   });
 
-  it("ignores unknown theme param and falls back to hour rule", () => {
-    expect(resolveTheme("?theme=night", 10)).toBe("light");
+  it("ignores unknown theme param and defaults to dusk", () => {
+    expect(resolveTheme("?theme=night", 10)).toBe("dusk");
     expect(resolveTheme("?theme=night", 20)).toBe("dusk");
   });
 
-  it("auto-selects dusk when hour >= 19", () => {
+  it("defaults to dusk with no ?theme param, regardless of hour", () => {
+    expect(resolveTheme("", 0)).toBe("dusk");
+    expect(resolveTheme("", 10)).toBe("dusk");
+    expect(resolveTheme("", 18)).toBe("dusk");
     expect(resolveTheme("", 19)).toBe("dusk");
     expect(resolveTheme("", 23)).toBe("dusk");
-    expect(resolveTheme("", 21)).toBe("dusk");
   });
 
-  it("auto-selects light when hour < 19", () => {
-    expect(resolveTheme("", 0)).toBe("light");
-    expect(resolveTheme("", 18)).toBe("light");
-    expect(resolveTheme("", 12)).toBe("light");
-    expect(resolveTheme("", 1)).toBe("light");
+  it("auto mode (By itself): dusk when hour >= 19", () => {
+    expect(resolveTheme("", 19, "auto")).toBe("dusk");
+    expect(resolveTheme("", 23, "auto")).toBe("dusk");
+    expect(resolveTheme("", 21, "auto")).toBe("dusk");
+  });
+
+  it("auto mode (By itself): light when hour < 19", () => {
+    expect(resolveTheme("", 0, "auto")).toBe("light");
+    expect(resolveTheme("", 18, "auto")).toBe("light");
+    expect(resolveTheme("", 12, "auto")).toBe("light");
+    expect(resolveTheme("", 1, "auto")).toBe("light");
+  });
+
+  it("?theme param overrides auto mode", () => {
+    expect(resolveTheme("?theme=light", 23, "auto")).toBe("light");
+    expect(resolveTheme("?theme=dusk", 10, "auto")).toBe("dusk");
   });
 });

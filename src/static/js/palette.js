@@ -17,12 +17,15 @@
     return "indigo";
   }
 
-  function resolveTheme(search, hour) {
+  function resolveTheme(search, hour, mode) {
     var params = new URLSearchParams(search || "");
     var t = params.get("theme");
     if (t === "light" || t === "dusk") return t;
-    var h = hour !== undefined ? hour : new Date().getHours();
-    return h >= 19 ? "dusk" : "light";
+    if (mode === "auto") {
+      var h = hour !== undefined ? hour : new Date().getHours();
+      return h >= 19 ? "dusk" : "light";
+    }
+    return "dusk";
   }
 
   var stored = null;
