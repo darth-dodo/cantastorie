@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.auth as auth_module
+import src.api.routes.parent as parent_module
 from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
@@ -113,6 +114,12 @@ class _FakeManager:
         self.executed: list[Any] = []
         self.raise_cap = raise_cap
 
+        class _FakeStore:
+            def list_runs(self, *, family_token: str | None = None, state: Any = None) -> list[Any]:
+                return []
+
+        self.store = _FakeStore()
+
     async def submit(self, family_token: str, request: Any) -> Any:
         if self.raise_cap is not None:
             raise self.raise_cap
@@ -132,6 +139,8 @@ def _packs_client(
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+    # Stub out R2 calls — parent routes now call list_published_stories for tab counts.
+    monkeypatch.setattr(parent_module, "list_published_stories", lambda settings: [])
     # Issuer set so the cap-hit branch can render packs.html (_fapi_host would
     # otherwise try to base64-decode the dummy publishable key). The minted
     # token must carry a matching iss so require_parent still verifies.

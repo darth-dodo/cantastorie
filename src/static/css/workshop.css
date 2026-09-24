@@ -857,3 +857,68 @@ body {
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* ── Accent pill (orchid CTA) ────────────────────────────────────────── */
+.ws-pill-accent {
+  background: var(--accent);
+  box-shadow: 0 6px 16px var(--accent-22);
+  color: #FFFDF7;
+}
+
+/* ── Make-a-story CTA spacing ────────────────────────────────────────── */
+.ws-pill--make-cta {
+  margin-bottom: 14px;
+}
+
+/* ── Make screen note card ───────────────────────────────────────────── */
+.ws-make-note-card {
+  margin-top: 12px;
+  border: 1.5px solid var(--line-12);
+  background: var(--ghost);
+  box-shadow: none;
+}
+
+.ws-make-note-body {
+  font: 500 14px/1.6 var(--font-app);
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* ── Custom-select orchid active border ──────────────────────────────── */
+.ws-select--custom-active {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* ── Textarea field (make screen premise) ────────────────────────────── */
+.ws-textarea {
+  height: auto;
+  padding: 10px 14px;
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ── Shared card ─────────────────────────────────────────────────────── */
+.ws-shared-card {
+  opacity: 0.85;
+}
+
+/* ── Shared badge ────────────────────────────────────────────────────── */
+.ws-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 700 11px var(--font-app);
+  flex: none;
+  white-space: nowrap;
+}
+
+.ws-badge--shared {
+  background: var(--accent-22);
+  color: var(--accent-text);
+}
+
+/* ── Empty state muted line ──────────────────────────────────────────── */
+.ws-empty-muted {
+  font: 500 12px var(--font-app);
+  color: var(--ink-faint);
+  margin-top: 4px;
+}

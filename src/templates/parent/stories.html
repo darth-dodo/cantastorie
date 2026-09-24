@@ -9,12 +9,15 @@
 
   {# ── Tab shell ──────────────────────────────────────────────────────── #}
   <nav class="ws-tabs" aria-label="Parent area">
-    <a href="/parent/stories" class="ws-tab ws-tab--active" aria-current="page">Your stories</a>
-    <a href="/parent" class="ws-tab">Being made</a>
+    <a href="/parent/stories" class="ws-tab ws-tab--active" aria-current="page">Your stories{% if owned_count %} · {{ owned_count }}{% endif %}</a>
+    <a href="/parent" class="ws-tab">Being made{% if inflight_count %} · {{ inflight_count }}{% endif %}</a>
   </nav>
 
   {# ── Exit: child's shelf ─────────────────────────────────────────────── #}
   <a href="/play" class="ws-pill ws-pill-confirm ws-pill--shelf-exit">Child's shelf →</a>
+
+  {# ── Make a story CTA ────────────────────────────────────────────────── #}
+  <a href="/parent/make" class="ws-pill ws-pill-accent ws-pill--make-cta">+ Make a story</a>
 
   {# ── Filter / sort bar ───────────────────────────────────────────────── #}
   <div class="ws-filter-bar">
@@ -80,12 +83,32 @@
         </div>
       {% endfor %}
     {% else %}
+      {# ── Empty state card ──────────────────────────────────────────── #}
       <div class="ws-card ws-empty-card">
-        <div class="ws-empty-title">No published stories yet</div>
-        <div class="ws-empty-sub">approve a story to add it to your shelf</div>
+        <div class="ws-empty-title">No stories yet</div>
+        <div class="ws-empty-sub">make your family's first one above</div>
+        <div class="ws-empty-muted">The shared stories below are already on the shelf tonight.</div>
       </div>
     {% endif %}
   </div>
+
+  {# ── Shared with every family ─────────────────────────────────────────── #}
+  {% if shared_stories %}
+    <div class="ws-section-head">Shared with every family</div>
+    <div class="ws-runs-list">
+      {% for story in shared_stories %}
+        <div class="ws-card ws-run-card ws-shared-card">
+          <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="72" height="72" />
+          <div class="ws-run-card-body">
+            <div class="ws-run-title">{{ story.title }}</div>
+            <div class="ws-run-meta">{{ story.language | language_name }} · on the shelf</div>
+          </div>
+          <span class="ws-badge ws-badge--shared">shared</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
 </div>
 
 <script>

@@ -145,6 +145,15 @@ async def parent_home(
     # Provisioned parents get the packs page with their own runs, newest first.
     runs = manager.store.list_runs(family_token=ctx.family_token)
     runs.sort(key=lambda r: r.created_at, reverse=True)
+    # Count in-flight (queued/running/staged) runs for tab badge.
+    inflight_count = sum(1 for r in runs if r.state in ("queued", "running", "staged"))
+    # Count owned published stories for tab badge.
+    owned = _owned_story_ids(manager, ctx.family_token)
+    owned_count = sum(
+        1
+        for s in list_published_stories(settings)
+        if s.family_token == ctx.family_token and s.id in owned
+    )
     return templates.TemplateResponse(
         request,
         "parent/packs.html",
@@ -154,8 +163,8 @@ async def parent_home(
             "runs": runs,
             "cap_message": None,
             "live": ["queued", "running"],
-            "themes": THEMES,
-            "languages": LANGUAGES,
+            "inflight_count": inflight_count,
+            "owned_count": owned_count,
         },
     )
 
@@ -181,13 +190,11 @@ async def parent_stories(
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
     owned = _owned_story_ids(manager, ctx.family_token)
-    # A family sees only its own overlay lane — never the shared shelf, never
-    # another family's overlay. list_published_stories tags each row's owner.
-    all_stories = [
-        s
-        for s in list_published_stories(settings)
-        if s.family_token == ctx.family_token and s.id in owned
-    ]
+    all_published = list_published_stories(settings)
+    # A family sees only its own overlay lane — never another family's overlay.
+    all_stories = [s for s in all_published if s.family_token == ctx.family_token and s.id in owned]
+    # Shared shelf stories (family_token is None) visible to every family.
+    shared_stories = [s for s in all_published if s.family_token is None]
     # Collect available languages with counts for the filter panel.
     lang_counts: dict[str, int] = {}
     for s in all_stories:
@@ -204,15 +211,50 @@ async def parent_stories(
         # Keep the default order — stories were appended in publish order,
         # reversing gives newest first.
         stories = list(reversed(stories))
+    # Count in-flight runs for the Being Made tab badge.
+    all_runs = manager.store.list_runs(family_token=ctx.family_token)
+    inflight_count = sum(1 for r in all_runs if r.state in ("queued", "running", "staged"))
     return templates.TemplateResponse(
         request,
         "parent/stories.html",
         {
             **context,
             "stories": stories,
+            "shared_stories": shared_stories,
             "lang_counts": lang_counts,
             "active_lang": active_lang,
             "sort": sort or "newest",
+            "owned_count": len(all_stories),
+            "inflight_count": inflight_count,
+        },
+    )
+
+
+@router.get("/make", response_class=HTMLResponse)
+async def parent_make(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
+    """Make-a-story screen — form on its own page, back-button → /parent/stories."""
+    ctx = await _page_identity(request, settings)
+    if ctx is not None and ctx.is_operator:
+        return RedirectResponse(home_path(True), status_code=303)
+    context: dict[str, object] = {
+        "fapi_host": fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+    }
+    if ctx is None:
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    if ctx.family_token is None:
+        context["onboarding"] = True
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    return templates.TemplateResponse(
+        request,
+        "parent/make.html",
+        {
+            **context,
+            "themes": THEMES,
+            "languages": LANGUAGES,
         },
     )
 
@@ -252,16 +294,25 @@ async def request_pack(
     try:
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
+        runs = manager.store.list_runs(family_token=ctx.family_token)
+        runs.sort(key=lambda r: r.created_at, reverse=True)
+        inflight_count = sum(1 for r in runs if r.state in ("queued", "running", "staged"))
+        owned = _owned_story_ids(manager, ctx.family_token)
+        owned_count = sum(
+            1
+            for s in list_published_stories(settings)
+            if s.family_token == ctx.family_token and s.id in owned
+        )
         context: dict[str, object] = {
             "door": "parent",
             "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "family_token": ctx.family_token,  # seeds same-device overlay adoption
-            "runs": [],
+            "runs": runs,
             "cap_message": str(cap),
             "cap_active": cap.active,
-            "themes": THEMES,
-            "languages": LANGUAGES,
+            "inflight_count": inflight_count,
+            "owned_count": owned_count,
         }
         return templates.TemplateResponse(request, "parent/packs.html", context)
     background.add_task(manager.execute, record)

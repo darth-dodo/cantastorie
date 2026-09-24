@@ -1,0 +1,74 @@
+{% extends "auth/base.html" %}
+{% block title %}Make a story{% endblock %}
+{% block content %}
+<div class="ws-page">
+  {# ── Header: back button + title ───────────────────────────────────── #}
+  <div class="ws-run-header">
+    <a href="/parent/stories" class="ws-back-btn" aria-label="Back to your stories">‹</a>
+    <div class="ws-run-head-text">
+      <div class="ws-run-head-title">Make a story</div>
+    </div>
+  </div>
+
+  {# ── Form card ──────────────────────────────────────────────────────── #}
+  <div class="ws-card ws-start-card">
+    <form method="post" action="/parent/packs" class="ws-run-form">
+      <div class="ws-field-grid">
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Theme</span>
+          <div class="ws-field-select-wrap">
+            <select name="theme" class="ws-field ws-select" data-custom-theme>
+              {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
+              <option value="custom">Custom…</option>
+            </select>
+          </div>
+        </div>
+        <div class="ws-field-block ws-field-full" data-custom-premise hidden>
+          <span class="ws-field-label">Your story</span>
+          <textarea name="premise" maxlength="300" rows="3" class="ws-field ws-textarea"
+                    placeholder="a small boat wants to see the moon"></textarea>
+        </div>
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Language</span>
+          <div class="ws-field-select-wrap">
+            <select name="language" class="ws-field ws-select">
+              {% for language in languages %}<option value="{{ language }}">{{ language | language_name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="ws-pill ws-pill-accent">Make our story</button>
+    </form>
+  </div>
+
+  {# ── Note card ──────────────────────────────────────────────────────── #}
+  <div class="ws-card ws-make-note-card">
+    <div class="ws-card-title">This takes about four minutes</div>
+    <p class="ws-make-note-body">You'll review it before anyone hears it — come back when it's done, there's nothing to watch.</p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var sel = document.querySelector("[data-custom-theme]");
+  var box = document.querySelector("[data-custom-premise]");
+  if (!sel || !box) return;
+  function sync() {
+    var isCustom = sel.value === "custom";
+    box.hidden = !isCustom;
+    var inp = box.querySelector("textarea");
+    if (inp) inp.disabled = !isCustom;
+    // Orchid active border on select when Custom is chosen.
+    if (isCustom) {
+      sel.classList.add("ws-select--custom-active");
+    } else {
+      sel.classList.remove("ws-select--custom-active");
+    }
+  }
+  sel.addEventListener("change", sync);
+  sync();
+})();
+</script>
+{% endblock %}

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.auth as auth_module
+import src.api.routes.parent as parent_module
 from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
@@ -62,6 +63,7 @@ def _make_client(
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+    monkeypatch.setattr(parent_module, "list_published_stories", lambda settings: [])
     settings = clerk_settings(clerk_issuer=ISSUER)
     app = FastAPI()
     app.include_router(parent_router)
@@ -74,25 +76,25 @@ def _make_client(
 
 
 def test_custom_theme_reveals_premise_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The packs page includes the hidden premise container (data-custom-premise)."""
+    """The make screen includes the hidden premise container (data-custom-premise)."""
     manager = _FakeManager()
     client = _make_client(monkeypatch, manager)
-    r = client.get("/parent")
+    r = client.get("/parent/make")
     assert r.status_code == 200
     assert "data-custom-premise" in r.text  # hidden field container present
 
 
 def test_four_minute_note_before_button(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The packs page includes the four-minute note."""
+    """The make screen includes the four-minute note."""
     manager = _FakeManager()
     client = _make_client(monkeypatch, manager)
-    r = client.get("/parent")
+    r = client.get("/parent/make")
     assert r.status_code == 200
-    assert "about four minutes" in r.text
+    assert "four minutes" in r.text
 
 
 def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When cap_message is set (via POST to /parent/packs), the form carries ws-form--capped."""
+    """When cap_message is set (via POST to /parent/packs), the packs page shows the cap message."""
     active = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
     running = active.advance("running")
     manager = _FakeManager(
@@ -105,4 +107,4 @@ def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
         data={"theme": "the_sleepy_sea", "language": "it", "count": "1"},
     )
     assert r.status_code == 200
-    assert "ws-form--capped" in r.text  # dim+inert class applied
+    assert "already being made" in r.text  # cap message shown
