@@ -12,8 +12,11 @@
 
 import { expect, test } from "@playwright/test";
 
-// The dev-branching cover is the fifth (last) entry in the it manifest.
-const BRANCHING_COVER_INDEX = 4;
+// The dev-branching cover's title in the it manifest.
+const BRANCHING_COVER_TITLE = "Il bivio della luna";
+
+// The Italian end screen's replay label (main.js end-screen strings).
+const AGAIN = "Di nuovo!";
 
 // The story.json the fixture cover loads — intercepted below to inject cards.
 const STORY_URL = "**/content/it/stories/dev-branching/story.json";
@@ -40,8 +43,8 @@ async function wakeAndOpenBranchingStory(page) {
   // The first tap anywhere wakes the sound...
   await page.locator(".greeting").click();
   await page.waitForFunction(() => window.__shell?.engine.unlocked === true);
-  // ...and the fifth cover opens the branching fixture.
-  await page.locator(".cover").nth(BRANCHING_COVER_INDEX).click();
+  // ...and the branching fixture's cover opens it.
+  await page.getByRole("button", { name: BRANCHING_COVER_TITLE }).click();
   await expect(page.locator(".player")).toBeVisible();
 }
 
@@ -89,8 +92,7 @@ test("a tapped choice leads to that arm's ending", async ({ page }) => {
 
   // With no further taps, the arm plays to its end screen.
   await expect(page.locator(".end")).toBeVisible({ timeout: 20_000 });
-  // The end screen speaks the story's language: "Di nuovo!" is Italian "Again!".
-  await expect(page.getByRole("button", { name: "Di nuovo!" })).toBeVisible();
+  await expect(page.getByRole("button", { name: AGAIN })).toBeVisible();
 });
 
 // Layout regression guard for commit 699cb9e (AI-428). Task 11 added

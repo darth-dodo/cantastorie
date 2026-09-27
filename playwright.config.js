@@ -8,6 +8,7 @@ const PORT = process.env.E2E_PORT ?? "8000";
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 30_000,
+  forbidOnly: !!process.env.CI,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 402, height: 874 },
@@ -21,7 +22,7 @@ export default defineConfig({
     // developer's .env pointing the shell at the R2 bucket, which holds only
     // published production content and none of these fixtures.
     env: { ...process.env, ASSET_BASE: "/static/content" },
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },
 });

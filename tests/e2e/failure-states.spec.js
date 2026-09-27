@@ -16,8 +16,8 @@ test.describe("When Things Go Wrong (product.md)", () => {
     // Every narration file is dead before the night begins; the prompts live.
     await page.route(STORY_AUDIO, (route) => route.abort());
 
-    // Only the Italian fixture ships prompt audio (manifest.prompts), so the
-    // bird's spoken line is only requestable there.
+    // The Italian dev shelf: its fixture narration is .wav and it ships the
+    // audio-retry prompt (the English fixtures are .mp3 with no prompts).
     await page.goto("/play?lang=it&theme=dusk");
     await page.locator(".greeting").click();
     await page.waitForFunction(() => window.__shell?.engine.unlocked === true);
