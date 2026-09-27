@@ -14,12 +14,13 @@ const GESTURE_EVENTS = ["pointerdown", "pointerup", "touchend", "click", "keydow
 
 export function createWaker({ engine, root, doc, onFirstUnlock }) {
   let greeted = false;
+  let disposed = false; // a torn-down waker never greets, even from a pending unlock
 
   function wake(event) {
     engine
       .unlock()
       .then(() => {
-        if (!engine.unlocked || greeted) return;
+        if (disposed || !engine.unlocked || greeted) return;
         // Checked and flipped synchronously, in the same microtask as the
         // unlocked check above: one tap fires pointerdown/pointerup/touchend
         // plus click, and this guard is what keeps that to one greeting.
@@ -44,6 +45,7 @@ export function createWaker({ engine, root, doc, onFirstUnlock }) {
 
   return {
     dispose() {
+      disposed = true;
       for (const type of GESTURE_EVENTS) {
         root.removeEventListener(type, wake, { capture: true });
       }
