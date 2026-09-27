@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPlayback, STORY_START_LOAD_TIMEOUT_MS } from "../../src/static/js/playback.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createPlayback,
+  STALL_POLL_MS,
+  STALL_TIMEOUT_MS,
+  STORY_START_LOAD_TIMEOUT_MS,
+} from "../../src/static/js/playback.js";
 import { createStore } from "../../src/static/js/store.js";
 
 // Playback-loop specs (AI-364), named for the behaviors in docs/product.md
@@ -17,6 +22,7 @@ function fakeEngine() {
   let held = null;
   let prompt = null;
   let state = "idle";
+  let position = 0; // seconds into the live voice; the tests move it by hand
   return {
     calls,
     get state() {
@@ -61,6 +67,12 @@ function fakeEngine() {
     async playPrompt(url, { onEnded } = {}) {
       calls.push(["prompt", url]);
       prompt = { url, onEnded };
+      if (state === "playing") state = "ducked"; // narration dips under the prompt
+    },
+    // The real engine derives this from ctx.currentTime, which freezes
+    // while the context is suspended; here the test drives it.
+    position() {
+      return position;
     },
     stopAll() {
       calls.push(["stopAll"]);
@@ -79,7 +91,12 @@ function fakeEngine() {
     endPrompt() {
       const finished = prompt;
       prompt = null;
+      if (state === "ducked") state = "playing";
       finished?.onEnded?.();
+    },
+    // Test driver: the audio clock's reading. Leaving it alone freezes the voice.
+    setPosition(seconds) {
+      position = seconds;
     },
   };
 }
@@ -693,5 +710,177 @@ describe("Audio won't load (AI-367) — the bird speaks, a tap wakes the story",
     expect(store.state.page).toBe(pageBeforeRetry);
     // The player is still in the player screen, not wedged on end/shelf.
     expect(store.state.screen).toBe("player");
+  });
+});
+
+describe("Stall watchdog (B9) — a frozen voice hands the stage to the sleeping bird", () => {
+  // A suspended audio context freezes ctx.currentTime without any error:
+  // the story looks like it is playing but nothing is heard. The watchdog
+  // notices the position standing still and wakes the bird instead.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    store.toShelf(); // leave the player so the watchdog stops
+    expect(vi.getTimerCount()).toBe(0); // nothing leaks out of a test
+    vi.useRealTimers();
+  });
+
+  async function openAndNarrate() {
+    await openFresh();
+    engine.endPrompt(); // "Si parte!" ends; page 1 narrates
+    expect(engine.state).toBe("playing");
+  }
+
+  it("a voice whose position keeps advancing never wakes the bird", async () => {
+    await openAndNarrate();
+    let seconds = 0;
+    for (let elapsed = 0; elapsed < 5000; elapsed += STALL_POLL_MS) {
+      seconds += STALL_POLL_MS / 1000;
+      engine.setPosition(seconds);
+      vi.advanceTimersByTime(STALL_POLL_MS);
+    }
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("a position frozen for STALL_TIMEOUT_MS holds the voice, wakes the bird once, and speaks the retry line", async () => {
+    await openAndNarrate();
+    const pause = vi.spyOn(engine, "pauseNarration");
+    const audioError = vi.spyOn(store, "audioError");
+
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS - STALL_POLL_MS);
+    expect(store.state.audioError).toBe(false); // not yet: the clock is still counting
+
+    vi.advanceTimersByTime(STALL_POLL_MS);
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(audioError).toHaveBeenCalledTimes(1);
+    // The exact spot is held before the bird takes the stage.
+    expect(pause.mock.invocationCallOrder[0]).toBeLessThan(audioError.mock.invocationCallOrder[0]);
+    expect(store.state.audioError).toBe(true);
+    expect(engine.state).toBe("paused");
+    expect(promptsSpoken()).toEqual([PROMPTS.story_start, PROMPTS.audio_retry]);
+
+    // Still frozen: the bird already holds the stage, nothing fires again.
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(audioError).toHaveBeenCalledTimes(1);
+  });
+
+  it("the retry tap after a stall resumes the held voice mid-sentence — no restart of the page", async () => {
+    await openAndNarrate();
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS);
+    expect(store.state.audioError).toBe(true);
+
+    store.retryAudio(); // the bird was tapped
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(engine.calls).toContainEqual(["resume", "/s/p1.wav"]);
+    expect(narrations()).toEqual(["/s/p1.wav"]);
+    expect(engine.state).toBe("playing");
+  });
+
+  it("a paused story never wakes the bird", async () => {
+    await openAndNarrate();
+    store.togglePlay();
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("a voice ducked under a prompt never wakes the bird", async () => {
+    await openAndNarrate();
+    engine.playPrompt("/p/aside.wav");
+    expect(engine.state).toBe("ducked");
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("the choice overlay never wakes the bird", async () => {
+    const story = fixtureStory();
+    story.pages[0].choice = { options: [{ next_page: "p2" }, { next_page: "p2" }] };
+    await playback.openStory(story);
+    engine.endPrompt();
+    engine.endNarration(); // p1 is the choice page: its audio end opens the overlay
+    expect(store.state.choiceOpen).toBe(true);
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("the resume overlay never wakes the bird", async () => {
+    store = createStore({ page: 3 });
+    engine = fakeEngine();
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    expect(store.state.resumeOpen).toBe(true);
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("off the player screen the watchdog never fires", async () => {
+    await openAndNarrate();
+    const pause = vi.spyOn(engine, "pauseNarration");
+    store.toShelf();
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(pause).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("the start prompt speaking is not a stall", async () => {
+    await openFresh(); // "Si parte!" is still speaking; page 1 waits
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("a page turn resets the stall clock", async () => {
+    await openAndNarrate();
+    vi.advanceTimersByTime(2000); // frozen, but not long enough
+    engine.endNarration(); // the page turns; page 2 narrates
+    expect(store.state.page).toBe(1);
+    vi.advanceTimersByTime(2000); // frozen again: 4 s in all, 2 s on this page
+    expect(store.state.audioError).toBe(false);
+  });
+
+  it("the interval is cleared on the bird waking and on leaving the player — none leak", async () => {
+    // A fresh store and engine, so the default instance above stays out of it.
+    store = createStore();
+    engine = fakeEngine();
+    const live = new Map(); // injected id -> the real timer behind it
+    let nextId = 1;
+    const setIntervalFn = vi.fn((fn, ms) => {
+      const id = nextId++;
+      live.set(id, setInterval(fn, ms));
+      return id;
+    });
+    const clearIntervalFn = vi.fn((id) => {
+      clearInterval(live.get(id));
+      live.delete(id);
+    });
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS, setIntervalFn, clearIntervalFn });
+    await openAndNarrate();
+    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), STALL_POLL_MS);
+    expect(live.size).toBe(1);
+
+    // The bird waking stops the poll...
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS);
+    expect(store.state.audioError).toBe(true);
+    expect(live.size).toBe(0);
+
+    // ...a retry starts it again, and leaving the player stops it.
+    store.retryAudio();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(live.size).toBe(1);
+    store.toShelf();
+    expect(live.size).toBe(0);
+    expect(clearIntervalFn).toHaveBeenCalledTimes(setIntervalFn.mock.calls.length);
+  });
+
+  it("an instance left behind by clearStory never fires, even when the shared engine stalls", async () => {
+    await openAndNarrate();
+    const pause = vi.spyOn(engine, "pauseNarration");
+    playback.clearStory(); // the language switch retires this instance
+    vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
+    expect(pause).not.toHaveBeenCalled();
+    expect(store.state.audioError).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
