@@ -439,3 +439,46 @@ describe("shelf settings (language + theme)", () => {
     expect(document.querySelector(".overlay.settings")).toBeNull();
   });
 });
+
+describe("wake wiring (AI-461): main.js greets on the first real activation", () => {
+  it("a tap on the greeting header wakes the engine and speaks the greeting once", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const engine = fakeEngine();
+    const playPrompt = engine.playPrompt.bind(engine);
+    const promptUrls = [];
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn: manifestFetch, engine });
+
+    const greeting = document.querySelector(".greeting");
+    greeting.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    greeting.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+    greeting.click();
+
+    await vi.waitFor(() => expect(engine.unlocked).toBe(true));
+    expect(promptUrls).toEqual(["/static/content/it/prompts/greeting.wav"]);
+
+    // A later, unrelated tap re-arms the wake but never greets a second time.
+    document.querySelector(".settings-gear").click();
+    expect(promptUrls).toEqual(["/static/content/it/prompts/greeting.wav"]);
+  });
+
+  it("a cover-first tap unlocks but never greets — the cover click starts the story instead", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const engine = fakeEngine();
+    const playPrompt = engine.playPrompt.bind(engine);
+    const promptUrls = [];
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn: routedFetch, engine });
+
+    document.querySelector(".cover").click();
+
+    await vi.waitFor(() => expect(engine.unlocked).toBe(true));
+    expect(promptUrls).not.toContain("/static/content/it/prompts/greeting.wav");
+  });
+});
