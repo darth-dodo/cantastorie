@@ -176,12 +176,10 @@ test('gate: wrong answer shows error message; correct answer (13) passes', async
   // Gate modal is still open.
   await expect(page.locator('.gate-modal')).toBeVisible();
 
-  // Now tap the correct answer (13).
-  const correctBtn = page.locator('.gate-choice', { hasText: '13' });
-  await correctBtn.click();
-
-  // Gate dismisses (the backdrop is removed from the DOM on pass).
-  await expect(page.locator('.gate-backdrop')).not.toBeVisible();
+  // Now tap the correct answer (13): the gate opens the door to the parent area.
+  const toParent = page.waitForRequest((r) => new URL(r.url()).pathname === '/parent');
+  await page.locator('.gate-choice', { hasText: '13' }).click();
+  await toParent;
 });
 
 test('gate: back button dismisses without passing', async ({ page }) => {
@@ -195,14 +193,6 @@ test('gate: back button dismisses without passing', async ({ page }) => {
   await expect(page.locator('.gate-backdrop')).not.toBeVisible();
   // Settings sheet should still be visible after gate is dismissed.
   await expect(page.locator('.settings-sheet')).toBeVisible();
-});
-
-// Audio autoplay in headless Chromium is blocked by policy.
-// The play-pause button and audio engine are present in the DOM, but
-// driven by Web Audio unlock (a user gesture) — we skip the playback
-// assertion rather than faking a pass.
-test.skip('audio: play-pause triggers narration (skipped — headless autoplay blocked)', async ({ page }) => {
-  // Would test: page.locator('button.play-pause').click() → audio starts.
 });
 
 // ── 3. Per-palette smoke: shelf renders and --accent resolves to orchid ──────

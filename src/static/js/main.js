@@ -402,9 +402,8 @@ export async function init(
                 else root.documentElement.setAttribute("data-palette", name);
               },
               onClose: () => closeSettings(),
-              onWorkshop: () => {
-                // Task 10 will wire the gate; no-op for now.
-              },
+              // Past the grown-up gate: the parent area (Clerk decides the door).
+              onWorkshop: () => root.defaultView?.location.assign("/parent"),
               doc: root,
             }),
           );
