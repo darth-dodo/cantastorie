@@ -7,6 +7,7 @@ import {
   buildPlayer,
   updatePlayer,
 } from '../../src/static/js/screens.js';
+import { LANGS } from '../../src/static/js/main.js';
 
 // A minimal player view with per-page text, mirroring what playerView()
 // produces from a loaded story.json.
@@ -37,10 +38,13 @@ describe('settingsCopy', () => {
     }
   });
 
-  it('has truthy keys for all 7 language codes', () => {
-    expect(LANG_CODES).toHaveLength(7);
-    expect(LANG_CODES).toContain('it');
-    expect(LANG_CODES).toContain('ru');
+  it('offers exactly the player roster (main.js LANGS), in order', () => {
+    expect(LANG_CODES).toEqual(LANGS.map((l) => l.code));
+  });
+
+  it('every language has its own copy, not the English fallback', () => {
+    for (const code of LANG_CODES.filter((c) => c !== 'en'))
+      expect(settingsCopy(code), code).not.toBe(settingsCopy('en'));
   });
 });
 
@@ -107,8 +111,8 @@ describe('readWithMe toggles on-screen page text', () => {
     expect(texts.every((t) => t.style.display === 'none')).toBe(true);
   });
 
-  it('LANG_CODES is exported in the it..ru order', () => {
+  it('LANG_CODES is exported in the it..mr order', () => {
     expect(LANG_CODES[0]).toBe('it');
-    expect(LANG_CODES[6]).toBe('ru');
+    expect(LANG_CODES.at(-1)).toBe('mr');
   });
 });

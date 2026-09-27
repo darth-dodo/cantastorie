@@ -12,11 +12,11 @@ describe('sortShelf', () => {
 });
 
 describe('cycleLanguage', () => {
-  it('cycles through all 7 languages and wraps', () => {
-    const order = ['it','es','en','el','de','bg','ru'];
+  it('cycles through all 8 languages and wraps', () => {
+    const order = ['it','es','en','el','de','bg','ru','mr'];
     let cur = 'it'; const seen = [cur];
-    for (let i = 0; i < 7; i++) { cur = cycleLanguage(cur); seen.push(cur); }
-    expect(seen.slice(0,7)).toEqual(order);
-    expect(seen[7]).toBe('it'); // wraps
+    for (let i = 0; i < 8; i++) { cur = cycleLanguage(cur); seen.push(cur); }
+    expect(seen.slice(0,8)).toEqual(order);
+    expect(seen[8]).toBe('it'); // wraps
   });
 });

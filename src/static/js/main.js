@@ -31,7 +31,7 @@ const PALETTE_LABELS = {
 
 const PAGE_SECONDS = 3.8;
 
-const LANGS = [
+export const LANGS = [
   { code: "it", label: "Italiano" },
   { code: "es", label: "Español" },
   { code: "en", label: "English" },

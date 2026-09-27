@@ -61,10 +61,10 @@ export function sortShelf(entries) {
   return [...family, ...shared];
 }
 
-export const LANG_CODES = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru'];
-const LANG_FLAGS = { it: '🇮🇹', es: '🇪🇸', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺' };
-const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ' };
-const LANG_NAMES = { it: 'Italiano', es: 'Español', en: 'English', el: 'Ελληνικά', de: 'Deutsch', bg: 'Български', ru: 'Русский' };
+export const LANG_CODES = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru', 'mr'];
+const LANG_FLAGS = { it: '🇮🇹', es: '🇪🇸', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺', mr: '🇮🇳' };
+const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ', mr: 'मरा' };
+const LANG_NAMES = { it: 'Italiano', es: 'Español', en: 'English', el: 'Ελληνικά', de: 'Deutsch', bg: 'Български', ru: 'Русский', mr: 'मराठी' };
 
 // Read-with-me: persisted to localStorage. When ON the player shows page text.
 const READ_WITH_ME_KEY = 'cantastorie-read-with-me';
@@ -188,6 +188,21 @@ const SETTINGS_COPY = {
     gateHeading:  'Родительский код',
     gateWrong:    'Неверный код, попробуй ещё раз',
     gateBack:     'Назад',
+  },
+  mr: {
+    languages:    'भाषा',
+    light:        'प्रकाश',
+    lightDay:     'दिवस',
+    lightAuto:    'आपोआप',
+    lightEvening: 'संध्याकाळ',
+    lightHint:    'संध्याकाळी आपोआप अंधार होतो',
+    grownups:     'मोठ्यांसाठी',
+    readWithMe:   'माझ्यासोबत वाचा',
+    workshop:     'कार्यशाळा',
+    close:        'झाले',
+    gateHeading:  'पालक कोड',
+    gateWrong:    'चुकीचा कोड, पुन्हा प्रयत्न करा',
+    gateBack:     'मागे',
   },
 };
 

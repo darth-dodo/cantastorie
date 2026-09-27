@@ -406,8 +406,8 @@ describe("shelf settings (language + light)", () => {
     gear.click();
     const sheet = document.querySelector(".settings-sheet");
     expect(sheet).not.toBeNull();
-    // 7 language tiles
-    expect([...sheet.querySelectorAll(".settings-lang-tile")]).toHaveLength(7);
+    // 8 language tiles
+    expect([...sheet.querySelectorAll(".settings-lang-tile")]).toHaveLength(8);
     // 3 light tiles
     expect([...sheet.querySelectorAll(".settings-light-tile")]).toHaveLength(3);
   });
