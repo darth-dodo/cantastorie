@@ -77,15 +77,24 @@ e2e test enforces it), so a rested run never reads as an ordinary action.
 Legacy aliases (`--terracotta`, `--sage`, `--honey`, `--sea`…) remain at the
 bottom of `tokens.css` for older `player.css` rules.
 
-**Theme selection.** `palette.js` runs synchronously in `<head>` and sets
-`data-theme` before first paint:
+**Theme selection.** One rule, `resolveTheme` in
+[`palette-resolve.js`](../../src/static/js/palette-resolve.js), used by
+`palette.js` (synchronously in `<head>`, before first paint), the child
+player's boot, and the settings sheet:
 
 - `?theme=light|dusk` wins;
+- then the stored *Light* choice (`localStorage["cantastorie-theme"]`:
+  `light`, `dusk` or `auto`);
 - otherwise **dusk** (AI-459).
 
-The child player applies the same rule at boot (`main.js` `pickTheme`). The
-settings sheet's *Light* section offers **Day**, **By itself** (dusk from
-19:00 to 07:00, light otherwise) and **Evening**.
+The settings sheet's *Light* section offers **Day**, **By itself** (`auto`:
+dusk from 19:00 to 07:00, light otherwise) and **Evening**; the stored
+choice shows as the selected tile and survives reloads.
+
+**The moon.** The mascot moon is orchid-lit in both the landing nav and the
+child shelf, drawn from shared `--moon-light`, `--moon-mid`, `--moon-ink`,
+`--moon-crater` and `--moon-shade` tokens with `--accent` at the rim. By day
+(light mode) the shelf mascot is a gold sun.
 
 ## The child player
 
@@ -105,7 +114,8 @@ settings sheet's *Light* section offers **Day**, **By itself** (dusk from
   **The workshop**, locked behind the grown-up math gate) — closed by a
   **Done** pill. All copy is localized per language.
 - **Grown-up gate.** A sum with three picture-free number choices; wrong
-  answers say so, *Back* dismisses.
+  answers say so, *Back* dismisses, the right answer opens the parent area
+  (`/parent`).
 - **End screen.** Replay and back-to-shelf blobs, in the story's language
   ("Di nuovo!" / "Un'altra storia?").
 
@@ -115,13 +125,25 @@ Server-rendered on the shared `auth/base.html` shell (Clerk sign-in), styled
 by `workshop.css` with calmed shapes.
 
 - **Tabs with counts**: *Your stories · N* and *Being made · N*.
-- **Your stories**: a filter bar (*All languages ▾*, *Sort ▾*), the family's
-  own stories, and an empty state when there are none. Family stories are
+- **Header**: *Your shelf* over "stories made just for your family", with a
+  compact sage *Child's shelf →* pill beside it; a quiet *Sign out* sits top
+  right once Clerk confirms a user.
+- **Your stories**: two equal filter pills (*All languages ▾*, *Sort ▾*;
+  Newest sorts by publish time), the family's own stories (orchid-ringed
+  thumbnail, *ours* badge), and an empty state when there are none. Family stories are
   **delete-only**: a quiet `×` arms to *Delete for good?*. There is no hide.
-- **Shared with every family**: read-only cards with a *shared* badge and
+- **Shared with every family**: read-only cards with a periwinkle *shared* badge and
   *on the shelf* — no delete, no hide.
 - **Make a story** (`/parent/make`) is its own screen with a back button, a
-  note card, and the orchid *Make our story* button.
+  note card, and the orchid *Make our story* button (dark `--on-accent`
+  text). While a story is already cooking, or the day's cap is used, the
+  **One story at a time** `--rest` card sits above the form, the form dims
+  to .45 and the button is disabled.
+- **Being made**: one compact row per run — title, language, state chip, a
+  small bead line with the current step, and *Review N pages* once staged.
+  Rows poll every 2 s while queued or running. A failed run shows only
+  "rested at <step> · nothing was published"; the pipeline error stays on
+  the operator bench.
 - **Staged review** (`/parent/staged/{id}`): the story page by page before
   approval, family-scoped.
 
