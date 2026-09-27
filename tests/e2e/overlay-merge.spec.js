@@ -53,7 +53,7 @@ test("family overlay merges onto the shared shelf", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
 
   // Shared-only first (no token yet) to establish the baseline count.
-  await page.goto("/?lang=en", { waitUntil: "networkidle" });
+  await page.goto("/play?lang=en", { waitUntil: "networkidle" });
   await page.waitForSelector(".cover-caption");
   const sharedCount = await page.locator(".cover-caption").count();
   expect(sharedCount, "expected the shared EN fixture shelf to render").toBeGreaterThan(0);
@@ -83,7 +83,7 @@ test("no family token → shared shelf only, zero overlay requests", async ({ pa
     if (r.url().includes("/families/")) overlayRequests.push(r.url());
   });
 
-  await page.goto("/?lang=en", { waitUntil: "networkidle" });
+  await page.goto("/play?lang=en", { waitUntil: "networkidle" });
   await page.waitForSelector(".cover-caption");
 
   expect(
