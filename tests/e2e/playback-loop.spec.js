@@ -3,18 +3,26 @@
 // docs/architecture.md -> "Whole-story prefetch". The dev fixture story
 // "La barchetta e la luna" narrates each page with a seconds-long chime,
 // so the whole night runs hands-free in well under a minute.
+//
+// The default child language is English now (#61), and this fixture lives on
+// the Italian dev shelf (with the Italian prompt audio), so the night opens
+// with ?lang=it; the end screen's replay and shelf labels are the Italian ones
+// from main.js's end-screen strings.
 
 import { expect, test } from "@playwright/test";
 
 const STORY_BASE = "/static/content/it/stories/la-barchetta-e-la-luna/";
+const STORY_TITLE = "La barchetta e la luna";
+const AGAIN = "Di nuovo!";
+const ANOTHER_STORY = "Un'altra storia?";
 
 async function wakeAndOpenTheStory(page) {
-  await page.goto("/play?theme=dusk");
+  await page.goto("/play?lang=it&theme=dusk");
   // Given the shelf: the first tap anywhere wakes the sound...
   await page.locator(".greeting").click();
   await page.waitForFunction(() => window.__shell?.engine.unlocked === true);
   // ...when the cover is tapped, the story opens.
-  await page.locator(".cover").first().click();
+  await page.getByRole("button", { name: STORY_TITLE }).click();
   await expect(page.locator(".player")).toBeVisible();
 }
 
@@ -49,8 +57,8 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
 
     // ...and the end screen offers replay and back-to-shelf pictures.
     await expect(page.locator(".end")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Again!" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Another story" })).toBeVisible();
+    await expect(page.getByRole("button", { name: AGAIN })).toBeVisible();
+    await expect(page.getByRole("button", { name: ANOTHER_STORY })).toBeVisible();
   });
 
   test("the end prompt plays on the end screen, and replay starts the story over", async ({ page }) => {
@@ -63,8 +71,8 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
     await expect(page.locator(".end")).toBeVisible({ timeout: 30_000 });
     expect(endPromptRequests.length).toBeGreaterThan(0);
 
-    // When "Again!" is tapped, the story begins again from page 1...
-    await page.getByRole("button", { name: "Again!" }).click();
+    // When "Di nuovo!" (again) is tapped, the story begins again from page 1...
+    await page.getByRole("button", { name: AGAIN }).click();
     await expect(page.locator(".player")).toBeVisible();
     await expect(page.locator(".page-wash.current")).toHaveAttribute("data-page", "0");
 

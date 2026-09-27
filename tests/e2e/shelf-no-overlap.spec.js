@@ -1,31 +1,17 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { openSevenCoverShelf, SEVEN_COVER_MANIFEST } from "./seven-cover-shelf.js";
 
-const PROD = "https://cantastorie.onrender.com";
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXED_CSS = readFileSync(join(__dirname, "..", "..", "src", "static", "css", "player.css"), "utf-8");
-
-// Regression for the shelf overlap bug (EN manifest has 7 covers; the overlap
-// only manifests at 5+ covers, which the local content/ fixture never has).
-// Covers must not overlap vertically: each row's covers must sit fully below
-// the previous row's covers, with the grid gap preserved.
-//
-// Reproduces the user's report exactly: load the REAL production bucket
-// manifest (asset-base meta already points at the R2 public URL on prod) and
-// serve the FIXED local CSS so the test pins the fix, not the deployed build.
+// Regression for the shelf overlap bug (#59): the EN manifest had 7 covers and
+// the overlap only manifests at 5+ covers, which the local EN fixture (3
+// stories) never reaches. Covers must not overlap vertically: each row's
+// covers must sit fully below the previous row's covers, with the grid gap
+// preserved. Runs on a stubbed 7-cover EN shelf with real cover art (see
+// seven-cover-shelf.js), against this checkout's own JS and CSS.
 test("shelf covers do not overlap on the 7-cover EN manifest", async ({ page }) => {
-  await page.route("**/static/css/player.css", (route) =>
-    route.fulfill({ contentType: "text/css", body: FIXED_CSS }),
-  );
-
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
-  await page.goto(`${PROD}/play?lang=en`, { waitUntil: "networkidle" });
-  await page.waitForSelector(".covers .cover");
-  await page.waitForTimeout(1500);
+  await openSevenCoverShelf(page);
 
   const covers = await page.evaluate(() => {
     return [...document.querySelectorAll(".covers .cover")].map((c) => {
@@ -34,7 +20,9 @@ test("shelf covers do not overlap on the 7-cover EN manifest", async ({ page }) 
     });
   });
 
-  expect(covers.length, "expected the EN manifest's 7 covers").toBeGreaterThanOrEqual(5);
+  expect(covers.length, "expected the stubbed EN manifest's 7 covers").toBe(
+    SEVEN_COVER_MANIFEST.stories.length,
+  );
 
   // Cluster covers into columns by their left edge (viewport-agnostic: side-by-
   // side covers share a left; the two columns are the distinct left values).
