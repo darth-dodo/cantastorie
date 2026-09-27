@@ -627,6 +627,23 @@ describe("Audio won't load (AI-367) — the bird speaks, a tap wakes the story",
     expect(promptsSpoken()).toContain(PROMPTS.audio_retry);
   });
 
+  it("a load failure while the context is locked plays no prompt; while unlocked it plays once", async () => {
+    engine = failingEngine();
+    engine.unlocked = false; // a prompt started now would sit frozen until the retry tap
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
+    await playback.openStory(fixtureStory());
+    engine.endPrompt(); // "Si parte!" ends; page 1's voice rejects
+    await flush();
+    expect(store.state.audioError).toBe(true);
+    expect(promptsSpoken()).not.toContain(PROMPTS.audio_retry);
+
+    engine.unlocked = true; // the bird's tap wakes the context; the wire is still dead
+    store.retryAudio();
+    await flush();
+    expect(store.state.audioError).toBe(true);
+    expect(promptsSpoken().filter((url) => url === PROMPTS.audio_retry)).toHaveLength(1);
+  });
+
   it("retryAudio() re-narrates the same page once the network is back", async () => {
     engine = failingEngine(1); // fail once, then recover
     playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS });
@@ -750,7 +767,7 @@ describe("Stall watchdog (B9) — a frozen voice hands the stage to the sleeping
     expect(store.state.audioError).toBe(false);
   });
 
-  it("a position frozen for STALL_TIMEOUT_MS holds the voice, wakes the bird once, and speaks the retry line", async () => {
+  it("a position frozen for STALL_TIMEOUT_MS holds the voice and wakes the bird once, silently", async () => {
     await openAndNarrate();
     const pause = vi.spyOn(engine, "pauseNarration");
     const audioError = vi.spyOn(store, "audioError");
@@ -765,7 +782,7 @@ describe("Stall watchdog (B9) — a frozen voice hands the stage to the sleeping
     expect(pause.mock.invocationCallOrder[0]).toBeLessThan(audioError.mock.invocationCallOrder[0]);
     expect(store.state.audioError).toBe(true);
     expect(engine.state).toBe("paused");
-    expect(promptsSpoken()).toEqual([PROMPTS.story_start, PROMPTS.audio_retry]);
+    expect(promptsSpoken()).toEqual([PROMPTS.story_start]); // a stall never speaks
 
     // Still frozen: the bird already holds the stage, nothing fires again.
     vi.advanceTimersByTime(STALL_TIMEOUT_MS * 2);
@@ -912,10 +929,14 @@ describe("Stall watchdog (B9) — a frozen voice hands the stage to the sleeping
     expect(promptsSpoken()).toEqual([PROMPTS.story_start]);
   });
 
-  it("a stall while the context is unlocked speaks the retry line once", async () => {
+  it("a stall never speaks the retry line, even while the context reads unlocked", async () => {
+    // The frozen clock is the stall: a prompt started now could only play
+    // late, over the resumed story, whatever the context claims.
     await openAndNarrate();
+    expect(engine.unlocked).toBe(true);
     vi.advanceTimersByTime(STALL_TIMEOUT_MS * 3);
-    expect(promptsSpoken().filter((url) => url === PROMPTS.audio_retry)).toHaveLength(1);
+    expect(store.state.audioError).toBe(true);
+    expect(promptsSpoken()).not.toContain(PROMPTS.audio_retry);
   });
 
   describe("a hidden tab — the wake on return gets its chance first", () => {

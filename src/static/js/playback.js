@@ -64,10 +64,13 @@ export function createPlayback({
   function wakeBird({ hold }) {
     if (hold) engine.pauseNarration();
     store.audioError();
-    // The bird speaks its line — banked by prefetch on the cover tap, so it
-    // plays even on the flaky network that caused a failure. Only into a
-    // running context: a prompt started while suspended would sit frozen
-    // and play from its first word on the retry tap, over the resumed story.
+    // A stall never speaks: it means the audio clock itself is frozen, so a
+    // prompt started now could only play late — from its first word, on the
+    // retry tap, over the resumed story. The bird alone holds the stage.
+    if (hold) return;
+    // A load failure speaks the bird's line — banked by prefetch on the cover
+    // tap, so it plays even on the flaky network that caused the failure.
+    // Only into a running context, for the same reason a stall stays quiet.
     if (prompts.audio_retry && engine.unlocked) {
       engine.playPrompt(prompts.audio_retry).catch(() => {});
     }
