@@ -318,7 +318,17 @@ export async function init(
       if (!url || event.target.closest(".cover") || event.target.closest(".settings-gear")) {
         return;
       }
-      engine.playPrompt(url).catch((err) => console.warn("greeting skipped", err));
+      // Bank the buffer first and greet only if the child is still on the
+      // shelf, like the end prompt. A greeting landing after a cover tap
+      // would silence "Si parte!" — a silenced prompt never fires its
+      // onEnded, so the story would never be released to start.
+      engine
+        .load(url)
+        .then(() => {
+          if (store.state.screen !== "shelf") return undefined;
+          return engine.playPrompt(url);
+        })
+        .catch((err) => console.warn("greeting skipped", err));
     },
   });
 

@@ -136,4 +136,28 @@ describe("createWaker", () => {
 
     expect(engine.unlock).not.toHaveBeenCalled();
   });
+
+  it("an unlock still pending at dispose() never greets when it resolves", async () => {
+    const engine = fakeEngine();
+    let finishUnlock;
+    engine.unlock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishUnlock = () => {
+            engine.unlocked = true;
+            resolve();
+          };
+        }),
+    );
+    const onFirstUnlock = vi.fn();
+    const waker = createWaker({ engine, root, doc: document, onFirstUnlock });
+
+    root.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    waker.dispose(); // the player is torn down while resume() is in flight
+    finishUnlock();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onFirstUnlock).not.toHaveBeenCalled();
+  });
 });
