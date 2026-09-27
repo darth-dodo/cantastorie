@@ -99,6 +99,18 @@ describe("player shell", () => {
     expect(document.querySelector('meta[name="asset-base"]').content).toBe(ASSET_BASE);
   });
 
+  it("defaults the child player to dusk by day too — whole app is dark by default (AI-459)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 27, 12, 0)); // noon
+    try {
+      document.body.innerHTML = '<main id="app"></main>';
+      running = await init(document, { fetchFn: manifestFetch });
+      expect(document.documentElement.dataset.theme).toBe("dusk");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("boots a manifest-driven shelf", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch });
