@@ -10,8 +10,10 @@
     </div>
   </div>
 
-  {# ── Form card ──────────────────────────────────────────────────────── #}
-  <div class="ws-card ws-start-card">
+  {% include "parent/_cap_card.html" %}
+
+  {# ── Form card (dimmed and inert while a cap blocks a new run) ───────── #}
+  <div class="ws-card ws-start-card{% if cap_message %} ws-form--capped{% endif %}">
     <form method="post" action="/parent/packs" class="ws-run-form">
       <div class="ws-field-grid">
         <div class="ws-field-block ws-field-full">
@@ -37,7 +39,7 @@
           </div>
         </div>
       </div>
-      <button type="submit" class="ws-pill ws-pill-accent">Make our story</button>
+      <button type="submit" class="ws-pill ws-pill-accent"{% if cap_message %} disabled{% endif %}>Make our story</button>
     </form>
   </div>
 

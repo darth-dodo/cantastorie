@@ -41,7 +41,7 @@ from src.pipeline.publish import (
     publish_story,
     unpublish_story,
 )
-from src.workshop.manager import RunCapExceeded, RunManager
+from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
 from src.workshop.records import InvalidTransition, PackRequest
 
 if TYPE_CHECKING:
@@ -189,6 +189,7 @@ async def parent_stories(
     if ctx is not None and ctx.is_operator:
         return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
+        "door": "parent",
         "fapi_host": fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),
     }
@@ -240,12 +241,14 @@ async def parent_stories(
 async def parent_make(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
 ) -> Response:
     """Make-a-story screen — form on its own page, back-button → /parent/stories."""
     ctx = await _page_identity(request, settings)
     if ctx is not None and ctx.is_operator:
         return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
+        "door": "parent",
         "fapi_host": fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),
     }
@@ -254,6 +257,10 @@ async def parent_make(
     if ctx.family_token is None:
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    # One story at a time: show the cap up front, not after the form is filled.
+    cap = blocking_cap(
+        manager.store.list_runs(family_token=ctx.family_token), settings.parent_daily_run_cap
+    )
     return templates.TemplateResponse(
         request,
         "parent/make.html",
@@ -261,6 +268,8 @@ async def parent_make(
             **context,
             "themes": THEMES,
             "languages": LANGUAGES,
+            "cap_message": str(cap) if cap else None,
+            "cap_active": cap.active if cap else None,
         },
     )
 
@@ -422,6 +431,7 @@ async def parent_staged_story(
         request,
         "parent/review.html",
         {
+            "door": "parent",  # sign-out returns to the parent door
             "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "story": story,

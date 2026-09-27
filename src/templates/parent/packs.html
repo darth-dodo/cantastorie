@@ -12,13 +12,7 @@
 <div class="ws-page">
   {% set active = "packs" %}{% include "parent/_header.html" %}
 
-  {% if cap_message %}
-    <div class="ws-card ws-card--rest" data-cap-message>
-      <div class="ws-card-title">One story at a time</div>
-      <p>{{ cap_message }}</p>
-      {% if cap_active %}{% set _cap_labels = {"failed": "rested", "staged": "needs your eyes", "approved": "on the shelf"} %}<p>Your current story is <strong>{{ _cap_labels.get(cap_active.state, cap_active.state) }}</strong>.</p>{% endif %}
-    </div>
-  {% endif %}
+  {% include "parent/_cap_card.html" %}
 
   <div class="ws-runs-list">
     {% if runs %}

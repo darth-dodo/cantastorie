@@ -307,3 +307,35 @@ def test_sort_newest_orders_by_approval_time_not_id(monkeypatch: pytest.MonkeyPa
     text = client.get("/parent/stories").text
     assert text.index('data-story-id="a-story"') < text.index('data-story-id="b-story"')
     assert text.index('data-story-id="b-story"') < text.index('data-story-id="c-story"')
+
+
+# ── Make screen: the one-story-at-a-time state is designed, up front ─────────
+
+
+def test_make_screen_shows_cap_card_and_inert_form_while_a_story_is_cooking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run = _make_queued_run()
+    client = _make_client(monkeypatch, _FakeManager({run.id: run}))
+    text = client.get("/parent/make").text
+    assert "data-cap-message" in text
+    assert "One story at a time" in text
+    assert "ws-form--capped" in text
+    assert 'type="submit" class="ws-pill ws-pill-accent" disabled' in text
+
+
+def test_make_screen_is_open_when_nothing_is_cooking(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _make_client(monkeypatch, _FakeManager({}))
+    text = client.get("/parent/make").text
+    assert "data-cap-message" not in text
+    assert "ws-form--capped" not in text
+
+
+@pytest.mark.parametrize("path", ["/parent/make", "/parent/stories"])
+def test_parent_pages_sign_in_through_the_parent_door(
+    monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """Signed out, every parent page's sign-in returns to the parent area."""
+    client = _make_client(monkeypatch, _FakeManager({}))
+    client.cookies.clear()
+    assert 'data-auth-door="parent"' in client.get(path).text
