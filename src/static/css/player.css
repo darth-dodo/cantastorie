@@ -257,7 +257,11 @@ button.presses:active {
   object-fit: cover;
 }
 
-.cover:not(:has(.cover-art)) { width: 100%; aspect-ratio: 5 / 6; }
+/* No cover art: the wash is the cover, sized like .cover-art */
+.cover:not(:has(.cover-art)) {
+  width: 100%;
+  aspect-ratio: 5 / 6;
+}
 
 .cover span {
   flex: 0 0 auto;

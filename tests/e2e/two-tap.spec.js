@@ -25,6 +25,17 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
   await page.goto("/play?lang=it&theme=light&speed=600");
   await expect(page.locator(".shelf .cover")).toHaveCount(IT_SHELF_COVERS);
 
+  // The IT dev covers carry no cover art: the wash is the cover. Each must
+  // still be a real, tappable box (#82 collapsed art-less covers to 0x0).
+  for (const cover of await page.locator(".shelf .cover").all()) {
+    const label = await cover.getAttribute("aria-label");
+    await expect(cover.locator("img.cover-art"), `${label}: art-less fixture`).toHaveCount(0);
+    const box = await cover.boundingBox();
+    expect(box, `${label}: art-less cover has a layout box`).not.toBeNull();
+    expect(box.width, `${label}: art-less cover collapsed to zero width`).toBeGreaterThan(0);
+    expect(box.height, `${label}: art-less cover collapsed to zero height`).toBeGreaterThan(0);
+  }
+
   const start = Date.now();
 
   // Tap 1: anywhere on the shelf — wakes the AudioContext, greeting plays.
