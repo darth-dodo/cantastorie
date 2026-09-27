@@ -280,6 +280,10 @@ button.presses:active {
 }
 
 .cover {
+  /* Explicit width: inside the centred .cover-card flex column a width-less
+     button shrink-wraps its content, so a wash-only cover (no <img>) collapsed
+     to 0×0 — invisible and untappable. */
+  width: 100%;
   aspect-ratio: 5 / 6;
   box-shadow: var(--sticker-ring), var(--card-shadow);
   display: flex;
@@ -303,23 +307,24 @@ button.presses:active {
   object-fit: cover;
 }
 
-/* Wobble — four cover shapes, alternating tilt */
-.cover:nth-child(4n+1) {
+/* Wobble — four cover shapes, alternating tilt. Keyed on the card: each
+   .cover is the only button in its .cover-card, so .cover:nth-child is always 1. */
+.cover-card:nth-child(4n+1) .cover {
   border-radius: 58% 42% 55% 45% / 52% 48% 40% 60%;
   transform: rotate(-2deg);
 }
 
-.cover:nth-child(4n+2) {
+.cover-card:nth-child(4n+2) .cover {
   border-radius: 45% 55% 48% 52% / 55% 45% 58% 42%;
   transform: rotate(2deg);
 }
 
-.cover:nth-child(4n+3) {
+.cover-card:nth-child(4n+3) .cover {
   border-radius: 50% 50% 44% 56% / 46% 54% 52% 48%;
   transform: rotate(1.5deg);
 }
 
-.cover:nth-child(4n+4) {
+.cover-card:nth-child(4n+4) .cover {
   border-radius: 52% 48% 58% 42% / 50% 50% 45% 55%;
   transform: rotate(-1.5deg);
 }
