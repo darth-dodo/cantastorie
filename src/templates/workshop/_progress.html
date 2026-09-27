@@ -1,9 +1,8 @@
 {# Polled progress fragment. While live it polls; once settled it stops.
    Beads use monotone fill: a step is done when its checkpoint dir exists OR
    any later step's does (revise only runs when safety demands a rewrite).
-   Parametrized (AI-411): the parent surface reuses this fragment with a
-   different poll base_url and operator controls hidden. Defaults preserve the
-   workshop's rendering byte-for-byte. #}
+   Operator-only since AI-460: parents render parent/_run_row.html, which
+   never shows the pipeline error. is_operator stays as a guard. #}
 {% set base_url = base_url | default("/workshop/runs") %}
 {% set is_operator = is_operator | default(true) %}
 {% set step_names = ["write", "revise", "safety", "narrate", "illustrate", "assemble"] %}
@@ -70,22 +69,9 @@
           {% endfor %}
         </div>
       {% endif %}
-    {% elif record.state == "staged" %}
-      <div class="ws-progress-sub">Your stories are made — review every page before adding to your family's shelf.</div>
-      {% if staged_stories %}
-        <div class="ws-review-pills">
-          {% for story in staged_stories %}
-            <a href="/parent/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="parent-review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
-          {% endfor %}
-        </div>
-      {% else %}
-        <form method="post" action="{{ base_url }}/{{ record.id }}/approve" class="ws-review-pills">
-          <button type="submit" class="ws-pill ws-pill-confirm" data-testid="parent-approve">Add to our shelf</button>
-        </form>
-      {% endif %}
     {% endif %}
 
-    {% if record.state == "failed" and record.error %}
+    {% if is_operator and record.state == "failed" and record.error %}
       <pre class="ws-error-box">{{ record.error }}</pre>
     {% endif %}
 
