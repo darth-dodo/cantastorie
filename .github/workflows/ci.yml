@@ -161,6 +161,16 @@ jobs:
       - name: Run Playwright
         run: npx playwright test
 
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   # ===========================================================================
   # Security Scan
   # ===========================================================================
