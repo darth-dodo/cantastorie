@@ -6,10 +6,21 @@
 # Deployment Instructions:
 # 1. Connect the GitHub repository to Render.com
 # 2. Create a new "Blueprint" and point to this render.yaml
-# 3. Deploy — the app needs no secrets; pipeline keys stay local
+# 3. Deploy, then set the sync: false variables in the dashboard (docs/setup.md)
 #
 # Runs the Dockerfile, whose first stage compiles the Tailwind stylesheet.
 # =============================================================================
+
+# -----------------------------------------------------------------------------
+# Preview environments (AI-464): every pull request gets its own short-lived
+# copy of this Blueprint at a temporary onrender.com URL, rebuilt on each push
+# and deleted when the PR merges or closes. Setup and caveats: docs/setup.md.
+# -----------------------------------------------------------------------------
+previews:
+  generation: automatic
+  # A preview left idle this long is deleted, so forgotten PRs don't keep
+  # billing a Starter instance.
+  expireAfterDays: 3
 
 services:
   # ---------------------------------------------------------------------------
@@ -34,9 +45,36 @@ services:
     envVars:
       - key: ASSET_BASE
         sync: false
+        # Previews serve the bundled dev fixtures, same-origin: the R2 bucket's
+        # CORS policy (deploy/r2-cors.json) lists exact origins only, so a
+        # preview's onrender.com host could not fetch published stories.
+        previewValue: /static/content
       - key: CONTENT_DIR
         value: /tmp/cantastorie-content
       - key: STAGING_DIR
         value: /tmp/cantastorie-staging
       - key: PYTHON_VERSION
         value: "3.12"
+
+      # --- Previews are read-only --------------------------------------------
+      # A PR preview must never publish to the live bucket, write a family's
+      # data, or spend generation credit. Blank Clerk keys make /parent and
+      # /workshop answer 404 (src/config.py), which closes every write path;
+      # dummy write keys are a second lock in case a route ever slips past.
+      # Production values are set in the dashboard (sync: false) and are
+      # untouched by these preview-only overrides.
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+        previewValue: ""
+      - key: CLERK_JWKS_URL
+        sync: false
+        previewValue: ""
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+        previewValue: preview-disabled
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+        previewValue: preview-disabled
+      - key: OPENROUTER_API_KEY
+        sync: false
+        previewValue: preview-disabled
