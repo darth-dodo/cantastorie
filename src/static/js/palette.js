@@ -17,13 +17,17 @@
     return "indigo";
   }
 
+  var THEME_KEY = "cantastorie-theme";
+
+  // Mirrors resolveTheme in palette-resolve.js (tested there).
   function resolveTheme(search, hour, mode) {
     var params = new URLSearchParams(search || "");
     var t = params.get("theme");
     if (t === "light" || t === "dusk") return t;
+    if (mode === "light" || mode === "dusk") return mode;
     if (mode === "auto") {
       var h = hour !== undefined ? hour : new Date().getHours();
-      return h >= 19 ? "dusk" : "light";
+      return h >= 19 || h < 7 ? "dusk" : "light";
     }
     return "dusk";
   }
@@ -33,8 +37,13 @@
     stored = localStorage.getItem(LS_KEY);
   } catch (_) {}
 
+  var themeMode = null;
+  try {
+    themeMode = localStorage.getItem(THEME_KEY);
+  } catch (_) {}
+
   var palette = resolvePalette(location.search, stored);
-  var theme = resolveTheme(location.search);
+  var theme = resolveTheme(location.search, undefined, themeMode);
 
   // Persist when palette was set via ?palette= param.
   var params = new URLSearchParams(location.search);

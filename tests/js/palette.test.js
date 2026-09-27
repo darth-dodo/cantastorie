@@ -66,11 +66,25 @@ describe("resolveTheme", () => {
     expect(resolveTheme("", 21, "auto")).toBe("dusk");
   });
 
-  it("auto mode (By itself): light when hour < 19", () => {
-    expect(resolveTheme("", 0, "auto")).toBe("light");
-    expect(resolveTheme("", 18, "auto")).toBe("light");
+  it("auto mode (By itself): dusk through the night, until 07:00", () => {
+    expect(resolveTheme("", 0, "auto")).toBe("dusk");
+    expect(resolveTheme("", 1, "auto")).toBe("dusk");
+    expect(resolveTheme("", 6, "auto")).toBe("dusk");
+  });
+
+  it("auto mode (By itself): light from 07:00 until 19:00", () => {
+    expect(resolveTheme("", 7, "auto")).toBe("light");
     expect(resolveTheme("", 12, "auto")).toBe("light");
-    expect(resolveTheme("", 1, "auto")).toBe("light");
+    expect(resolveTheme("", 18, "auto")).toBe("light");
+  });
+
+  it("a stored light or dusk choice sticks, regardless of hour", () => {
+    expect(resolveTheme("", 22, "light")).toBe("light");
+    expect(resolveTheme("", 10, "dusk")).toBe("dusk");
+  });
+
+  it("unknown stored modes fall back to the dusk default", () => {
+    expect(resolveTheme("", 10, "sepia")).toBe("dusk");
   });
 
   it("?theme param overrides auto mode", () => {

@@ -439,6 +439,37 @@ describe("shelf settings (language + light)", () => {
     expect(lightTiles[2].classList.contains("selected")).toBe(true);
   });
 
+  it("a light choice survives a reload, and its tile shows selected", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    // Click Day (first tile).
+    document.querySelectorAll(".settings-light-tile")[0].click();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    running.stop?.();
+
+    // Reboot the player: the choice holds and Day is the selected tile.
+    document.documentElement.dataset.theme = "";
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    expect(document.documentElement.dataset.theme).toBe("light");
+    document.querySelector(".settings-gear").click();
+    const tiles = [...document.querySelectorAll(".settings-light-tile")];
+    expect(tiles.map((t) => t.classList.contains("selected"))).toEqual([true, false, false]);
+  });
+
+  it("By itself shows as selected once chosen", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    document.querySelectorAll(".settings-light-tile")[1].click();
+    running.stop?.();
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    expect(document.querySelectorAll(".settings-light-tile")[1].classList.contains("selected")).toBe(true);
+  });
+
   it("the close pill dismisses the sheet", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });

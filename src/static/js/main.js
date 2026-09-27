@@ -8,7 +8,7 @@ import { createAudioEngine } from "./audio-engine.js";
 import { createPlayback } from "./playback.js";
 import { createPrefetcher } from "./prefetch.js";
 import { loadStory, shelf as fallbackShelf } from "./story.js";
-import { VALID_PALETTES } from "./palette-resolve.js";
+import { VALID_PALETTES, resolveTheme, loadThemeMode } from "./palette-resolve.js";
 import {
   buildShelf,
   buildPlayer,
@@ -46,14 +46,6 @@ const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!", el: "Γεια σο
 const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?", el: "Ποια ιστορία σήμερα;", de: "Welche Geschichte heute?", bg: "Коя история днес?", ru: "Какую историю сегодня?", mr: "आज कोणती गोष्ट?" };
 const RESUMES = { it: "Continua o ricomincia?", es: "¿Continuar o empezar de nuevo?", en: "Continue or start over?", el: "Συνέχεια ή από αρχή;", de: "Weiter oder von vorne?", bg: "Продължи или започни отначало?", ru: "Продолжить или начать заново?", mr: "पुढे चालू ठेवायचे की पुन्हा सुरू करायचे?" };
 const ENDS = { it: { title: "Fine!", again: "Di nuovo!", prompt: "Un'altra storia?" }, es: { title: "¡Fin!", again: "¡Otra vez!", prompt: "¿Otra historia?" }, en: { title: "The End!", again: "Again!", prompt: "Another story?" }, el: { title: "Τέλος!", again: "Ξανά!", prompt: "Άλλη ιστορία;" }, de: { title: "Ende!", again: "Nochmal!", prompt: "Eine andere Geschichte?" }, bg: { title: "Край!", again: "Отново!", prompt: "Друга история?" }, ru: { title: "Конец!", again: "Ещё раз!", prompt: "Другая история?" }, mr: { title: "समाप्त!", again: "पुन्हा!", prompt: "आणखी एक गोष्ट?" } };
-
-// The whole app defaults to dusk (AI-459, mirrors palette.js); ?theme=
-// overrides, and the settings "By itself" tile opts into the clock.
-function pickTheme(params) {
-  const forced = params.get("theme");
-  if (forced === "light" || forced === "dusk") return forced;
-  return "dusk";
-}
 
 function pickLang(params, saved) {
   const lang = params.get("lang") ?? saved ?? "";
@@ -212,8 +204,7 @@ export async function init(
   if (!app) return null;
 
   const params = new URLSearchParams(root.defaultView?.location.search ?? "");
-  const theme = pickTheme(params);
-  root.documentElement.dataset.theme = theme;
+  root.documentElement.dataset.theme = resolveTheme(params.toString(), undefined, loadThemeMode());
 
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";

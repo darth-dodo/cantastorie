@@ -4,6 +4,7 @@
 
 import { story, shelf, coverSrc } from "./story.js";
 import { PAGE_COUNT } from "./store.js";
+import { resolveTheme, loadThemeMode, saveThemeMode } from "./palette-resolve.js";
 
 // What the player screen shows for the open story. The mock backs covers
 // whose stories the pipeline hasn't produced yet; playerView() derives a
@@ -405,37 +406,17 @@ export function buildSettingsOverlay({
   lightHeading.textContent = copy.light;
   const lightGrid = el("div", "settings-light-grid");
 
-  // Current theme from html element
-  function getCurrentTheme() {
-    return doc?.documentElement?.dataset?.theme ?? "light";
-  }
-
-  // "By itself" = auto = recompute from hour on next palette.js call; we represent
-  // it as re-applying the time-based logic now, then clearing any forced state.
+  // The stored Light choice; dusk is the default (AI-459).
+  const currentMode = loadThemeMode() ?? "dusk";
   const lightOptions = [
-    { key: "lightDay",     theme: "light" },
-    { key: "lightAuto",    theme: "auto" },
-    { key: "lightEvening", theme: "dusk" },
+    { key: "lightDay",     mode: "light" },
+    { key: "lightAuto",    mode: "auto" },
+    { key: "lightEvening", mode: "dusk" },
   ];
 
-  function applyTheme(theme) {
-    if (theme === "auto") {
-      const h = new Date().getHours();
-      const resolved = h >= 19 || h < 7 ? "dusk" : "light";
-      if (doc?.documentElement) doc.documentElement.dataset.theme = resolved;
-    } else {
-      if (doc?.documentElement) doc.documentElement.dataset.theme = theme;
-    }
-  }
-
-  lightOptions.forEach(({ key, theme }) => {
+  lightOptions.forEach(({ key, mode }) => {
     const tile = el("button", "settings-light-tile");
-    const currentTheme = getCurrentTheme();
-    const isSelected =
-      theme === "auto"
-        ? false // auto never shows as selected; its resolved value matches day or dusk
-        : currentTheme === theme;
-    if (isSelected) tile.classList.add("selected");
+    if (mode === currentMode) tile.classList.add("selected");
 
     // CSS shape icon
     const icon = el("div", `settings-light-icon settings-light-icon--${key}`);
@@ -445,11 +426,8 @@ export function buildSettingsOverlay({
     tile.addEventListener("click", () => {
       lightGrid.querySelectorAll(".settings-light-tile").forEach((t) => t.classList.remove("selected"));
       tile.classList.add("selected");
-      applyTheme(theme);
-      // Notify palette system if available
-      if (globalThis.cantastoriePalette?.set) {
-        // palette.js persists the palette; theme is separate — handled above
-      }
+      saveThemeMode(mode);
+      if (doc?.documentElement) doc.documentElement.dataset.theme = resolveTheme("", undefined, mode);
     });
     lightGrid.appendChild(tile);
   });
