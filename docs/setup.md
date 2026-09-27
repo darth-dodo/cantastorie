@@ -95,6 +95,24 @@ published/prompts/it/…
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
 
+### Preview environments (AI-464)
+
+`render.yaml` turns on Render **preview environments**: every pull request gets its own short-lived copy of the Blueprint on a temporary `onrender.com` URL. The preview is rebuilt on each push and deleted when the PR merges or closes, or after 3 idle days (`expireAfterDays`). Render posts the URL on the PR, so a change can be opened on a phone before it merges.
+
+**A preview is read-only by construction.** It must never publish to the live bucket, write a family's data, or spend generation credit. `previewValue` overrides in `render.yaml` apply only to previews; the production values set in the dashboard are untouched.
+
+| Variable | In a preview | Why |
+|----------|--------------|-----|
+| `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL` | empty | With Clerk unset, `/parent` and `/workshop` answer **404**, which closes every write path |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `OPENROUTER_API_KEY` | `preview-disabled` | A second lock: nothing can publish or generate even if a route slips past |
+| `ASSET_BASE` | `/static/content` | Same-origin dev fixtures. The R2 CORS policy (`deploy/r2-cors.json`) lists exact origins, so a preview host could not fetch published stories |
+
+`tests/test_render_previews.py` builds settings from these `previewValue`s and asserts the result: landing, player and `/health` answer 200; the parent area and workshop answer 404.
+
+**What a preview shows:** the landing page, the child player, and the settings sheet, all against the fixture shelf. **What it doesn't:** the parent area and workshop (Clerk-gated), and real published art. Review those locally, or on production after merge.
+
+**Turning it on:** preview environments are a Render workspace feature. **Unverified:** whether it needs a paid workspace tier (Render's pricing page decides this). If the Blueprint sync reports previews as unavailable, enable them in **Blueprint → Settings → Preview environments**, or upgrade the workspace. Each live preview bills as its own Starter instance while it exists; the 3-day expiry bounds that cost.
+
 ---
 
 ## 4. Clerk (parent + workshop sign-in, ADR-003)
@@ -192,4 +210,5 @@ On a phone on **cellular** (not home wifi), open the Render URL and confirm:
 ## Cost
 
 - **Render Starter**: ~$7/month, always-on (the cold-start decision — a bedtime app is opened cold nightly, and the free tier's spin-down would blow the 4-second first-open budget).
+- **Preview environments**: one extra Starter instance per open PR, prorated, and deleted after merge, close or 3 idle days.
 - **R2**: zero egress fees; storage for the launch library is pennies.
