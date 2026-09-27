@@ -219,7 +219,7 @@ On return the context is suspended, so `start()` schedules nothing audible and `
 
 **Fix**: make unlock idempotent and re-run it on `visibilitychange`; add a narration watchdog that flips to the existing audio-error state if playback position stops advancing.
 
-**Resolved** 2026-09-27: see [`docs/plans/2026-09-27-audio-wake.md`](../plans/2026-09-27-audio-wake.md) (Linear AI-461).
+**Fixed in code** 2026-09-27 (Linear AI-461; see [`docs/plans/2026-09-27-audio-wake.md`](../plans/2026-09-27-audio-wake.md)). The plan's real-device checklist is still pending; B9 is confirmed fixed only once it passes on real devices.
 
 ---
 
