@@ -6,7 +6,7 @@
     <a href="/workshop" class="ws-back-btn">‹</a>
     <div class="ws-run-head-text">
       <div class="ws-run-head-title">{% if record.request.premise %}{{ record.request.premise }}{% else %}{{ record.request.theme.replace("_", " ") }}{% endif %}</div>
-      <div class="ws-run-head-meta">{{ record.request.language }} · {{ record.request.count }} stor{{ "y" if record.request.count == 1 else "ies" }} · {{ rel_time(record.created_at) }}</div>
+      <div class="ws-run-head-meta">{{ record.request.language | language_name }} · {{ record.request.count }} stor{{ "y" if record.request.count == 1 else "ies" }} · {{ rel_time(record.created_at) }}</div>
     </div>
   </div>
   {% include "workshop/_progress.html" %}

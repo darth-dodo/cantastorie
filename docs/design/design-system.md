@@ -1,152 +1,192 @@
 # Cantastorie Design System — the sticker-book
 
-> Warm, wobbly, and slow. Bedtime, not Saturday cartoons.
+> Wobbly and slow, lit by moonlight. Bedtime, not Saturday cartoons.
 
 Source of truth: the Claude Design project *Cantastorie design system*
-(Foundations + Prototype, locked from explorations 3a + 3b). This document
-records how those foundations live in code.
+(`design_handoff/` — `Cantastorie Foundations.dc.html` and
+`Cantastorie Site.dc.html` are interactive references, not code to copy).
+This document records how those foundations live in code after the design
+overhaul (AI-441, branch `feature/design-overhaul`, 2026-09-13 → 2026-09-27).
+
+## Contents
+
+- [Where it lives](#where-it-lives)
+- [The rules, briefly](#the-rules-briefly)
+- [Colour: one palette, two modes](#colour-one-palette-two-modes)
+- [The child player](#the-child-player)
+- [The parent area](#the-parent-area)
+- [The workshop](#the-workshop)
+- [The journey](#the-journey)
 
 ## Where it lives
 
 | Layer | File |
 |-------|------|
-| Tokens (color, type, motion, shape) — 4 palettes × 2 modes | [`src/static/css/tokens.css`](../../src/static/css/tokens.css) |
-| Palette selection (whole app) | [`src/static/js/palette.js`](../../src/static/js/palette.js) |
-| Screens & components (child player) | [`src/static/css/player.css`](../../src/static/css/player.css) |
+| Tokens (colour, type, motion, shape) — indigo × light/dusk | [`src/static/css/tokens.css`](../../src/static/css/tokens.css) |
+| Theme selection, before first paint | [`src/static/js/palette.js`](../../src/static/js/palette.js) (testable twin: [`palette-resolve.js`](../../src/static/js/palette-resolve.js)) |
+| Child player screens & components | [`src/static/css/player.css`](../../src/static/css/player.css), [`src/static/js/screens.js`](../../src/static/js/screens.js) |
+| Child player boot, languages, end screen copy | [`src/static/js/main.js`](../../src/static/js/main.js) |
 | State machine | [`src/static/js/store.js`](../../src/static/js/store.js) |
-| Rendering | [`src/static/js/screens.js`](../../src/static/js/screens.js) |
-| Workshop screens (operator) | [`src/static/css/workshop.css`](../../src/static/css/workshop.css) + [`src/templates/workshop/`](../../src/templates/workshop/) + [`src/static/js/workshop.js`](../../src/static/js/workshop.js) |
+| Parent area + workshop (server-rendered) | [`src/static/css/workshop.css`](../../src/static/css/workshop.css), [`src/templates/parent/`](../../src/templates/parent/), [`src/templates/workshop/`](../../src/templates/workshop/), [`src/static/js/workshop.js`](../../src/static/js/workshop.js) |
+| Landing page | [`src/static/css/landing.css`](../../src/static/css/landing.css) |
 
 ## The rules, briefly
 
-- **Four palettes, two modes.** Colour is now a two-axis system (see
-  [Palettes](#palettes)): a palette (`indigo` default, plus `warm`, `seaglass`,
-  `plum`) crossed with a mode — light and dusk (lamplit). The shelf follows the
-  clock (dusk from 19:00); `?palette=` and `?theme=` override for development.
-  The player itself always lives at dusk — stories are bedtime.
+- **One palette, two modes, dusk by default.** Moonlit indigo in light and
+  dusk. The whole app — landing, child player, parent area, workshop — opens
+  at dusk. See [Colour](#colour-one-palette-two-modes).
+- **Semantic tokens, never raw hues.** Screens reference `--surface`,
+  `--ink`, `--primary`, `--accent`… — never a hex. The single allowed literal
+  is `#FFFDF7`, the text colour on filled buttons.
+- **Orchid means *make*.** `--accent` (orchid `#A88BE0`) is reserved for the
+  create call-to-action (`ws-pill-accent`: "+ Make a story", "Make our
+  story"). Indigo `--primary` carries other actions; sage `--confirm` carries
+  navigation and confirmation.
 - **Two typefaces only.** Baloo 2 for everything the app says; Literata for
-  everything the story says (reading mode, later).
-- **The wobble** belongs to the child's world: blob border-radii (42–58% /
-  40–60%), tilts ±1.5–3° alternating, sticker rings. Parent UI keeps the
-  palette but calms the shapes.
-- **Watercolor washes** are 2–3 radial gradients of accent colors over a warm
-  base — placeholders until pipeline art lands.
-- **Glow, not lightness, at dusk.** Halos of moonlight at 15–25% alpha replace
-  bright surfaces.
-- **Slow crossfades only** (600–900 ms). Nothing snaps, flashes, or bounces.
-- **Beads, never numbers.** Progress is a string of colored beads; the current
-  one is bright, the past ones settled, the future ones faint.
-- **Child targets ≥ 96 px**; parent UI and reading-mode words ≥ 44 px.
+  everything the story says.
+- **The wobble belongs to the child's world**: blob border-radii (42–58% /
+  40–60%), alternating tilts of ±1.5–2°, sticker rings. Parent and operator UI
+  keep the tokens but calm the shapes.
+- **Glow, not lightness, at dusk.** `--page-glow` halos replace bright
+  surfaces.
+- **Slow crossfades only** (`--fade` 900 ms, `--fade-quick` 600 ms). Nothing
+  snaps, flashes, or bounces.
+- **Beads, never numbers.** Progress is a string of beads — in the player and
+  on the pipeline's run card alike.
+- **Child targets ≥ 96 px** where the design allows, never under 48 px (an
+  e2e test pins every shelf cover at ≥ 48 px); parent UI ≥ 44 px.
 
-## Palettes
+## Colour: one palette, two modes
 
-Colour used to be a single warm cream-and-terracotta look. It is now a
-**two-axis system**: a *palette* (the hues) crossed with a *mode* (light or
-dusk). Both the child shelf/player and the operator workshop obey it.
+The overhaul collapsed the four-palette system (indigo, warm, seaglass, plum)
+to **indigo only** (AI-453). `<html>` still carries `data-palette="indigo"`
+so the selector shape is stable, but no other value is accepted.
 
-| Palette | Name | Feel |
-|---------|------|------|
-| `indigo` **(default)** | Moonlit indigo | Cool slate and periwinkle — the new house look. |
-| `warm` | Warm cream | The original Anthropic-adjacent cream and terracotta. |
-| `seaglass` | Sea glass & slate | Muted teal-green over cool stone. |
-| `plum` | Plum & lantern | Soft aubergine with a lantern-gold accent. |
+| Token | Light | Dusk | Role |
+|-------|-------|------|------|
+| `--surface` | `#F2F4F8` | `#1C2130` | Page ground |
+| `--card` | `#FFFFFF` | `#2A3044` | Raised surfaces, sheets |
+| `--ink` / `--ink-soft` | `#2F3646` / `#7C8598` | `#E8EBF2` / `#97A0B5` | Text, captions |
+| `--primary` | `#5566A8` | `#8B9AD6` | Default action |
+| `--confirm` | `#5E8A72` | `#7FA98D` | Navigation, confirm |
+| `--accent` | `#A88BE0` | `#A88BE0` | Orchid — the make CTA |
+| `--rest` | `#A85E68` | `#C08087` | A run that stopped ("rested") |
 
-**Semantic tokens, not raw hues.** [`tokens.css`](../../src/static/css/tokens.css)
-defines one semantic set — `--surface`, `--card`, `--ink`, `--primary`,
-`--confirm`, `--accent`, `--info`, `--rest`, and their derived alphas — for
-every palette × mode. Screens reference the semantic names; they never hardcode
-a hex. Legacy aliases (`--terracotta → --primary`, `--sage → --confirm`,
-`--honey → --accent`, `--sea → --info`) let `player.css` and the shelf ride the
-system without a rewrite.
+`--rest` is deliberately distinct from `--primary` in both modes (a tokens
+e2e test enforces it), so a rested run never reads as an ordinary action.
+Legacy aliases (`--terracotta`, `--sage`, `--honey`, `--sea`…) remain at the
+bottom of `tokens.css` for older `player.css` rules.
 
-**Selection contract.** `<html>` carries `data-palette` and `data-theme`.
-A tiny synchronous head script,
-[`palette.js`](../../src/static/js/palette.js), sets both before first paint
-(no flash):
+**Theme selection.** One rule, `resolveTheme` in
+[`palette-resolve.js`](../../src/static/js/palette-resolve.js), used by
+`palette.js` (synchronously in `<head>`, before first paint), the child
+player's boot, and the settings sheet:
 
-- **palette** = `?palette=` if valid (and persisted) → else
-  `localStorage["cantastorie-palette"]` → else `indigo`.
-- **theme** = `?theme=light|dusk` → else dusk when the local hour ≥ 19.
+- `?theme=light|dusk` wins;
+- then the stored *Light* choice (`localStorage["cantastorie-theme"]`:
+  `light`, `dusk` or `auto`);
+- otherwise **dusk** (AI-459).
 
-It exposes `window.cantastoriePalette.set(name)` for the switcher UI (the
-four-dot row on the workshop bench). No-JS fallback is indigo light.
+The settings sheet's *Light* section offers **Day**, **By itself** (`auto`:
+dusk from 19:00 to 07:00, light otherwise) and **Evening**; the stored
+choice shows as the selected tile and survives reloads.
 
-## The user journey
+**The moon.** The mascot moon is orchid-lit in both the landing nav and the
+child shelf, drawn from shared `--moon-light`, `--moon-mid`, `--moon-ink`,
+`--moon-crater` and `--moon-shade` tokens with `--accent` at the rim. By day
+(light mode) the shelf mascot is a gold sun.
 
-Captured from the running shell (402×874, `make dev` + Playwright):
+## The child player
+
+- **Shelf.** A sphere-lit moon mascot with a spoken greeting, a two-column
+  grid of wobbly covers, a language sticker (one tap cycles the eight
+  languages) and a settings button drawn as 2×2 dots. Each cover is a
+  `.cover-card`: the tappable `.cover` plus its caption *below* the art, never
+  over it. Family stories carry an orchid ring and a star badge and sort
+  first.
+- **Portrait covers.** A cover shows `story.cover` (the pipeline's portrait
+  image), falling back to the first page's art, then to a watercolour wash
+  (`coverSrc` in `story.js`).
+- **Settings sheet.** A bottom sheet with three labelled sections —
+  **Language** (eight flag tiles: it, es, en, el, de, bg, ru, mr),
+  **Light** (Day / By itself / Evening) and **For grown-ups** (the
+  **Read with me** toggle, which shows page text in the player, and
+  **The workshop**, locked behind the grown-up math gate) — closed by a
+  **Done** pill. All copy is localized per language.
+- **Grown-up gate.** A sum with three picture-free number choices; wrong
+  answers say so, *Back* dismisses, the right answer opens the parent area
+  (`/parent`).
+- **End screen.** Replay and back-to-shelf blobs, in the story's language
+  ("Di nuovo!" / "Un'altra storia?").
+
+## The parent area
+
+Server-rendered on the shared `auth/base.html` shell (Clerk sign-in), styled
+by `workshop.css` with calmed shapes.
+
+- **Tabs with counts**: *Your stories · N* and *Being made · N*.
+- **Header**: *Your shelf* over "stories made just for your family", with a
+  compact sage *Child's shelf →* pill beside it; a quiet *Sign out* sits top
+  right once Clerk confirms a user.
+- **Your stories**: two equal filter pills (*All languages ▾*, *Sort ▾*;
+  Newest sorts by publish time), the family's own stories (orchid-ringed
+  thumbnail, *ours* badge), and an empty state when there are none. Family stories are
+  **delete-only**: a quiet `×` arms to *Delete for good?*. There is no hide.
+- **Shared with every family**: read-only cards with a periwinkle *shared* badge and
+  *on the shelf* — no delete, no hide.
+- **Make a story** (`/parent/make`) is its own screen with a back button, a
+  note card, and the orchid *Make our story* button (dark `--on-accent`
+  text). While a story is already cooking, or the day's cap is used, the
+  **One story at a time** `--rest` card sits above the form, the form dims
+  to .45 and the button is disabled.
+- **Being made**: one compact row per run — title, language, state chip, a
+  small bead line with the current step, and *Review N pages* once staged.
+  Rows poll every 2 s while queued or running. A failed run shows only
+  "rested at <step> · nothing was published"; the pipeline error stays on
+  the operator bench.
+- **Staged review** (`/parent/staged/{id}`): the story page by page before
+  approval, family-scoped.
+
+## The workshop
+
+The operator face at `/workshop` ([ADR-005](../adr/ADR-005-workshop-area.md)):
+server-rendered Jinja2 + HTMX, with a progress fragment that re-polls every
+2 s while a run is live. Vanilla `workshop.js` handles the stories stepper,
+the armed two-tap delete and the review audio pill.
+
+- **Run-state labels.** Operators and parents see friendly labels over the
+  internal states: `failed` → **rested**, `staged` → **needs your eyes**,
+  `approved` → **on the shelf**; `queued`, `running` and `rejected` show as-is.
+- **Beads on the run card** follow the pipeline order — `write · revise ·
+  safety · narrate · illustrate · assemble`; settled, current and future
+  states are steady (no looping animation, since the fragment re-swaps).
+- **Custom disclosure** on the bench tucks the less-used run options away;
+  the library shows stories as cards.
+- **Armed delete, not a browser dialog**: `×` → *Sure?* → delete.
+
+## The journey
+
+Child screens captured from the running app on 2026-09-27 (402×874, dev
+fixtures, `?lang=it`):
 
 | | |
 |---|---|
-| ![Shelf, light](journey/01-shelf-light.png) | **1 · The shelf, light.** Sun mascot, spoken greeting caption, four wobbly story covers, the Italiano sticker, and the deliberately quiet parent corner. |
-| ![Shelf, dusk](journey/02-shelf-dusk.png) | **2 · The shelf at dusk.** The sleepy moon replaces the sun, stars come out, covers dim to lamplight — same shelf, later hour. |
-| ![Player](journey/03-player-page1.png) | **3 · A story begins.** Full-bleed watercolor night, bead progress, the exit sticker, and the one and only control: the 140 px play-pause blob. |
-| ![Choice](journey/04-choice-overlay.png) | **4 · The choice.** The page dims; two glowing picture cards with spoken labels. A tap branches the story; a sleeping child auto-continues. |
-| ![Resume](journey/05-resume-offer.png) | **5 · Coming back.** An unfinished story asks: continue, or start again? Two pictures, no reading required. |
-| ![Moon path](journey/06-player-moonpath.png) | **6 · Deep in the story.** Each page is its own watercolor wash, crossfaded at 900 ms. |
-| ![The end](journey/07-story-end.png) | **7 · Fine!** Replay or another story — and after twenty quiet seconds, a goodnight. |
+| ![Shelf, dusk](journey/02-shelf-dusk.png) | **The shelf at dusk — the default.** Indigo ground under the moon, covers with captions below, the settings dots and the language sticker. (The last cover is the art-less `dev-branching` fixture.) |
+| ![Shelf, light](journey/01-shelf-light.png) | **The shelf, light** — chosen with *Day* or `?theme=light`. Same shelf, daylight tokens. |
+| ![Settings](journey/13-settings-sheet.png) | **Settings.** Language tiles, the Light choice, and the grown-up section with *Read with me* and the locked workshop. |
 
-## What the shell is (and isn't)
-
-This is the **design shell**: real screens, real state machine (page turns,
-choice, resume, persistence), with a timer standing in for narration and CSS
-washes standing in for pipeline art. The audio engine, real
-`story.json`, and spoken prompts replace those stand-ins in Slice 1
-(see the Linear project).
-
-## The workshop — the room behind the piazza
-
-The operator face at `/workshop`
-([ADR-005](../adr/ADR-005-workshop-area.md), AI-388): sign in with one
-secret, start a pipeline run, watch its steps land, review the staged story
-page by page, approve & publish. Unlike the shell above this is **real,
-shipped code** — server-rendered Jinja2 + HTMX, with a progress fragment
-that re-polls itself every 2 s while a run is live.
-
-### As built (the sticker-book, AI-395)
-
-The first pass was deliberately plain — palette kept, craft absent. It is now
-the design system's own look: Baloo 2 throughout, `tokens.css` semantic colours
-(so the workshop re-themes with every palette), and the parent-UI rule — keep
-the warmth, calm the shapes. Vanilla `workshop.js` (~100 lines) carries the
-three interactions HTMX can't: the stories stepper, the armed two-tap delete,
-and the review audio pill. No new dependencies; no SPA.
-
-- **Beads, never numbers.** Run progress is the player's bead language brought
-  to the fixed pipeline order — `write · revise · safety · narrate ·
-  illustrate · assemble`. Settled beads are sage, the current one is honey at
-  24 px with a static halo, future ones faint. Because the progress fragment
-  `outerHTML`-swaps every 2 s, the states are *steady* — no looping animation
-  that would restart on each swap.
-- **Six states, one of them renamed.** The chip vocabulary is `queued`,
-  `running`, `staged — review`, `approved`, `rejected`, and `failed` — which
-  the operator sees as **`rested`** (a calm terracotta, not an alarm), since
-  failures are routine while the pipeline is tuned. Internal state names are
-  unchanged.
-- **Armed delete, not a browser dialog.** The old `hx-confirm` is replaced by a
-  quiet `×` that arms to "Sure?" on first tap and deletes on the second
-  (disarms on an outside tap) — the same idiom for per-story deletes on the
-  review page. The delete plumbing shipped in #32 is untouched underneath.
-- **A phone-first bench.** The runs table that overflowed at phone width is now
-  a stack of run cards (title, meta line, state chip, armed `×`); live runs
-  hide the delete affordance. Empty state: *"No runs yet — the shelf is waiting
-  for its first story."*
-- **A real review, no native controls.** Each page is a card — full-bleed
-  illustration, Literata story text, and a custom **audio pill** (play/pause
-  circle, honey progress track, `m:ss` label over a hidden `<audio>`, one
-  playing at a time) instead of clashing native `<audio>` chrome. A sticky
-  footer offers *Approve & publish* / *Reject*, shown only while the run is
-  staged.
-- **The palette switcher** lives quietly at the foot of the bench: four dots,
-  the current one ring-highlighted, calling `window.cantastoriePalette.set()`.
-
-### The operator journey
-
-Captured from the running app with seeded runs (402×874, indigo default):
+The player, choice, resume and end captures below (03–07) and the workshop
+captures (08–12) **predate the overhaul** (warm palette, old chrome) and
+are kept for layout reference only. The parent area and the workshop sit
+behind Clerk sign-in and cannot be captured headlessly; refresh them from an
+authenticated session.
 
 | | |
 |---|---|
-| ![Login](journey/08-workshop-login.png) | **8 · The door.** Wordmark over *"the room behind the piazza"*, one secret, one Enter pill. No accounts — with no secret configured, the workshop answers 404 and does not exist. |
-| ![Bench](journey/09-workshop-dashboard.png) | **9 · The bench.** The start-a-run card (theme, premise, language, shape, a stories stepper) over the run cards with their state chips and armed delete — and the palette switcher at the foot. |
-| ![Run](journey/10-workshop-run.png) | **10 · A run.** The bead card: six beads on the pipeline's step order with a state headline; while live the fragment re-polls itself every 2 s, and a staged run offers *Review N pages*. |
-| ![Rested](journey/12-workshop-rested.png) | **11 · Rested.** A failed run rests calmly — a terracotta ring on the step it stopped at, the note in a mono box, and a *Run it again* pill that submits a fresh run. |
-| ![Review](journey/11-workshop-review.png) | **12 · The review.** The staged story page by page — illustration, Literata text, the custom audio pill — with the *Approve & publish* / *Reject* footer: the parent-gate promise in operator form, everything seen before publish. |
+| ![Player](journey/03-player-page1.png) | **A story begins** — full-bleed art, bead progress, exit sticker, the play-pause blob. |
+| ![Choice](journey/04-choice-overlay.png) | **The choice** — two glowing picture cards; a sleeping child auto-continues. |
+| ![Resume](journey/05-resume-offer.png) | **Coming back** — continue, or start again. |
+| ![Moon path](journey/06-player-moonpath.png) | **Deep in the story** — page art crossfaded at 900 ms. |
+| ![The end](journey/07-story-end.png) | **The end** — replay or another story. |
+| ![Bench](journey/09-workshop-dashboard.png) | **The workshop bench** (pre-overhaul). |
+| ![Review](journey/11-workshop-review.png) | **The workshop review** (pre-overhaul). |

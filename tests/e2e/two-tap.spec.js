@@ -57,16 +57,20 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
   expect(offOrigin).toEqual([]);
 });
 
-// product.md -> The Parent Area: "A small low-contrast corner of the shelf
-// leads to everything grown-up." The corner once led nowhere; #35 made it a
-// link and #82 points it at /parent, so the child-facing contract is that the corner is on the
-// shelf and tapping it leaves the shelf for the parent area.
-test("the parent corner leads from the shelf to the parent area", async ({ page }) => {
+// product.md -> The Parent Area: the way to everything grown-up starts on the
+// shelf. The design overhaul (AI-444) replaced the low-contrast parent corner
+// with the settings sheet's "The workshop" row behind the grown-up gate (a
+// sum a child can't answer), so a stray tap can no longer leave the shelf.
+test("the shelf leads to the parent area only through the grown-up gate", async ({ page }) => {
   await page.goto("/play?lang=it&theme=light");
-  const corner = page.locator(".shelf .parent-corner");
-  await expect(corner).toBeVisible();
-  await expect(corner).toHaveAttribute("href", "/parent");
-  await corner.click();
+  await expect(page.locator(".shelf .parent-corner")).toHaveCount(0); // no open door
+
+  await page.locator(".settings-gear").click();
+  await page.locator("button.settings-row--workshop").click();
+  await expect(page.locator(".gate-modal")).toBeVisible();
+
+  // 7 + 6: the right answer opens the door.
+  await page.locator(".gate-choice", { hasText: "13" }).click();
   await page.waitForURL((url) => url.pathname === "/parent");
   await expect(page.locator(".shelf")).toHaveCount(0); // left the child shelf
 });

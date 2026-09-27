@@ -1,0 +1,64 @@
+{# Parent "Being made" row (handoff mockup): title, language and a state chip,
+   a small bead line with the current step, and the review action once the
+   run stages. Polls itself while live and swaps in place. The pipeline error
+   stays on the operator bench — parents only see that the run rested. #}
+{% set step_names = ["write", "revise", "safety", "narrate", "illustrate", "assemble"] %}
+{% set step_words = {
+     "write": "writing the story",
+     "revise": "softening for bedtime",
+     "safety": "checking every page",
+     "narrate": "narrating the pages",
+     "illustrate": "painting the pictures",
+     "assemble": "binding the book",
+   } %}
+{% set chip_labels = {"failed": "rested", "staged": "needs your eyes", "approved": "on the shelf"} %}
+{% set ns = namespace(last=-1) %}
+{% for step in step_names %}{% if step in steps %}{% set ns.last = loop.index0 %}{% endif %}{% endfor %}
+{% set current_idx = ns.last + 1 %}
+{% set current_step = step_names[current_idx] if current_idx < 6 else "assemble" %}
+{% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
+<div class="ws-run-card ws-run-row{% if record.state == 'staged' %} ws-run-card--staged{% endif %}"
+     data-run-id="{{ record.id }}" data-state="{{ record.state }}"
+     {% if record.state in live %}hx-get="{{ base_url }}/{{ record.id }}/progress"
+     hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <div class="ws-run-row-head">
+    <div class="ws-run-card-body">
+      <div class="ws-run-title">{{ title }}</div>
+      <div class="ws-run-meta">{{ record.request.language | language_name }}</div>
+    </div>
+    <div class="ws-chip ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
+  </div>
+
+  {% if record.state in ["queued", "running", "failed"] %}
+    <div class="ws-run-row-beads">
+      {% for step in step_names %}
+        {% set idx = loop.index0 %}
+        {% if record.state == "failed" %}
+          {% set bead = "done" if idx < current_idx else ("rest" if idx == current_idx else "future") %}
+        {% elif record.state == "running" %}
+          {% set bead = "done" if idx < current_idx else ("current" if idx == current_idx else "future") %}
+        {% else %}
+          {% set bead = "future" %}
+        {% endif %}
+        <div class="ws-bead ws-bead--{{ bead }}"></div>
+      {% endfor %}
+      <span class="ws-run-row-step">
+        {%- if record.state == "queued" -%}in the queue
+        {%- elif record.state == "running" -%}{{ step_words[current_step] }}…
+        {%- else -%}rested at {{ current_step }} · nothing was published{%- endif -%}
+      </span>
+    </div>
+  {% endif %}
+
+  {% if record.state == "staged" %}
+    {% if staged_stories %}
+      {% for story in staged_stories %}
+        <a href="/parent/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm ws-run-row-action" data-testid="parent-review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
+      {% endfor %}
+    {% else %}
+      <form method="post" action="{{ base_url }}/{{ record.id }}/approve">
+        <button type="submit" class="ws-pill ws-pill-confirm ws-run-row-action" data-testid="parent-approve">Add to our shelf</button>
+      </form>
+    {% endif %}
+  {% endif %}
+</div>

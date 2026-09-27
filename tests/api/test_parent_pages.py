@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.auth as auth_module
+import src.api.routes.parent as parent_module
 from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
@@ -113,6 +114,12 @@ class _FakeManager:
         self.executed: list[Any] = []
         self.raise_cap = raise_cap
 
+        class _FakeStore:
+            def list_runs(self, *, family_token: str | None = None, state: Any = None) -> list[Any]:
+                return []
+
+        self.store = _FakeStore()
+
     async def submit(self, family_token: str, request: Any) -> Any:
         if self.raise_cap is not None:
             raise self.raise_cap
@@ -132,6 +139,8 @@ def _packs_client(
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+    # Stub out R2 calls — parent routes now call list_published_stories for tab counts.
+    monkeypatch.setattr(parent_module, "list_published_stories", lambda settings: [])
     # Issuer set so the cap-hit branch can render packs.html (_fapi_host would
     # otherwise try to base64-decode the dummy publishable key). The minted
     # token must carry a matching iss so require_parent still verifies.
@@ -268,6 +277,34 @@ def test_own_progress_fragment_polls_parent_url(monkeypatch: pytest.MonkeyPatch)
     assert f"/parent/packs/{mine.id}/progress" in response.text  # hx-get, not /workshop
     assert "/workshop" not in response.text  # no operator URLs leak to parents
     assert "Delete run" not in response.text  # operator controls hidden
+
+
+def test_progress_fragment_keeps_the_run_title_and_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The polled swap must not erase which story is which (AI-460 follow-up)."""
+    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _packs_client(monkeypatch, manager)
+    response = client.get(f"/parent/packs/{mine.id}/progress")
+    assert "the sleepy sea" in response.text
+    assert "Italiano" in response.text
+
+
+def test_failed_run_shows_rested_not_the_pipeline_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parents see a calm 'rested' chip; the raw pipeline error is operator-only."""
+    run = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    run = run.advance("running").advance("failed", error="Traceback: ElevenLabs 429")
+    manager = _FakeManager()
+    _store_with_runs(manager, [run])
+    client = _packs_client(monkeypatch, manager)
+    response = client.get(f"/parent/packs/{run.id}/progress")
+    assert response.status_code == 200
+    assert "rested" in response.text
+    assert "ElevenLabs" not in response.text
 
 
 def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:

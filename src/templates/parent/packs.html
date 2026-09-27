@@ -1,5 +1,5 @@
 {% extends "auth/base.html" %}
-{% block title %}Your shelf{% endblock %}
+{% block title %}Being made{% endblock %}
 {% block head %}
   {% if family_token %}
     {# Same-device overlay bridge: seed the family token into IndexedDB so a
@@ -10,73 +10,37 @@
 {% endblock %}
 {% block content %}
 <div class="ws-page">
-  <div class="ws-bench-header">
-    <div class="ws-wordmark">Your shelf</div>
-    <div class="ws-tagline">stories made just for your family</div>
-  </div>
+  {% set active = "packs" %}{% include "parent/_header.html" %}
 
-  {% if cap_message %}
-    <div class="ws-card" data-cap-message>
-      <div class="ws-card-title">One story at a time</div>
-      <p>{{ cap_message }}</p>
-      {% if cap_active %}<p>Your current story is <strong>{{ cap_active.state }}</strong>.</p>{% endif %}
-    </div>
-  {% endif %}
-
-  <div class="ws-card ws-start-card">
-    <div class="ws-card-title">Make a story</div>
-    <form method="post" action="/parent/packs" class="ws-run-form">
-      <div class="ws-field-grid">
-        <div class="ws-field-block ws-field-full">
-          <span class="ws-field-label">Theme</span>
-          <div class="ws-field-select-wrap">
-            <select name="theme" class="ws-field ws-select">
-              {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="ws-field-block ws-field-full">
-          <span class="ws-field-label">A wish for the story (optional)</span>
-          <input name="premise" type="text" maxlength="300" class="ws-field" placeholder="a small boat wants to see the moon" />
-        </div>
-        <div class="ws-field-block ws-field-full">
-          <span class="ws-field-label">Language</span>
-          <div class="ws-field-select-wrap">
-            <select name="language" class="ws-field ws-select">
-              {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
-            </select>
-          </div>
-        </div>
-      </div>
-      <button type="submit" class="ws-pill ws-pill-primary">Make our story</button>
-    </form>
-  </div>
-
-  <div class="ws-section-head">Your stories</div>
+  {% include "parent/_cap_card.html" %}
 
   <div class="ws-runs-list">
     {% if runs %}
+      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes", "approved": "on the shelf"} %}
       {% for record in runs %}
         {% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
-        <div data-run-id="{{ record.id }}">
-          <div class="ws-run-title">{{ title }}</div>
-          <div hx-get="/parent/packs/{{ record.id }}/progress" hx-trigger="load" hx-swap="outerHTML"></div>
+        <div data-run-id="{{ record.id }}"
+             hx-get="/parent/packs/{{ record.id }}/progress"
+             hx-trigger="load"
+             hx-swap="outerHTML">
+          <div class="ws-run-card ws-run-row">
+            <div class="ws-run-row-head">
+              <div class="ws-run-card-body">
+                <div class="ws-run-title">{{ title }}</div>
+                <div class="ws-run-meta">{{ record.request.language | language_name }}</div>
+              </div>
+              <div class="ws-chip ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
+            </div>
+          </div>
         </div>
       {% endfor %}
     {% else %}
       <div class="ws-card ws-empty-card">
-        <div class="ws-empty-title">No stories yet</div>
-        <div class="ws-empty-sub">make your family's first one above</div>
+        <div class="ws-empty-title">No stories being made</div>
+        <div class="ws-empty-sub">tap "Make a story" above to start one</div>
       </div>
     {% endif %}
   </div>
 
-  <p><a href="/parent/stories">Your published stories →</a></p>
-
-  <div class="ws-palette-bar">
-    {% for name in ["warm", "indigo", "seaglass", "plum"] %}
-      <button class="ws-palette-dot ws-palette-dot--{{ name }}" data-palette-name="{{ name }}" title="{{ name }}"></button>
-    {% endfor %}
-  </div>
 </div>
 {% endblock %}

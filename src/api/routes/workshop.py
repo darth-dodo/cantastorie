@@ -20,15 +20,14 @@ import json as _json
 import shutil
 from datetime import UTC, datetime
 from functools import lru_cache
-from pathlib import Path
 from typing import Annotated, Protocol, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from fastapi.templating import Jinja2Templates
 
 from src.api.auth import verify_clerk_session
 from src.api.routes._nav import fapi_host, home_path
+from src.api.routes._templates import TEMPLATES_DIR, templates  # noqa: F401 — re-exported for tests
 from src.config import Settings, get_settings
 from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
@@ -46,12 +45,9 @@ from src.workshop.manager import RunManager
 from src.workshop.records import InvalidTransition, PackRequest, RunRecord, RunStore
 from src.workshop.scope import WorkshopScope, resolve_scope
 
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
-
 LIVE_STATES = frozenset({"queued", "running"})
 
 router = APIRouter(prefix="/workshop")
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 class Publisher(Protocol):
@@ -211,6 +207,7 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
         }
         for r in runs
     }
+    debug = request.query_params.get("debug") == "1"
     return templates.TemplateResponse(
         request,
         "workshop/dashboard.html",
@@ -221,6 +218,7 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
             themes=get_args(Theme),
             languages=get_args(Language),
             live=LIVE_STATES,
+            debug=debug,
         ),
     )
 

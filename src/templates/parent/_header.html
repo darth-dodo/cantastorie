@@ -1,0 +1,18 @@
+{# Parent area header, shared by both tabs (handoff mockup): title stack with
+   the child's-shelf exit beside it, the two tabs with counts, and the orchid
+   make CTA. `active` is "stories" or "packs". #}
+<div class="ws-parent-header">
+  <div class="ws-parent-title-stack">
+    <div class="ws-parent-title">Your shelf</div>
+    <div class="ws-parent-sub">stories made just for your family</div>
+  </div>
+  <a href="/play" class="ws-pill-shelf">Child's shelf →</a>
+</div>
+
+<nav class="ws-tabs" aria-label="Parent area">
+  {% for key, href, label, count in [("stories", "/parent/stories", "Your stories", owned_count), ("packs", "/parent", "Being made", inflight_count)] %}
+    <a href="{{ href }}" class="ws-tab{{ ' ws-tab--active' if active == key }}"{{ ' aria-current="page"' | safe if active == key }}>{{ label }}{% if count %} · {{ count }}{% endif %}</a>
+  {% endfor %}
+</nav>
+
+<a href="/parent/make" class="ws-pill ws-pill-accent ws-pill--make-cta"><span class="ws-pill-plus" aria-hidden="true">+</span>Make a story</a>

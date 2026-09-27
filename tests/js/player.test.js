@@ -99,6 +99,18 @@ describe("player shell", () => {
     expect(document.querySelector('meta[name="asset-base"]').content).toBe(ASSET_BASE);
   });
 
+  it("defaults the child player to dusk by day too — whole app is dark by default (AI-459)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 27, 12, 0)); // noon
+    try {
+      document.body.innerHTML = '<main id="app"></main>';
+      running = await init(document, { fetchFn: manifestFetch });
+      expect(document.documentElement.dataset.theme).toBe("dusk");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("boots a manifest-driven shelf", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch });
@@ -385,57 +397,84 @@ describe("audio-error overlay (AI-367): the sleeping bird", () => {
   });
 });
 
-describe("shelf settings (language + theme)", () => {
-  it("the gear opens a settings overlay with language and palette selects", async () => {
+describe("shelf settings (language + light)", () => {
+  it("the gear opens the settings sheet with language tiles and light tiles", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     const gear = document.querySelector(".settings-gear");
     expect(gear).not.toBeNull();
     gear.click();
-    const overlay = document.querySelector(".overlay.settings");
-    expect(overlay).not.toBeNull();
-    expect([...overlay.querySelectorAll(".settings-select")]).toHaveLength(2);
-    expect(overlay.textContent).toContain("Language");
-    expect(overlay.textContent).toContain("Theme");
+    const sheet = document.querySelector(".settings-sheet");
+    expect(sheet).not.toBeNull();
+    // 8 language tiles
+    expect([...sheet.querySelectorAll(".settings-lang-tile")]).toHaveLength(8);
+    // 3 light tiles
+    expect([...sheet.querySelectorAll(".settings-light-tile")]).toHaveLength(3);
   });
 
-  it("picking a language persists it and keeps the overlay open on the new language", async () => {
+  it("picking a language tile persists it and keeps the sheet open", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     document.querySelector(".settings-gear").click();
-    const overlay = document.querySelector(".overlay.settings");
-    overlay.querySelector(".settings-select-current").click();
-    const esItem = [...overlay.querySelectorAll(".settings-menu-item")].find(
-      (p) => p.textContent === "Español",
+    const sheet = document.querySelector(".settings-sheet");
+    const esTile = [...sheet.querySelectorAll(".settings-lang-tile")].find(
+      (t) => t.getAttribute("aria-label") === "Español",
     );
-    esItem.click();
+    esTile.click();
     await vi.waitFor(() => {
       expect(localStorage.getItem("cantastorie-lang")).toBe("es");
-      const overlay2 = document.querySelector(".overlay.settings");
-      const label = overlay2.querySelector(".settings-select-label");
-      expect(label.textContent).toBe("Español");
+      // sheet stays open until explicit close
+      expect(document.querySelector(".settings-sheet")).not.toBeNull();
     });
   });
 
-  it("picking a palette marks it current", async () => {
+  it("selecting a light tile marks it selected", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     document.querySelector(".settings-gear").click();
-    const overlay = document.querySelector(".overlay.settings");
-    const selects = [...overlay.querySelectorAll(".settings-select-current")];
-    selects[1].click();
-    const plum = [...overlay.querySelectorAll(".settings-menu-item")].find(
-      (p) => p.textContent === "Plum",
-    );
-    plum.click();
-    expect(plum.getAttribute("aria-current")).toBe("true");
+    const sheet = document.querySelector(".settings-sheet");
+    const lightTiles = [...sheet.querySelectorAll(".settings-light-tile")];
+    // Click Evening (third tile)
+    lightTiles[2].click();
+    expect(lightTiles[2].classList.contains("selected")).toBe(true);
   });
 
-  it("the Done button closes the overlay", async () => {
+  it("a light choice survives a reload, and its tile shows selected", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
     document.querySelector(".settings-gear").click();
-    document.querySelector(".settings-done").click();
-    expect(document.querySelector(".overlay.settings")).toBeNull();
+    // Click Day (first tile).
+    document.querySelectorAll(".settings-light-tile")[0].click();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    running.stop?.();
+
+    // Reboot the player: the choice holds and Day is the selected tile.
+    document.documentElement.dataset.theme = "";
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    expect(document.documentElement.dataset.theme).toBe("light");
+    document.querySelector(".settings-gear").click();
+    const tiles = [...document.querySelectorAll(".settings-light-tile")];
+    expect(tiles.map((t) => t.classList.contains("selected"))).toEqual([true, false, false]);
+  });
+
+  it("By itself shows as selected once chosen", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    document.querySelectorAll(".settings-light-tile")[1].click();
+    running.stop?.();
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    expect(document.querySelectorAll(".settings-light-tile")[1].classList.contains("selected")).toBe(true);
+  });
+
+  it("the close pill dismisses the sheet", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    document.querySelector(".settings-gear").click();
+    document.querySelector(".settings-close-pill").click();
+    expect(document.querySelector(".settings-sheet")).toBeNull();
   });
 });

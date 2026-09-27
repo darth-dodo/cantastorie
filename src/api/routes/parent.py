@@ -7,8 +7,7 @@ pack request form, my-packs) arrive in the next step of the design.
 from __future__ import annotations
 
 import secrets
-from pathlib import Path
-from typing import Annotated, Protocol, get_args
+from typing import TYPE_CHECKING, Annotated, Protocol, get_args
 
 from fastapi import (
     APIRouter,
@@ -20,35 +19,49 @@ from fastapi import (
     Response,
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
 from src.api.routes._nav import fapi_host, home_path
+from src.api.routes._templates import templates
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
+    _staged_story_summaries,
     get_run_manager,
 )
 from src.config import Settings, get_settings
-from src.pipeline.models import Language, Theme
-from src.pipeline.publish import list_published_stories, publish_story, unpublish_story
-from src.workshop.manager import RunCapExceeded, RunManager
-from src.workshop.records import PackRequest
+from src.pipeline.models import Language, Story, Theme
+from src.pipeline.publish import (
+    STAGED_PREFIX,
+    STORY_FILE,
+    _build_client,
+    _content_type,
+    list_published_stories,
+    publish_story,
+    unpublish_story,
+)
+from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
+from src.workshop.records import InvalidTransition, PackRequest
 
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
+if TYPE_CHECKING:
+    from datetime import datetime
 
 router = APIRouter(prefix="/parent")
 
 
-def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
+def _published_at(manager: RunManager, family_token: str) -> dict[str, datetime]:
+    """The family's published story ids, each with its approval (publish) time."""
     return {
-        story_id
+        story_id: record.updated_at
         for record in manager.store.list_runs(family_token=family_token)
         if record.state == "approved"
         for story_id in record.story_ids
     }
+
+
+def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
+    return set(_published_at(manager, family_token))
 
 
 Manager = Annotated[RunManager, Depends(get_run_manager)]
@@ -140,6 +153,15 @@ async def parent_home(
     # Provisioned parents get the packs page with their own runs, newest first.
     runs = manager.store.list_runs(family_token=ctx.family_token)
     runs.sort(key=lambda r: r.created_at, reverse=True)
+    # Count in-flight (queued/running/staged) runs for tab badge.
+    inflight_count = sum(1 for r in runs if r.state in ("queued", "running", "staged"))
+    # Count owned published stories for tab badge.
+    owned = _owned_story_ids(manager, ctx.family_token)
+    owned_count = sum(
+        1
+        for s in list_published_stories(settings)
+        if s.family_token == ctx.family_token and s.id in owned
+    )
     return templates.TemplateResponse(
         request,
         "parent/packs.html",
@@ -149,8 +171,8 @@ async def parent_home(
             "runs": runs,
             "cap_message": None,
             "live": ["queued", "running"],
-            "themes": THEMES,
-            "languages": LANGUAGES,
+            "inflight_count": inflight_count,
+            "owned_count": owned_count,
         },
     )
 
@@ -160,11 +182,14 @@ async def parent_stories(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
     manager: Manager,
+    lang: str | None = None,
+    sort: str | None = None,
 ) -> Response:
     ctx = await _page_identity(request, settings)
     if ctx is not None and ctx.is_operator:
         return RedirectResponse(home_path(True), status_code=303)
     context: dict[str, object] = {
+        "door": "parent",
         "fapi_host": fapi_host(settings),
         "publishable_key": settings.clerk_publishable_key.get_secret_value(),
     }
@@ -173,16 +198,79 @@ async def parent_stories(
     if ctx.family_token is None:
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
-    owned = _owned_story_ids(manager, ctx.family_token)
-    # A family sees only its own overlay lane — never the shared shelf, never
-    # another family's overlay. list_published_stories tags each row's owner.
-    stories = [
-        s
-        for s in list_published_stories(settings)
-        if s.family_token == ctx.family_token and s.id in owned
+    published_at = _published_at(manager, ctx.family_token)
+    all_published = list_published_stories(settings)
+    # A family sees only its own overlay lane — never another family's overlay.
+    all_stories = [
+        s for s in all_published if s.family_token == ctx.family_token and s.id in published_at
     ]
+    # Shared shelf stories (family_token is None) visible to every family.
+    shared_stories = [s for s in all_published if s.family_token is None]
+    # Collect available languages with counts for the filter panel.
+    lang_counts: dict[str, int] = {}
+    for s in all_stories:
+        lang_counts[s.language] = lang_counts.get(s.language, 0) + 1
+    # Apply language filter.
+    active_lang = lang if lang and lang in lang_counts else None
+    stories = [s for s in all_stories if active_lang is None or s.language == active_lang]
+    # Sort: "az" = A-Z by title; default = newest published first.
+    if sort == "az":
+        stories = sorted(stories, key=lambda s: s.title.lower())
+    else:
+        stories = sorted(stories, key=lambda s: published_at[s.id], reverse=True)
+    # Count in-flight runs for the Being Made tab badge.
+    all_runs = manager.store.list_runs(family_token=ctx.family_token)
+    inflight_count = sum(1 for r in all_runs if r.state in ("queued", "running", "staged"))
     return templates.TemplateResponse(
-        request, "parent/stories.html", {**context, "stories": stories}
+        request,
+        "parent/stories.html",
+        {
+            **context,
+            "stories": stories,
+            "shared_stories": shared_stories,
+            "lang_counts": lang_counts,
+            "active_lang": active_lang,
+            "sort": sort or "newest",
+            "owned_count": len(all_stories),
+            "inflight_count": inflight_count,
+        },
+    )
+
+
+@router.get("/make", response_class=HTMLResponse)
+async def parent_make(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    """Make-a-story screen — form on its own page, back-button → /parent/stories."""
+    ctx = await _page_identity(request, settings)
+    if ctx is not None and ctx.is_operator:
+        return RedirectResponse(home_path(True), status_code=303)
+    context: dict[str, object] = {
+        "door": "parent",
+        "fapi_host": fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+    }
+    if ctx is None:
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    if ctx.family_token is None:
+        context["onboarding"] = True
+        return templates.TemplateResponse(request, "auth/sign_in.html", context)
+    # One story at a time: show the cap up front, not after the form is filled.
+    cap = blocking_cap(
+        manager.store.list_runs(family_token=ctx.family_token), settings.parent_daily_run_cap
+    )
+    return templates.TemplateResponse(
+        request,
+        "parent/make.html",
+        {
+            **context,
+            "themes": THEMES,
+            "languages": LANGUAGES,
+            "cap_message": str(cap) if cap else None,
+            "cap_active": cap.active if cap else None,
+        },
     )
 
 
@@ -221,16 +309,25 @@ async def request_pack(
     try:
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
+        runs = manager.store.list_runs(family_token=ctx.family_token)
+        runs.sort(key=lambda r: r.created_at, reverse=True)
+        inflight_count = sum(1 for r in runs if r.state in ("queued", "running", "staged"))
+        owned = _owned_story_ids(manager, ctx.family_token)
+        owned_count = sum(
+            1
+            for s in list_published_stories(settings)
+            if s.family_token == ctx.family_token and s.id in owned
+        )
         context: dict[str, object] = {
             "door": "parent",
             "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "family_token": ctx.family_token,  # seeds same-device overlay adoption
-            "runs": [],
+            "runs": runs,
             "cap_message": str(cap),
             "cap_active": cap.active,
-            "themes": THEMES,
-            "languages": LANGUAGES,
+            "inflight_count": inflight_count,
+            "owned_count": owned_count,
         }
         return templates.TemplateResponse(request, "parent/packs.html", context)
     background.add_task(manager.execute, record)
@@ -248,16 +345,18 @@ async def pack_progress(
     record = manager.store.load(ctx.family_token, run_id)  # tenancy: load is family-scoped
     if record is None:
         raise HTTPException(status_code=404)
+    staged_stories = (
+        _staged_story_summaries(record.story_ids, settings) if record.state == "staged" else []
+    )
     return templates.TemplateResponse(
         request,
-        "workshop/_progress.html",
+        "parent/_run_row.html",
         {
             "record": record,
             "live": ["queued", "running"],
             "steps": _checkpointed_steps(record, settings),
-            "staged_stories": [],
+            "staged_stories": staged_stories,
             "base_url": "/parent/packs",
-            "is_operator": False,
         },
     )
 
@@ -287,6 +386,106 @@ async def approve_pack(
     for story_id in record.story_ids:
         publisher(story_id, ctx.family_token)
     manager.store.save(record.advance("approved"))
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return RedirectResponse("/parent/stories", status_code=303)
+
+
+@router.get("/staged/{story_id}", response_class=HTMLResponse)
+async def parent_staged_story(
+    request: Request,
+    story_id: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    """Parent review page: see story pages before approving.
+
+    Tenancy: the run is located by story_id and then confirmed family-scoped —
+    a parent cannot reach another family's staged story (returns 404).
+    """
+    # Find the run that contains this story, then confirm it belongs to this family.
+    record = None
+    run_id = request.query_params.get("run")
+    if run_id:
+        candidate = manager.store.load(ctx.family_token, run_id)
+        if candidate and story_id in candidate.story_ids:
+            record = candidate
+    if record is None:
+        # Fall back: scan this family's runs only.
+        for candidate in manager.store.list_runs(family_token=ctx.family_token):
+            if story_id in candidate.story_ids:
+                record = candidate
+                break
+    if record is None:
+        raise HTTPException(status_code=404)
+    # Load the staged story from the pending bucket.
+    client = _build_client(settings)
+    bucket = settings.pending_bucket
+    try:
+        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}")
+    except Exception:
+        raise HTTPException(status_code=404) from None
+    story = Story.model_validate_json(obj["Body"].read())
+    return templates.TemplateResponse(
+        request,
+        "parent/review.html",
+        {
+            "door": "parent",  # sign-out returns to the parent door
+            "fapi_host": fapi_host(settings),
+            "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+            "story": story,
+            "record": record,
+            "base_url": "/parent/packs",
+        },
+    )
+
+
+@router.get("/staged/{story_id}/assets/{name}")
+async def parent_staged_asset(
+    story_id: str,
+    name: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    manager: Manager,
+) -> Response:
+    """Serve a staged asset (image/audio) family-scoped."""
+    if "/" in name or ".." in name:
+        raise HTTPException(status_code=404)
+    # Confirm family owns a run containing this story.
+    owned = any(
+        story_id in r.story_ids for r in manager.store.list_runs(family_token=ctx.family_token)
+    )
+    if not owned:
+        raise HTTPException(status_code=404)
+    client = _build_client(settings)
+    bucket = settings.pending_bucket
+    try:
+        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}")
+    except Exception:
+        raise HTTPException(status_code=404) from None
+    return Response(
+        content=obj["Body"].read(),
+        media_type=_content_type(name),
+        headers={"Cache-Control": "private, no-cache"},
+    )
+
+
+@router.post("/packs/{run_id}/reject")
+async def reject_pack(
+    request: Request,
+    run_id: str,
+    ctx: Annotated[ParentContext, Depends(require_parent)],
+    manager: Manager,
+) -> Response:
+    """A family rejects its own staged pack."""
+    record = manager.store.load(ctx.family_token, run_id)
+    if record is None:
+        raise HTTPException(status_code=404)
+    try:
+        manager.store.save(record.advance("rejected"))
+    except InvalidTransition:
+        raise HTTPException(status_code=400) from None
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent", status_code=303)

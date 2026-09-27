@@ -6,7 +6,6 @@
     <div class="ws-wordmark">Workshop</div>
     <div class="ws-tagline">the room behind the piazza</div>
   </div>
-  <a href="/workshop/library" class="ws-pill">Library — everything published</a>
 
   <div class="ws-card ws-start-card">
     <div class="ws-card-title">Start a run</div>
@@ -15,20 +14,22 @@
         <div class="ws-field-block ws-field-full">
           <span class="ws-field-label">Theme</span>
           <div class="ws-field-select-wrap">
-            <select name="theme" class="ws-field ws-select">
+            <select name="theme" class="ws-field ws-select" data-custom-theme>
               {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
+              <option value="custom">Custom…</option>
             </select>
           </div>
         </div>
-        <div class="ws-field-block ws-field-full">
-          <span class="ws-field-label">Your theme</span>
-          <input name="premise" type="text" class="ws-field" placeholder="a small boat wants to see the moon" />
+        <div class="ws-field-block ws-field-full" data-custom-premise hidden>
+          <span class="ws-field-label">Your story</span>
+          <input name="premise" type="text" maxlength="300" class="ws-field"
+                 placeholder="a small boat wants to see the moon" />
         </div>
         <div class="ws-field-block">
           <span class="ws-field-label">Language</span>
           <div class="ws-field-select-wrap">
             <select name="language" class="ws-field ws-select">
-              {% for language in languages %}<option value="{{ language }}">{{ language }}</option>{% endfor %}
+              {% for language in languages %}<option value="{{ language }}">{{ language | language_name }}</option>{% endfor %}
             </select>
           </div>
         </div>
@@ -55,11 +56,13 @@
     </form>
   </div>
 
+  <a href="/workshop/library" class="ws-pill ws-pill-primary ws-pill--library-link">Library — everything published</a>
+
   <div class="ws-section-head">Runs</div>
 
   <div class="ws-runs-list">
     {% if runs %}
-      {% set chip_labels = {"failed": "rested", "staged": "staged — review"} %}
+      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes", "approved": "on the shelf"} %}
       {% for run in runs %}
         {% set extras = run_extras[run.id] %}
         {% set title = run.request.premise if run.request.premise else run.request.theme.replace("_", " ") %}
@@ -72,7 +75,7 @@
           <a href="{{ href }}" class="ws-run-card-link">
             <div class="ws-run-card-body">
               <div class="ws-run-title">{{ title }}</div>
-              <div class="ws-run-meta">{{ run.request.language }} · {{ run.request.count }} stor{{ "y" if run.request.count == 1 else "ies" }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
+              <div class="ws-run-meta">{{ run.request.language | language_name }} · {{ run.request.count }} stor{{ "y" if run.request.count == 1 else "ies" }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
             </div>
             <div class="ws-chip ws-state-{{ run.state }}">{{ chip_labels.get(run.state, run.state) }}</div>
           </a>
@@ -93,10 +96,22 @@
     {% endif %}
   </div>
 
-  <div class="ws-palette-bar">
-    {% for name in ["warm", "indigo", "seaglass", "plum"] %}
-      <button class="ws-palette-dot ws-palette-dot--{{ name }}" data-palette-name="{{ name }}" title="{{ name }}"></button>
-    {% endfor %}
-  </div>
 </div>
+
+<script>
+(function () {
+  "use strict";
+  var sel = document.querySelector("[data-custom-theme]");
+  var box = document.querySelector("[data-custom-premise]");
+  if (!sel || !box) return;
+  function sync() {
+    var isCustom = sel.value === "custom";
+    box.hidden = !isCustom;
+    var inp = box.querySelector("input");
+    if (inp) inp.disabled = !isCustom;
+  }
+  sel.addEventListener("change", sync);
+  sync();
+})();
+</script>
 {% endblock %}

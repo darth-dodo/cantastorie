@@ -10,6 +10,7 @@ body {
 }
 
 .ws-shell {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -243,6 +244,11 @@ body {
   white-space: nowrap;
 }
 
+/* Replaces ad-hoc style="flex:none" on header chips */
+.ws-chip--fixed {
+  flex: none;
+}
+
 .ws-state-queued   { background: var(--accent-22);   color: var(--accent-text); }
 .ws-state-running  { background: var(--accent-22);   color: var(--accent-text); }
 .ws-state-staged   { background: var(--info-20);     color: var(--info-text); }
@@ -280,10 +286,16 @@ body {
 /* Cover thumbnail on the parent's published-stories shelf. */
 .ws-story-cover {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
-  border-radius: 12px;
+  width: 78px;
+  height: 44px;
+  border-radius: 10px;
   object-fit: cover;
+  background: var(--field);
+  box-shadow: 0 0 0 1.5px var(--primary-ring);
+}
+
+.ws-story-cover--ours {
+  box-shadow: 0 0 0 1.5px var(--accent);
 }
 
 .ws-run-card-link {
@@ -445,7 +457,7 @@ body {
 }
 
 .ws-bead--done    { background: var(--confirm); }
-.ws-bead--current { width: 24px; height: 24px; background: var(--accent); box-shadow: 0 0 0 5px var(--accent-22), 0 0 22px 2px var(--accent-22); }
+.ws-bead--current { width: 24px; height: 24px; background: var(--accent); box-shadow: 0 0 0 5px var(--accent-22), 0 0 22px 2px var(--accent-22); transition: none; }
 .ws-bead--rest    { background: var(--card); box-shadow: inset 0 0 0 3px var(--rest); }
 .ws-bead--future  { background: var(--line-10); }
 
@@ -686,49 +698,341 @@ body {
   border-radius: 999px;
 }
 
-/* ── Palette switcher ────────────────────────────────────────────────── */
-.ws-palette-bar {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  padding: 20px 0 8px;
-}
-
-.ws-palette-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  display: block;
-  position: relative;
-  padding: 0;
-  /* 44px tap target via pseudo */
-  transition: transform 150ms;
-}
-
-.ws-palette-dot::before {
-  content: "";
-  position: absolute;
-  inset: -8px;
-}
-
-.ws-palette-dot:active { transform: scale(0.9); }
-
-.ws-palette-dot[data-active]::after {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2.5px solid var(--ink-soft);
-}
-
-.ws-palette-dot--warm     { background: #C9714F; }
-.ws-palette-dot--indigo   { background: #5566A8; }
-.ws-palette-dot--seaglass { background: #47858A; }
-.ws-palette-dot--plum     { background: #7B5A8E; }
-
 /* ── Start card spacing ──────────────────────────────────────────────── */
 .ws-start-card + .ws-section-head {
   padding-top: 20px;
+}
+
+/* ── Library link (below start card, above runs) ─────────────────────── */
+.ws-pill--library-link {
+  margin-top: 12px;
+}
+
+/* ── Parent tab shell ────────────────────────────────────────────────── */
+.ws-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px 16px;
+}
+
+.ws-tab {
+  flex: 1;
+  text-align: center;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--ghost);
+  color: var(--ink-soft);
+  font: 700 13px var(--font-app);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms, color 120ms;
+}
+
+.ws-tab--active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--card-shadow), inset 0 0 0 1.5px var(--line-12);
+}
+
+/* ── Rest card (cap state) ───────────────────────────────────────────── */
+.ws-card--rest {
+  background: var(--rest-16);
+  color: var(--rest-text);
+  margin-bottom: 12px;
+}
+
+.ws-card--rest .ws-card-title {
+  color: var(--rest-text);
+}
+
+/* ── Capped form (dim + inert) ───────────────────────────────────────── */
+.ws-form--capped {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── Four-minute note ────────────────────────────────────────────────── */
+.ws-form-note {
+  font: 500 13px var(--font-app);
+  color: var(--ink-soft);
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Parent header: title stack + child's-shelf exit ──────────────────── */
+.ws-parent-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 16px;
+}
+
+.ws-parent-title-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ws-parent-title {
+  font: 700 25px var(--font-app);
+}
+
+.ws-parent-sub {
+  font: 500 12.5px var(--font-app);
+  color: var(--ink-soft);
+}
+
+.ws-pill-shelf {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: var(--confirm-22);
+  box-shadow: inset 0 0 0 1.5px var(--confirm);
+  color: var(--confirm-text);
+  font: 700 12.5px var(--font-app);
+  text-decoration: none;
+}
+
+/* ── Filter / sort bar ───────────────────────────────────────────────── */
+.ws-filter-bar {
+  display: flex;
+  gap: 8px;
+  height: 36px;
+  align-items: center;
+  padding: 0 2px 0;
+  margin-bottom: 4px;
+}
+
+/* Two equal-width pills (handoff §4 "Filter and sort"). */
+.ws-filter-bar > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ws-filter-wrap {
+  position: relative;
+}
+
+.ws-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-radius: 999px;
+  font: 600 13px var(--font-app);
+  color: var(--ink-soft);
+  background: var(--ghost);
+  border: none;
+  cursor: pointer;
+  padding: 0 14px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 120ms, color 120ms;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ws-filter-pill--active {
+  background: var(--accent-22);
+  color: var(--accent-text);
+}
+
+.ws-filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow), 0 0 0 1.5px var(--line-12);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.ws-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  text-decoration: none;
+  color: var(--ink);
+  font: 500 13px var(--font-app);
+  gap: 12px;
+  transition: background 80ms;
+}
+
+.ws-filter-row:hover { background: var(--ghost); }
+
+.ws-filter-row--selected { color: var(--accent-text); font-weight: 700; }
+
+.ws-filter-name { flex: 1; }
+
+.ws-filter-count {
+  font: 600 12px var(--font-app);
+  color: var(--ink-faint);
+}
+
+/* ── Result count ────────────────────────────────────────────────────── */
+.ws-stories-count {
+  font: 500 12px var(--font-app);
+  color: var(--ink-faint);
+  padding: 0 4px 10px;
+}
+
+/* ── Armed-delete wrap ───────────────────────────────────────────────── */
+.ws-delete-armed-wrap {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.ws-arm-confirm {
+  margin: 0;
+}
+
+.ws-delete-btn--armed {
+  background: var(--rest);
+  color: #FFFDF7;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Accent pill (orchid CTA) ────────────────────────────────────────── */
+.ws-pill-accent {
+  background: var(--accent);
+  box-shadow: 0 6px 16px var(--accent-22);
+  color: var(--on-accent);
+  gap: 9px;
+}
+
+.ws-pill-plus {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ── Make-a-story CTA spacing ────────────────────────────────────────── */
+.ws-pill--make-cta {
+  margin-bottom: 14px;
+}
+
+/* ── Make screen note card ───────────────────────────────────────────── */
+.ws-make-note-card {
+  margin-top: 12px;
+  border: 1.5px solid var(--line-12);
+  background: var(--ghost);
+  box-shadow: none;
+}
+
+.ws-make-note-body {
+  font: 500 14px/1.6 var(--font-app);
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* ── Custom-select orchid active border ──────────────────────────────── */
+.ws-select--custom-active {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* ── Textarea field (make screen premise) ────────────────────────────── */
+.ws-textarea {
+  height: auto;
+  padding: 10px 14px;
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ── Shared badge ────────────────────────────────────────────────────── */
+.ws-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 700 11px var(--font-app);
+  flex: none;
+  white-space: nowrap;
+}
+
+.ws-badge--ours {
+  background: var(--accent-22);
+  color: var(--accent-text);
+}
+
+.ws-badge--shared {
+  background: var(--info-20);
+  color: var(--info-text);
+}
+
+/* ── Being-made run row (parent) ─────────────────────────────────────── */
+.ws-run-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.ws-run-row-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ws-run-row-beads {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ws-run-row-beads .ws-bead {
+  width: 10px;
+  height: 10px;
+}
+
+.ws-run-row-beads .ws-bead--current {
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 0 3px var(--accent-22);
+}
+
+.ws-run-row-beads .ws-bead--rest {
+  box-shadow: inset 0 0 0 2px var(--rest);
+}
+
+.ws-run-row-step {
+  font: 600 11px var(--font-app);
+  color: var(--ink-soft);
+  padding-left: 4px;
+}
+
+.ws-run-row-action {
+  height: 42px;
+}
+
+/* ── Sign out: quiet, top-right, only once Clerk confirms a user ─────── */
+.ws-signout {
+  position: absolute;
+  top: 16px;
+  right: max(16px, calc(50% - var(--app-max) / 2 + 16px));
+  width: auto;
+  height: 34px;
+  padding: 0 14px;
+  background: var(--ghost);
+  box-shadow: inset 0 0 0 1.5px var(--line-12);
+  color: var(--ink-soft);
+  font: 600 12.5px var(--font-app);
+}
+
+/* `hidden` must win over component display rules (.ws-pill is inline-flex). */
+[hidden] {
+  display: none !important;
+}
+
+/* ── Empty state muted line ──────────────────────────────────────────── */
+.ws-empty-muted {
+  font: 500 12px var(--font-app);
+  color: var(--ink-faint);
+  margin-top: 4px;
 }

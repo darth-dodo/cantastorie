@@ -48,6 +48,32 @@ class RunCapExceeded(Exception):
         self.active = active
 
 
+def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None:
+    """The cap a family would hit by starting a run now, or None.
+
+    One run at a time (a queued or running run blocks), then a daily cap on
+    runs started today (UTC). The make screen asks this up front; submit()
+    raises it.
+    """
+    for run in runs:
+        if run.state in ("queued", "running"):
+            return RunCapExceeded(
+                "a story pack is already being made for this family",
+                active=run,
+            )
+    today = datetime.now(UTC).date()
+    started_today = 0
+    for run in runs:
+        created = run.created_at
+        if created.tzinfo is None:  # records persisted before tz-aware writes
+            created = created.replace(tzinfo=UTC)
+        if created.date() == today:
+            started_today += 1
+    if started_today >= daily_cap:
+        return RunCapExceeded("that's all the story packs for today — tomorrow brings more")
+    return None
+
+
 def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
     """Default generation seam: one generate_story pass per requested story.
 
@@ -101,22 +127,9 @@ class RunManager:
 
     def _enforce_caps(self, family_token: str) -> None:
         runs = self._store.list_runs(family_token=family_token)
-        for run in runs:
-            if run.state in ("queued", "running"):
-                raise RunCapExceeded(
-                    "a story pack is already being made for this family",
-                    active=run,
-                )
-        today = datetime.now(UTC).date()
-        started_today = 0
-        for run in runs:
-            created = run.created_at
-            if created.tzinfo is None:  # records persisted before tz-aware writes
-                created = created.replace(tzinfo=UTC)
-            if created.date() == today:
-                started_today += 1
-        if started_today >= self._settings.parent_daily_run_cap:
-            raise RunCapExceeded("that's all the story packs for today — tomorrow brings more")
+        cap = blocking_cap(runs, self._settings.parent_daily_run_cap)
+        if cap is not None:
+            raise cap
 
     async def execute(self, record: RunRecord) -> RunRecord:
         async with self._lock:

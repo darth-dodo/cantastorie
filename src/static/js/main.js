@@ -8,7 +8,7 @@ import { createAudioEngine } from "./audio-engine.js";
 import { createPlayback } from "./playback.js";
 import { createPrefetcher } from "./prefetch.js";
 import { loadStory, shelf as fallbackShelf } from "./story.js";
-import { VALID_PALETTES } from "./palette-resolve.js";
+import { VALID_PALETTES, resolveTheme, loadThemeMode } from "./palette-resolve.js";
 import {
   buildShelf,
   buildPlayer,
@@ -31,7 +31,7 @@ const PALETTE_LABELS = {
 
 const PAGE_SECONDS = 3.8;
 
-const LANGS = [
+export const LANGS = [
   { code: "it", label: "Italiano" },
   { code: "es", label: "Español" },
   { code: "en", label: "English" },
@@ -46,12 +46,6 @@ const GREETINGS = { it: "Ciao!", es: "¡Hola!", en: "Hello!", el: "Γεια σο
 const SUBS = { it: "Quale storia oggi?", es: "¿Qué historia hoy?", en: "Which story today?", el: "Ποια ιστορία σήμερα;", de: "Welche Geschichte heute?", bg: "Коя история днес?", ru: "Какую историю сегодня?", mr: "आज कोणती गोष्ट?" };
 const RESUMES = { it: "Continua o ricomincia?", es: "¿Continuar o empezar de nuevo?", en: "Continue or start over?", el: "Συνέχεια ή από αρχή;", de: "Weiter oder von vorne?", bg: "Продължи или започни отначало?", ru: "Продолжить или начать заново?", mr: "पुढे चालू ठेवायचे की पुन्हा सुरू करायचे?" };
 const ENDS = { it: { title: "Fine!", again: "Di nuovo!", prompt: "Un'altra storia?" }, es: { title: "¡Fin!", again: "¡Otra vez!", prompt: "¿Otra historia?" }, en: { title: "The End!", again: "Again!", prompt: "Another story?" }, el: { title: "Τέλος!", again: "Ξανά!", prompt: "Άλλη ιστορία;" }, de: { title: "Ende!", again: "Nochmal!", prompt: "Eine andere Geschichte?" }, bg: { title: "Край!", again: "Отново!", prompt: "Друга история?" }, ru: { title: "Конец!", again: "Ещё раз!", prompt: "Другая история?" }, mr: { title: "समाप्त!", again: "पुन्हा!", prompt: "आणखी एक गोष्ट?" } };
-
-function pickTheme(params, hour) {
-  const forced = params.get("theme");
-  if (forced === "light" || forced === "dusk") return forced;
-  return hour >= 19 || hour < 7 ? "dusk" : "light";
-}
 
 function pickLang(params, saved) {
   const lang = params.get("lang") ?? saved ?? "";
@@ -102,7 +96,7 @@ function mergeOverlay(manifest, overlay) {
     prompts: { ...(overlay.prompts ?? {}), ...(manifest.prompts ?? {}) },
   };
   const seen = new Set((manifest.stories ?? []).map((s) => s.id));
-  const extra = (overlay.stories ?? []).filter((s) => !seen.has(s.id));
+  const extra = (overlay.stories ?? []).filter((s) => !seen.has(s.id)).map((s) => ({ ...s, isFamily: true }));
   merged.stories = [...(manifest.stories ?? []), ...extra];
   return merged;
 }
@@ -210,8 +204,7 @@ export async function init(
   if (!app) return null;
 
   const params = new URLSearchParams(root.defaultView?.location.search ?? "");
-  const theme = pickTheme(params, new Date().getHours());
-  root.documentElement.dataset.theme = theme;
+  root.documentElement.dataset.theme = resolveTheme(params.toString(), undefined, loadThemeMode());
 
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
@@ -386,22 +379,23 @@ export async function init(
             (entry) => {
               openCover(entry).catch((err) => console.warn("cover tap failed", err));
             },
+            lang,
+            (newLang) => switchLanguage(newLang),
           ),
         );
         if (settingsOpen) {
           app.appendChild(
             buildSettingsOverlay({
-              langs: LANGS,
               currentLang: lang,
               onLangChange: (newLang) => switchLanguage(newLang),
-              palettes: VALID_PALETTES,
-              paletteLabels: PALETTE_LABELS,
-              currentPalette: root.documentElement.getAttribute("data-palette") || "indigo",
               onPaletteChange: (name) => {
                 if (globalThis.cantastoriePalette) globalThis.cantastoriePalette.set(name);
                 else root.documentElement.setAttribute("data-palette", name);
               },
               onClose: () => closeSettings(),
+              // Past the grown-up gate: the parent area (it handles its own sign-in).
+              onWorkshop: () => root.defaultView?.location.assign("/parent"),
+              doc: root,
             }),
           );
         }

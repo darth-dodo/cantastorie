@@ -114,8 +114,8 @@ def test_assembly_rewrites_every_asset_to_its_immutable_hashed_name(tmp_path: Pa
         assert re.fullmatch(rf"{page.id}\.[0-9a-f]{{8}}\.webp", page.image)
         assert page.audio.file in assembled.assets
         assert page.image in assembled.assets
-    # Two assets per page — audio and image — all present on disk.
-    assert len(assembled.assets) == 20
+    # Two assets per page — audio and image — plus one portrait cover.
+    assert len(assembled.assets) == 21
     assert all(source.exists() for source in assembled.assets.values())
 
 

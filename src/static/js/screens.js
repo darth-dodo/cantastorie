@@ -2,8 +2,9 @@
 // render() swaps what #app shows based on store state. No framework —
 // the whole child UI is four screens and two overlays.
 
-import { story, shelf } from "./story.js";
+import { story, shelf, coverSrc } from "./story.js";
 import { PAGE_COUNT } from "./store.js";
+import { resolveTheme, loadThemeMode, saveThemeMode } from "./palette-resolve.js";
 
 // What the player screen shows for the open story. The mock backs covers
 // whose stories the pipeline hasn't produced yet; playerView() derives a
@@ -19,6 +20,7 @@ export function playerView(loaded) {
     pageCount: loaded.pages.length,
     beadColors: loaded.pages.map((_, i) => story.beadColors[i % story.beadColors.length]),
     images: loaded.pages.map((page) => page.imageUrl),
+    texts: loaded.pages.map((page) => page.text ?? null),
   };
 }
 
@@ -54,6 +56,166 @@ function iconShelf() {
   return grid;
 }
 
+export function sortShelf(entries) {
+  const family = entries.filter((e) => e.isFamily === true);
+  const shared = entries.filter((e) => e.isFamily !== true);
+  return [...family, ...shared];
+}
+
+export const LANG_CODES = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru', 'mr'];
+const LANG_FLAGS = { it: '🇮🇹', es: '🇪🇸', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺', mr: '🇮🇳' };
+const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ', mr: 'मरा' };
+const LANG_NAMES = { it: 'Italiano', es: 'Español', en: 'English', el: 'Ελληνικά', de: 'Deutsch', bg: 'Български', ru: 'Русский', mr: 'मराठी' };
+
+// Read-with-me: persisted to localStorage. When ON the player shows page text.
+const READ_WITH_ME_KEY = 'cantastorie-read-with-me';
+
+export function getReadWithMe(storage = globalThis.localStorage) {
+  try { return storage?.getItem(READ_WITH_ME_KEY) === '1'; } catch { return false; }
+}
+
+export function setReadWithMe(value, storage = globalThis.localStorage) {
+  try { storage?.setItem(READ_WITH_ME_KEY, value ? '1' : '0'); } catch {}
+  // Reflect immediately onto any live player text elements
+  document.querySelectorAll('.player-page-text').forEach((el) => {
+    el.style.display = value ? '' : 'none';
+  });
+}
+
+// Localized copy for the settings sheet.
+// Keys also consumed by Task 10 (gate): gateHeading, gateWrong, gateBack.
+const SETTINGS_COPY = {
+  it: {
+    languages:    'Lingua',
+    light:        'Luce',
+    lightDay:     'Giorno',
+    lightAuto:    'Automatica',
+    lightEvening: 'Sera',
+    lightHint:    'La sera si scurisce da sola',
+    grownups:     'Per i grandi',
+    readWithMe:   'Leggi con me',
+    workshop:     'Il laboratorio',
+    close:        'Fatto',
+    gateHeading:  'Codice genitore',
+    gateWrong:    'Codice errato, riprova',
+    gateBack:     'Indietro',
+  },
+  es: {
+    languages:    'Idioma',
+    light:        'Luz',
+    lightDay:     'Día',
+    lightAuto:    'Automática',
+    lightEvening: 'Tarde',
+    lightHint:    'Por la tarde se oscurece sola',
+    grownups:     'Para mayores',
+    readWithMe:   'Leer conmigo',
+    workshop:     'El taller',
+    close:        'Listo',
+    gateHeading:  'Código parental',
+    gateWrong:    'Código incorrecto, inténtalo de nuevo',
+    gateBack:     'Volver',
+  },
+  en: {
+    languages:    'Language',
+    light:        'Light',
+    lightDay:     'Day',
+    lightAuto:    'By itself',
+    lightEvening: 'Evening',
+    lightHint:    'Goes dark on its own in the evening',
+    grownups:     'For grown-ups',
+    readWithMe:   'Read with me',
+    workshop:     'The workshop',
+    close:        'Done',
+    gateHeading:  'Parent code',
+    gateWrong:    'Wrong code, try again',
+    gateBack:     'Back',
+  },
+  el: {
+    languages:    'Γλώσσα',
+    light:        'Φως',
+    lightDay:     'Μέρα',
+    lightAuto:    'Αυτόματο',
+    lightEvening: 'Βράδυ',
+    lightHint:    'Σκουραίνει μόνο του το βράδυ',
+    grownups:     'Για μεγάλους',
+    readWithMe:   'Διάβασε μαζί μου',
+    workshop:     'Το εργαστήρι',
+    close:        'Έτοιμο',
+    gateHeading:  'Κωδικός γονέα',
+    gateWrong:    'Λάθος κωδικός, ξαναπροσπάθησε',
+    gateBack:     'Πίσω',
+  },
+  de: {
+    languages:    'Sprache',
+    light:        'Helligkeit',
+    lightDay:     'Tag',
+    lightAuto:    'Automatisch',
+    lightEvening: 'Abend',
+    lightHint:    'Wird abends von selbst dunkler',
+    grownups:     'Für Erwachsene',
+    readWithMe:   'Lies mit mir',
+    workshop:     'Die Werkstatt',
+    close:        'Fertig',
+    gateHeading:  'Elterncode',
+    gateWrong:    'Falscher Code, nochmal versuchen',
+    gateBack:     'Zurück',
+  },
+  bg: {
+    languages:    'Език',
+    light:        'Светлина',
+    lightDay:     'Ден',
+    lightAuto:    'Автоматично',
+    lightEvening: 'Вечер',
+    lightHint:    'Вечерта потъмнява само',
+    grownups:     'За възрастни',
+    readWithMe:   'Чети с мен',
+    workshop:     'Работилницата',
+    close:        'Готово',
+    gateHeading:  'Родителски код',
+    gateWrong:    'Грешен код, опитай пак',
+    gateBack:     'Назад',
+  },
+  ru: {
+    languages:    'Язык',
+    light:        'Свет',
+    lightDay:     'День',
+    lightAuto:    'Авто',
+    lightEvening: 'Вечер',
+    lightHint:    'Вечером темнеет само',
+    grownups:     'Для взрослых',
+    readWithMe:   'Читай со мной',
+    workshop:     'Мастерская',
+    close:        'Готово',
+    gateHeading:  'Родительский код',
+    gateWrong:    'Неверный код, попробуй ещё раз',
+    gateBack:     'Назад',
+  },
+  mr: {
+    languages:    'भाषा',
+    light:        'प्रकाश',
+    lightDay:     'दिवस',
+    lightAuto:    'आपोआप',
+    lightEvening: 'संध्याकाळ',
+    lightHint:    'संध्याकाळी आपोआप अंधार होतो',
+    grownups:     'मोठ्यांसाठी',
+    readWithMe:   'माझ्यासोबत वाचा',
+    workshop:     'कार्यशाळा',
+    close:        'झाले',
+    gateHeading:  'पालक कोड',
+    gateWrong:    'चुकीचा कोड, पुन्हा प्रयत्न करा',
+    gateBack:     'मागे',
+  },
+};
+
+export function settingsCopy(lang) {
+  return SETTINGS_COPY[lang] ?? SETTINGS_COPY.en;
+}
+
+export function cycleLanguage(current) {
+  const idx = LANG_CODES.indexOf(current);
+  return LANG_CODES[(idx + 1) % LANG_CODES.length];
+}
+
 export function buildShelf(
   store,
   greeting,
@@ -61,12 +223,17 @@ export function buildShelf(
   stories = shelf,
   onOpenSettings = () => {},
   onOpen = () => store.openStory(),
+  lang = 'en',
+  onCycleLanguage = () => {},
 ) {
   const screen = el("div", "screen shelf");
 
   const header = el("div", "greeting");
   const mascot = el("div", "mascot");
   mascot.appendChild(el("div", "smile"));
+  mascot.appendChild(el("div", "crater-a"));
+  mascot.appendChild(el("div", "crater-b"));
+  mascot.appendChild(el("div", "crater-c"));
   const text = el("div");
   const hello = el("h1");
   hello.textContent = greeting;
@@ -86,13 +253,15 @@ export function buildShelf(
     meadow.appendChild(note);
     covers.appendChild(meadow);
   } else {
-    stories.forEach((entry) => {
+    sortShelf(stories).forEach((entry) => {
       const name = entry.title ?? entry.label;
       const card = el("div", "cover-card");
-      const cover = el("button", `cover ${entry.wash}`, { "aria-label": name });
-      if (entry.cover) {
+      const familyClass = entry.isFamily ? " cover--family" : "";
+      const cover = el("button", `cover ${entry.wash}${familyClass}`, { "aria-label": name });
+      const src = coverSrc(entry);
+      if (src) {
         const img = el("img", "cover-art");
-        img.src = entry.cover;
+        img.src = src;
         img.alt = "";
         img.loading = "lazy";
         cover.appendChild(img);
@@ -105,20 +274,23 @@ export function buildShelf(
     });
   }
 
+  // Language sticker — CSS shape, one tap cycles language
+  const sticker = el("button", "lang-sticker", { "aria-label": "Change language" });
+  const stickerLabel = el("span", "lang-sticker-label");
+  stickerLabel.textContent = LANG_LABELS[lang] ?? lang.toUpperCase();
+  sticker.appendChild(stickerLabel);
+  sticker.addEventListener("click", () => onCycleLanguage(cycleLanguage(lang)));
+
+  // Settings button — 2×2 CSS dots, replaces GEAR_SVG
   const gear = el("button", "settings-gear", { "aria-label": "Settings" });
-  gear.innerHTML = GEAR_SVG;
+  const dotsGrid = el("div", "settings-dots");
+  for (let i = 0; i < 4; i++) dotsGrid.appendChild(el("div", "settings-dot"));
+  gear.appendChild(dotsGrid);
   gear.addEventListener("click", onOpenSettings);
 
-  const parent = el("a", "parent-corner");
-  parent.href = "/parent";
-  parent.textContent = "parent";
-
-  screen.append(header, covers, gear, parent);
+  screen.append(header, covers, sticker, gear);
   return screen;
 }
-
-const GEAR_SVG =
-  '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>';
 
 function buildSelect({ options, current, onChange, menuDir = "down" }) {
   const wrap = el("div", "settings-select", { "data-menu-dir": menuDir });
@@ -186,54 +358,131 @@ function buildSelect({ options, current, onChange, menuDir = "down" }) {
 }
 
 export function buildSettingsOverlay({
-  langs = [],
   currentLang = "it",
   onLangChange = () => {},
-  palettes = [],
-  paletteLabels = {},
-  currentPalette = "indigo",
   onPaletteChange = () => {},
   onClose = () => {},
+  onWorkshop = () => {},
+  doc = globalThis.document,
 }) {
-  const overlay = el("div", "overlay settings");
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) onClose();
+  const copy = settingsCopy(currentLang);
+
+  const backdrop = el("div", "settings-backdrop");
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) onClose();
   });
 
-  const panel = el("div", "settings-panel");
+  const sheet = el("div", "settings-sheet");
 
+  // Drag handle (decorative)
+  const handle = el("div", "settings-handle");
+  sheet.appendChild(handle);
+
+  // ── Section 1: Languages ────────────────────────────────────────────
   const langSection = el("div", "settings-section");
-  const langLabel = el("div", "settings-label");
-  langLabel.textContent = "Language";
-  langSection.append(
-    langLabel,
-    buildSelect({
-      options: langs.map((l) => ({ value: l.code, label: l.label })),
-      current: currentLang,
-      onChange: onLangChange,
-    }),
-  );
+  const langHeading = el("div", "settings-section-label");
+  langHeading.textContent = copy.languages;
+  const langGrid = el("div", "settings-lang-grid");
+  LANG_CODES.forEach((code) => {
+    const tile = el("button", "settings-lang-tile", { "aria-label": LANG_NAMES[code] });
+    if (code === currentLang) tile.classList.add("selected");
+    const flag = el("span", "settings-lang-flag");
+    flag.textContent = LANG_FLAGS[code];
+    const name = el("span", "settings-lang-name");
+    name.textContent = LANG_NAMES[code];
+    tile.append(flag, name);
+    tile.addEventListener("click", () => {
+      langGrid.querySelectorAll(".settings-lang-tile").forEach((t) => t.classList.remove("selected"));
+      tile.classList.add("selected");
+      onLangChange(code);
+    });
+    langGrid.appendChild(tile);
+  });
+  langSection.append(langHeading, langGrid);
 
-  const themeSection = el("div", "settings-section");
-  const themeLabel = el("div", "settings-label");
-  themeLabel.textContent = "Theme";
-  themeSection.append(
-    themeLabel,
-    buildSelect({
-      options: palettes.map((p) => ({ value: p, label: paletteLabels[p] ?? p })),
-      current: currentPalette,
-      onChange: onPaletteChange,
-      menuDir: "up",
-    }),
-  );
+  // ── Section 2: Light ─────────────────────────────────────────────────
+  const lightSection = el("div", "settings-section");
+  const lightHeading = el("div", "settings-section-label");
+  lightHeading.textContent = copy.light;
+  const lightGrid = el("div", "settings-light-grid");
 
-  const done = el("button", "settings-done");
-  done.textContent = "Done";
-  done.addEventListener("click", onClose);
+  // The stored Light choice; dusk is the default (AI-459).
+  const currentMode = loadThemeMode() ?? "dusk";
+  const lightOptions = [
+    { key: "lightDay",     mode: "light" },
+    { key: "lightAuto",    mode: "auto" },
+    { key: "lightEvening", mode: "dusk" },
+  ];
 
-  panel.append(langSection, themeSection, done);
-  overlay.appendChild(panel);
-  return overlay;
+  lightOptions.forEach(({ key, mode }) => {
+    const tile = el("button", "settings-light-tile");
+    if (mode === currentMode) tile.classList.add("selected");
+
+    // CSS shape icon
+    const icon = el("div", `settings-light-icon settings-light-icon--${key}`);
+    const label = el("span", "settings-light-label");
+    label.textContent = copy[key];
+    tile.append(icon, label);
+    tile.addEventListener("click", () => {
+      lightGrid.querySelectorAll(".settings-light-tile").forEach((t) => t.classList.remove("selected"));
+      tile.classList.add("selected");
+      saveThemeMode(mode);
+      if (doc?.documentElement) doc.documentElement.dataset.theme = resolveTheme("", undefined, mode);
+    });
+    lightGrid.appendChild(tile);
+  });
+
+  const lightHint = el("p", "settings-light-hint");
+  lightHint.textContent = copy.lightHint;
+  lightSection.append(lightHeading, lightGrid, lightHint);
+
+  // ── Section 3: For grown-ups ──────────────────────────────────────────
+  const grownupsSection = el("div", "settings-section");
+  const grownupsHeading = el("div", "settings-section-label");
+  grownupsHeading.textContent = copy.grownups;
+
+  // Read-with-me toggle row
+  const rwmRow = el("div", "settings-row");
+  const rwmLabel = el("span", "settings-row-label");
+  rwmLabel.textContent = copy.readWithMe;
+  const rwmToggle = el("button", "settings-toggle", { role: "switch" });
+  const rwmOn = getReadWithMe();
+  rwmToggle.setAttribute("aria-checked", String(rwmOn));
+  if (rwmOn) rwmToggle.classList.add("on");
+  const rwmThumb = el("span", "settings-toggle-thumb");
+  rwmToggle.appendChild(rwmThumb);
+  rwmToggle.addEventListener("click", () => {
+    const next = rwmToggle.getAttribute("aria-checked") !== "true";
+    rwmToggle.setAttribute("aria-checked", String(next));
+    rwmToggle.classList.toggle("on", next);
+    setReadWithMe(next);
+  });
+  rwmRow.append(rwmLabel, rwmToggle);
+
+  // Workshop row with lock glyph
+  const workshopRow = el("button", "settings-row settings-row--workshop");
+  const workshopLabel = el("span", "settings-row-label");
+  workshopLabel.textContent = copy.workshop;
+  const lockIcon = el("div", "settings-lock-icon");
+  const lockBody = el("div", "settings-lock-body");
+  const lockShackle = el("div", "settings-lock-shackle");
+  lockIcon.append(lockShackle, lockBody);
+  workshopRow.append(workshopLabel, lockIcon);
+  workshopRow.addEventListener("click", () => {
+    const gate = buildGate({ lang: currentLang, onPass: () => { gate.remove(); onWorkshop(); } });
+    (doc?.body ?? globalThis.document.body).appendChild(gate);
+  });
+
+  grownupsSection.append(grownupsHeading, rwmRow, workshopRow);
+
+  // ── Section 4: Close ─────────────────────────────────────────────────
+  const closePill = el("button", "settings-close-pill");
+  closePill.textContent = copy.close;
+  closePill.addEventListener("click", onClose);
+
+  sheet.append(langSection, lightSection, grownupsSection, closePill);
+  backdrop.appendChild(sheet);
+  return backdrop;
 }
 
 export function buildPlayer(store, view = mockView) {
@@ -250,6 +499,19 @@ export function buildPlayer(store, view = mockView) {
       const art = el("div", "page-art", { "data-page": i });
       if (imageUrl) art.style.backgroundImage = `url("${imageUrl}")`;
       screen.appendChild(art);
+    });
+  }
+
+  // Page text elements — shown only when "Read with me" is ON.
+  // Each overlays the matching page; display toggled by setReadWithMe().
+  if (view.texts) {
+    const readWithMeOn = getReadWithMe();
+    view.texts.forEach((text, i) => {
+      if (!text) return;
+      const textEl = el("div", "player-page-text", { "data-page": i });
+      textEl.textContent = text;
+      textEl.style.display = readWithMeOn ? "" : "none";
+      screen.appendChild(textEl);
     });
   }
 
@@ -313,6 +575,13 @@ export function updatePlayer(screen, state, view = mockView) {
   playPause.setAttribute("aria-label", state.playing ? "pause" : "play");
 
   screen.querySelector(".nav-prev").classList.toggle("disabled", state.page === 0);
+
+  // Show only the text element for the current page, and only when Read-with-me is ON.
+  const rwmOn = getReadWithMe();
+  screen.querySelectorAll(".player-page-text").forEach((textEl) => {
+    const pageIndex = Number(textEl.dataset.page);
+    textEl.style.display = rwmOn && pageIndex === state.page ? "" : "none";
+  });
 }
 
 // buildChoiceOverlay(view, store, onChoose): `view` is the loaded story's
@@ -397,6 +666,76 @@ export function buildAudioError(store) {
   overlay.append(bird, prompt);
   overlay.addEventListener("click", () => store.retryAudio());
   return overlay;
+}
+
+// ── Math gate (AI-444) ───────────────────────────────────────────────────────
+// gateOptions(a, b) → { options: number[3], answer: number }
+// answer === a+b; options contains the answer and two distractors, no dupes.
+export function gateOptions(a, b) {
+  const answer = a + b;
+  const distractors = new Set();
+  const offsets = [1, 2, 3, 4, 5];
+  for (const d of offsets) {
+    if (distractors.size >= 2) break;
+    if (answer - d !== answer) distractors.add(answer - d);
+    if (distractors.size >= 2) break;
+    if (answer + d !== answer) distractors.add(answer + d);
+  }
+  const arr = [answer, ...Array.from(distractors).slice(0, 2)];
+  // Shuffle with a stable, non-random approach seeded by answer so tests are
+  // deterministic, but still different from the sorted order.
+  arr.sort((x, y) => ((x * 7 + answer) % 13) - ((y * 7 + answer) % 13));
+  return { options: arr, answer };
+}
+
+// checkGate(choice, answer, onPass): calls onPass only if choice === answer.
+export function checkGate(choice, answer, onPass) {
+  if (choice === answer) onPass();
+}
+
+// buildGate({ lang, onPass }) → detached modal element.
+// The gate is not dismissible on wrong answer; only the Back link exits.
+// onPass is called when the correct sum is tapped.
+export function buildGate({ lang = 'en', onPass = () => {} } = {}) {
+  const copy = settingsCopy(lang);
+  const { options, answer } = gateOptions(7, 6);
+
+  const backdrop = el('div', 'gate-backdrop');
+
+  const modal = el('div', 'gate-modal');
+
+  const heading = el('h2', 'gate-heading');
+  heading.textContent = copy.gateHeading;
+
+  const equationRow = el('div', 'gate-equation');
+  equationRow.textContent = '7 + 6 = ?';
+
+  const wrongMsg = el('p', 'gate-wrong');
+  wrongMsg.textContent = copy.gateWrong;
+  wrongMsg.setAttribute('aria-live', 'polite');
+  wrongMsg.setAttribute('aria-hidden', 'true');
+
+  const choicesRow = el('div', 'gate-choices');
+  options.forEach((num) => {
+    const btn = el('button', 'gate-choice', { 'aria-label': String(num) });
+    btn.textContent = num;
+    btn.addEventListener('click', () => {
+      checkGate(num, answer, onPass);
+      if (num !== answer) {
+        wrongMsg.removeAttribute('aria-hidden');
+        wrongMsg.classList.add('gate-wrong--visible');
+      }
+    });
+    choicesRow.appendChild(btn);
+  });
+
+  const backBtn = el('button', 'gate-back');
+  backBtn.textContent = copy.gateBack;
+  backBtn.addEventListener('click', () => backdrop.remove());
+
+  modal.append(heading, equationRow, choicesRow, wrongMsg, backBtn);
+  backdrop.appendChild(modal);
+  return backdrop;
 }
 
 export function buildEnd(store, endText = { title: "The End!", again: "Again!", prompt: "Another story?" }) {
