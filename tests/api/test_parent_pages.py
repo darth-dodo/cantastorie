@@ -279,6 +279,34 @@ def test_own_progress_fragment_polls_parent_url(monkeypatch: pytest.MonkeyPatch)
     assert "Delete run" not in response.text  # operator controls hidden
 
 
+def test_progress_fragment_keeps_the_run_title_and_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The polled swap must not erase which story is which (AI-460 follow-up)."""
+    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _packs_client(monkeypatch, manager)
+    response = client.get(f"/parent/packs/{mine.id}/progress")
+    assert "the sleepy sea" in response.text
+    assert "Italiano" in response.text
+
+
+def test_failed_run_shows_rested_not_the_pipeline_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parents see a calm 'rested' chip; the raw pipeline error is operator-only."""
+    run = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    run = run.advance("running").advance("failed", error="Traceback: ElevenLabs 429")
+    manager = _FakeManager()
+    _store_with_runs(manager, [run])
+    client = _packs_client(monkeypatch, manager)
+    response = client.get(f"/parent/packs/{run.id}/progress")
+    assert response.status_code == 200
+    assert "rested" in response.text
+    assert "ElevenLabs" not in response.text
+
+
 def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:
     """The parametrization must not alter the workshop's rendering defaults."""
     from src.api.routes import workshop as workshop_module  # noqa: PLC0415

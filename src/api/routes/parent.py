@@ -335,14 +335,13 @@ async def pack_progress(
     )
     return templates.TemplateResponse(
         request,
-        "workshop/_progress.html",
+        "parent/_run_row.html",
         {
             "record": record,
             "live": ["queued", "running"],
             "steps": _checkpointed_steps(record, settings),
             "staged_stories": staged_stories,
             "base_url": "/parent/packs",
-            "is_operator": False,
         },
     )
 

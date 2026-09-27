@@ -9,7 +9,7 @@
      card-shadow, btn-shadow,
      primary, primary-text, primary-16, primary-ring, primary-outline,
      confirm, confirm-text, confirm-22,
-     accent, accent-text, accent-22,
+     accent, accent-text, accent-22, on-accent,
      info, info-20, info-text, info-ring,
      rest, rest-text, rest-16
 
@@ -65,6 +65,7 @@
 
   --accent:      #A88BE0;
   --accent-text: #BFA8EB;
+  --on-accent: #1C2130; /* ink on an orchid fill (make CTA) */
   --accent-22:   rgba(168,139,224,.22);
 
   --info:      #6C93B8;
@@ -110,6 +111,7 @@
 
   --accent:      #A88BE0;
   --accent-text: #BFA8EB;
+  --on-accent: #1C2130; /* ink on an orchid fill (make CTA) */
   --accent-22:   rgba(168,139,224,.22);
 
   --info:      #7FA0C4;

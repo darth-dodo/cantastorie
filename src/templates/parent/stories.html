@@ -2,22 +2,7 @@
 {% block title %}Your stories{% endblock %}
 {% block content %}
 <div class="ws-page">
-  <div class="ws-bench-header">
-    <div class="ws-wordmark">Your shelf</div>
-    <div class="ws-tagline">on your family's private shelf</div>
-  </div>
-
-  {# ── Tab shell ──────────────────────────────────────────────────────── #}
-  <nav class="ws-tabs" aria-label="Parent area">
-    <a href="/parent/stories" class="ws-tab ws-tab--active" aria-current="page">Your stories{% if owned_count %} · {{ owned_count }}{% endif %}</a>
-    <a href="/parent" class="ws-tab">Being made{% if inflight_count %} · {{ inflight_count }}{% endif %}</a>
-  </nav>
-
-  {# ── Exit: child's shelf ─────────────────────────────────────────────── #}
-  <a href="/play" class="ws-pill ws-pill-confirm ws-pill--shelf-exit">Child's shelf →</a>
-
-  {# ── Make a story CTA ────────────────────────────────────────────────── #}
-  <a href="/parent/make" class="ws-pill ws-pill-accent ws-pill--make-cta">+ Make a story</a>
+  {% set active = "stories" %}{% include "parent/_header.html" %}
 
   {# ── Filter / sort bar ───────────────────────────────────────────────── #}
   <div class="ws-filter-bar">
@@ -61,11 +46,12 @@
     {% if stories %}
       {% for story in stories %}
         <div class="ws-card ws-run-card" data-story-id="{{ story.id }}">
-          <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="72" height="72" />
+          <img class="ws-story-cover ws-story-cover--ours" src="{{ story.cover }}" alt="" width="78" height="44" />
           <div class="ws-run-card-body">
             <div class="ws-run-title">{{ story.title }}</div>
             <div class="ws-run-meta">{{ story.language | language_name }}</div>
           </div>
+          <span class="ws-badge ws-badge--ours">ours</span>
           {# Two-step delete: first tap arms; second tap fires the POST #}
           <div class="ws-delete-armed-wrap" data-arm-wrap>
             <button type="button"
@@ -98,7 +84,7 @@
     <div class="ws-runs-list">
       {% for story in shared_stories %}
         <div class="ws-card ws-run-card ws-shared-card">
-          <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="72" height="72" />
+          <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="78" height="44" />
           <div class="ws-run-card-body">
             <div class="ws-run-title">{{ story.title }}</div>
             <div class="ws-run-meta">{{ story.language | language_name }} · on the shelf</div>

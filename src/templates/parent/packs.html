@@ -10,22 +10,7 @@
 {% endblock %}
 {% block content %}
 <div class="ws-page">
-  <div class="ws-bench-header">
-    <div class="ws-wordmark">Your shelf</div>
-    <div class="ws-tagline">stories made just for your family</div>
-  </div>
-
-  {# ── Tab shell ──────────────────────────────────────────────────────── #}
-  <nav class="ws-tabs" aria-label="Parent area">
-    <a href="/parent/stories" class="ws-tab">Your stories{% if owned_count %} · {{ owned_count }}{% endif %}</a>
-    <a href="/parent" class="ws-tab ws-tab--active" aria-current="page">Being made{% if inflight_count %} · {{ inflight_count }}{% endif %}</a>
-  </nav>
-
-  {# ── Exit: child's shelf ─────────────────────────────────────────────── #}
-  <a href="/play" class="ws-pill ws-pill-confirm ws-pill--shelf-exit">Child's shelf →</a>
-
-  {# ── Make a story CTA ────────────────────────────────────────────────── #}
-  <a href="/parent/make" class="ws-pill ws-pill-accent ws-pill--make-cta">+ Make a story</a>
+  {% set active = "packs" %}{% include "parent/_header.html" %}
 
   {% if cap_message %}
     <div class="ws-card ws-card--rest" data-cap-message>
@@ -37,19 +22,21 @@
 
   <div class="ws-runs-list">
     {% if runs %}
-      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes"} %}
+      {% set chip_labels = {"failed": "rested", "staged": "needs your eyes", "approved": "on the shelf"} %}
       {% for record in runs %}
         {% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
         <div data-run-id="{{ record.id }}"
              hx-get="/parent/packs/{{ record.id }}/progress"
              hx-trigger="load"
              hx-swap="outerHTML">
-          <div class="ws-run-card">
-            <div class="ws-run-card-body">
-              <div class="ws-run-title">{{ title }}</div>
-              <div class="ws-run-meta">{{ record.request.language | language_name }}</div>
+          <div class="ws-run-card ws-run-row">
+            <div class="ws-run-row-head">
+              <div class="ws-run-card-body">
+                <div class="ws-run-title">{{ title }}</div>
+                <div class="ws-run-meta">{{ record.request.language | language_name }}</div>
+              </div>
+              <div class="ws-chip ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
             </div>
-            <div class="ws-chip ws-state-{{ record.state }}">{{ chip_labels.get(record.state, record.state) }}</div>
           </div>
         </div>
       {% endfor %}
