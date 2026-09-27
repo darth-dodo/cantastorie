@@ -226,3 +226,37 @@ def test_store_list_skips_malformed_run_records(
         message.startswith(f"Skipping malformed run record at {malformed_key}")
         for message in caplog.messages
     )
+
+
+def test_operator_listing_reads_every_family_but_never_pages_staged_artifacts(
+    s3: S3Client,
+) -> None:
+    """The all-families read lists each owner's runs/ folder (AI-465): staged
+    artifacts share pending/ and must not be paged through to find records."""
+    store = RunStore(_settings(), client=s3)
+    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    runs = [new_run(token, request) for token in ("a" * 32, "b" * 32, "operator")]
+    for run in runs:
+        store.save(run)
+    for i in range(5):
+        s3.put_object(Bucket=BUCKET, Key=f"pending/staged/story-x/p{i}.webp", Body=b"x")
+
+    listed_prefixes: list[str] = []
+    paginator = s3.get_paginator
+
+    def spying_paginator(name: str):  # type: ignore[no-untyped-def]
+        pager = paginator(name)
+        paginate = pager.paginate
+
+        def spy(**kwargs):  # type: ignore[no-untyped-def]
+            listed_prefixes.append(kwargs["Prefix"])
+            return paginate(**kwargs)
+
+        pager.paginate = spy  # type: ignore[method-assign]
+        return pager
+
+    s3.get_paginator = spying_paginator  # type: ignore[method-assign]
+
+    assert {r.id for r in store.list_runs()} == {r.id for r in runs}
+    assert not any(p.startswith("pending/staged") for p in listed_prefixes)
+    assert "pending/" not in listed_prefixes[1:]  # only the one delimiter listing

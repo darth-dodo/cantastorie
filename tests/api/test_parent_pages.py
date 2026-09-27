@@ -139,8 +139,8 @@ def _packs_client(
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
-    # Stub out R2 calls — parent routes now call list_published_stories for tab counts.
-    monkeypatch.setattr(parent_module, "list_published_stories", lambda settings: [])
+    # Stub out R2 calls — parent routes call list_family_shelf for tab counts.
+    monkeypatch.setattr(parent_module, "list_family_shelf", lambda settings, family_token: [])
     # Issuer set so the cap-hit branch can render packs.html (_fapi_host would
     # otherwise try to base64-decode the dummy publishable key). The minted
     # token must carry a matching iss so require_parent still verifies.

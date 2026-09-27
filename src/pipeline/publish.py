@@ -25,16 +25,21 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_args
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
-from src.pipeline.models import Story, Theme
+from src.pipeline.models import Language, Story, Theme
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
     from mypy_boto3_s3 import S3Client
     from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
@@ -125,14 +130,62 @@ def _content_type(name: str) -> str:
     return CONTENT_TYPES.get(Path(name).suffix, "application/octet-stream")
 
 
+# Parallel R2 reads (AI-465): a page that needs N manifests or run records
+# pays about one round trip of wall time, not N. The client's pool must be at
+# least this wide or the extra threads just queue for a connection.
+READ_WORKERS = 16
+CLIENT_CONFIG = Config(max_pool_connections=READ_WORKERS * 2)
+
+# One pooled client per Settings instance. Production has exactly one Settings
+# (get_settings is cached), so every request reuses warm R2 connections instead
+# of paying a fresh TLS handshake. Keying on the instance (and holding it, so
+# its id is never reused) keeps each test's Settings on its own client.
+_CLIENTS: dict[int, tuple[Settings, S3Client]] = {}
+_CLIENTS_LOCK = threading.Lock()
+
+
 def _build_client(settings: Settings) -> S3Client:
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.r2_endpoint_url or None,
-        aws_access_key_id=settings.r2_access_key_id.get_secret_value() or None,
-        aws_secret_access_key=settings.r2_secret_access_key.get_secret_value() or None,
-        region_name="auto",
-    )
+    with _CLIENTS_LOCK:
+        cached = _CLIENTS.get(id(settings))
+        if cached is None or cached[0] is not settings:
+            client = boto3.client(
+                "s3",
+                endpoint_url=settings.r2_endpoint_url or None,
+                aws_access_key_id=settings.r2_access_key_id.get_secret_value() or None,
+                aws_secret_access_key=settings.r2_secret_access_key.get_secret_value() or None,
+                region_name="auto",
+                config=CLIENT_CONFIG,
+            )
+            cached = (settings, client)
+            _CLIENTS[id(settings)] = cached
+        return cached[1]
+
+
+def parallel_map[T, R](fn: Callable[[T], R], items: Iterable[T]) -> list[R]:
+    """``[fn(x) for x in items]`` on up to READ_WORKERS threads, in order.
+
+    boto3 clients are thread-safe, so independent R2 reads overlap.
+    """
+    work = list(items)
+    if len(work) <= 1:
+        return [fn(item) for item in work]
+    with ThreadPoolExecutor(max_workers=min(READ_WORKERS, len(work))) as pool:
+        return list(pool.map(fn, work))
+
+
+def child_prefixes(client: S3Client, bucket: str, prefix: str) -> list[str]:
+    """The immediate "subdirectory" names under ``prefix`` (which ends in "/").
+
+    A delimiter listing returns one entry per child rather than every object
+    below it — one call instead of paging through every audio file and image.
+    """
+    names: list[str] = []
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=prefix, Delimiter="/"
+    ):
+        for common in page.get("CommonPrefixes", []):
+            names.append(common["Prefix"].removeprefix(prefix).rstrip("/"))
+    return names
 
 
 def _missing(error: ClientError) -> bool:
@@ -724,6 +777,67 @@ def _manifest_lane(key: str) -> tuple[str, str | None] | None:
     return None
 
 
+# A lane is (language, family_token); a family_token of None is the shared shelf.
+Lane = tuple[str, "str | None"]
+# Top-level published/ children that are not shared-shelf language lanes.
+_NON_LANE_DIRS = frozenset({FAMILIES_SEGMENT, "stories", "prompts"})
+
+
+def _all_lanes(client: S3Client, bucket: str) -> list[Lane]:
+    """Every lane in the bucket: shared languages, then each family's languages.
+
+    Delimiter listings only: a few calls however many assets are published.
+    """
+    shared = child_prefixes(client, bucket, f"{PUBLISHED_PREFIX}/")
+    lanes: list[Lane] = [(name, None) for name in shared if name not in _NON_LANE_DIRS]
+    tokens = [
+        name
+        for name in child_prefixes(client, bucket, f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/")
+        if _FAMILY_TOKEN_RE.fullmatch(name)
+    ]
+    family_languages = parallel_map(
+        lambda token: child_prefixes(client, bucket, f"{_publish_root(token)}/"), tokens
+    )
+    for token, languages in zip(tokens, family_languages, strict=True):
+        lanes.extend((language, token) for language in languages)
+    return lanes
+
+
+def read_manifests(
+    client: S3Client, bucket: str, lanes: list[Lane]
+) -> list[tuple[Lane, dict[str, Any]]]:
+    """Each lane's manifest (an empty one where none exists), read in parallel."""
+    manifests = parallel_map(
+        lambda lane: _load_manifest(client, bucket, lane[0], _publish_root(lane[1]))[0], lanes
+    )
+    return list(zip(lanes, manifests, strict=True))
+
+
+def published_manifests(
+    settings: Settings, *, client: S3Client | None = None
+) -> list[tuple[Lane, dict[str, Any]]]:
+    """Every lane's manifest: the shared shelf and every family overlay."""
+    client = client or _build_client(settings)
+    return read_manifests(client, settings.r2_bucket, _all_lanes(client, settings.r2_bucket))
+
+
+def stories_from_manifests(manifests: list[tuple[Lane, dict[str, Any]]]) -> list[PublishedStory]:
+    """Manifest entries as PublishedStory rows, sorted for stable pages."""
+    stories = [
+        PublishedStory(
+            id=str(entry.get("id", "")),
+            title=str(entry.get("title", "")),
+            language=language,
+            cover=str(entry.get("cover", "")),
+            family_token=family_token,
+        )
+        for (language, family_token), manifest in manifests
+        for entry in manifest.get("stories", [])
+    ]
+    stories.sort(key=lambda story: (story.family_token or "", story.language, story.id))
+    return stories
+
+
 def list_published_stories(
     settings: Settings,
     *,
@@ -736,67 +850,47 @@ def list_published_stories(
     tagging each row with its owning family (None for the shared shelf) so the
     operator library can show and moderate private stories.
     """
+    return stories_from_manifests(published_manifests(settings, client=client))
+
+
+def list_family_shelf(
+    settings: Settings,
+    family_token: str,
+    *,
+    client: S3Client | None = None,
+) -> list[PublishedStory]:
+    """What one family's parent pages show: the shared shelf and that family's
+    own overlay — never another family's lane.
+
+    Reads the known manifest key for every supported language directly and in
+    parallel: no bucket listing, about one round trip of wall time.
+    """
     client = client or _build_client(settings)
-    bucket = settings.r2_bucket
-    stories: list[PublishedStory] = []
-    for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
-    ):
-        for item in page.get("Contents", []):
-            key = item["Key"]
-            if not key.endswith("/manifest.json"):
-                continue
-            lane = _manifest_lane(key)
-            if lane is None:
-                continue
-            language, family_token = lane
-            root = _publish_root(family_token)
-            manifest, _ = _load_manifest(client, bucket, language, root)
-            for entry in manifest.get("stories", []):
-                stories.append(
-                    PublishedStory(
-                        id=str(entry.get("id", "")),
-                        title=str(entry.get("title", "")),
-                        language=language,
-                        cover=str(entry.get("cover", "")),
-                        family_token=family_token,
-                    )
-                )
-    stories.sort(key=lambda story: (story.family_token or "", story.language, story.id))
-    return stories
+    languages = get_args(Language)
+    lanes: list[Lane] = [(language, None) for language in languages]
+    lanes += [(language, family_token) for language in languages]
+    return stories_from_manifests(read_manifests(client, settings.r2_bucket, lanes))
 
 
 def list_orphan_story_dirs(
     settings: Settings,
     *,
     client: S3Client | None = None,
+    manifests: list[tuple[Lane, dict[str, Any]]] | None = None,
 ) -> list[str]:
-    """Story directories under published/stories/ that no manifest lists."""
+    """Story directories under published/stories/ that no manifest lists.
+
+    Pass ``manifests`` (from published_manifests) to reuse a read the caller
+    already made instead of reading every manifest again.
+    """
     client = client or _build_client(settings)
-    bucket = settings.r2_bucket
-    listed: set[str] = set()
-    for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/"
-    ):
-        for item in page.get("Contents", []):
-            if not item["Key"].endswith("/manifest.json"):
-                continue
-            language = (
-                item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/").removesuffix("/manifest.json")
-            )
-            manifest, _ = _load_manifest(client, bucket, language)
-            for entry in manifest.get("stories", []):
-                if entry.get("story"):
-                    listed.add(str(entry["id"]))
-    seen: set[str] = set()
-    dirs: list[str] = []
-    for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{PUBLISHED_PREFIX}/stories/"
-    ):
-        for item in page.get("Contents", []):
-            name = item["Key"].removeprefix(f"{PUBLISHED_PREFIX}/stories/")
-            parts = name.split("/", 1)
-            if len(parts) == 2 and parts[0] not in seen:
-                seen.add(parts[0])
-                dirs.append(parts[0])
+    if manifests is None:
+        manifests = published_manifests(settings, client=client)
+    listed = {
+        str(entry["id"])
+        for _lane, manifest in manifests
+        for entry in manifest.get("stories", [])
+        if entry.get("story")
+    }
+    dirs = child_prefixes(client, settings.r2_bucket, f"{PUBLISHED_PREFIX}/stories/")
     return [story_id for story_id in dirs if story_id not in listed]

@@ -17,7 +17,11 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
-from src.pipeline.publish import list_orphan_story_dirs, list_published_stories
+from src.pipeline.publish import (
+    list_family_shelf,
+    list_orphan_story_dirs,
+    list_published_stories,
+)
 
 BUCKET = "cantastorie-published"
 PUBLIC_BASE = "https://cdn.example.test/published"
@@ -127,3 +131,30 @@ def test_overlay_manifests_are_not_double_counted_as_shared(tmp_path: Path, s3: 
     assert [s.id for s in stories] == ["fam-a-it-1"]
     assert stories[0].family_token == FAMILY
     assert stories[0].language == "it"  # not "families/{token}/it"
+
+
+def test_family_shelf_is_shared_plus_own_lane_never_another_family(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """The parent pages' read (AI-465): scoped, so it never touches other lanes."""
+    _put_manifest(s3, "it", [("global-it-1", "Globale")])
+    _put_manifest(s3, "en", [("global-en-1", "Global")])
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-a-it-1", "Storia A")])
+    _put_overlay_manifest(s3, OTHER_FAMILY, "it", [("fam-b-it-1", "Storia B")])
+
+    stories = list_family_shelf(_settings(tmp_path), FAMILY)
+
+    assert {s.id: s.family_token for s in stories} == {
+        "global-en-1": None,
+        "global-it-1": None,
+        "fam-a-it-1": FAMILY,
+    }
+
+
+def test_orphans_ignore_stories_listed_by_a_family_overlay(tmp_path: Path, s3: S3Client) -> None:
+    """A story directory an overlay manifest lists is not an orphan."""
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-a-it-1", "Storia A")])
+    s3.put_object(Bucket=BUCKET, Key="published/stories/fam-a-it-1/story.json", Body=b"{}")
+    s3.put_object(Bucket=BUCKET, Key="published/stories/ghost/story.json", Body=b"{}")
+
+    assert list_orphan_story_dirs(_settings(tmp_path)) == ["ghost"]

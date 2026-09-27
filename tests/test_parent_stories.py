@@ -104,7 +104,9 @@ def _make_client(
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
-    monkeypatch.setattr(parent_module, "list_published_stories", lambda settings: stories or [])
+    monkeypatch.setattr(
+        parent_module, "list_family_shelf", lambda settings, family_token: stories or []
+    )
     if unpublish_fn is not None:
         monkeypatch.setattr(parent_module, "unpublish_story", unpublish_fn)
     else:

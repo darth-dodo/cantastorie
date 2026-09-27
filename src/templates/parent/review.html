@@ -16,7 +16,7 @@
       <div class="ws-page-card ws-card">
         <div class="ws-page-art-wrap">
           {% if page.image %}
-            <img class="ws-page-art" src="/parent/staged/{{ story.id }}/assets/{{ page.image }}" alt="Illustration for page {{ loop.index }}" loading="lazy" />
+            <img class="ws-page-art" src="/parent/staged/{{ story.id }}/assets/{{ page.image }}?run={{ record.id }}" alt="Illustration for page {{ loop.index }}" loading="lazy" />
           {% else %}
             <div class="ws-page-art ws-page-art-fallback"></div>
           {% endif %}
@@ -31,7 +31,7 @@
                 <div class="ws-audio-progress" data-audio-progress></div>
               </div>
               <span class="ws-audio-time" data-audio-time>0:00</span>
-              <audio preload="none" src="/parent/staged/{{ story.id }}/assets/{{ page.audio.file }}" data-audio-src></audio>
+              <audio preload="none" src="/parent/staged/{{ story.id }}/assets/{{ page.audio.file }}?run={{ record.id }}" data-audio-src></audio>
             </div>
           {% endif %}
         </div>

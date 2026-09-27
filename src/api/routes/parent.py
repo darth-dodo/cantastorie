@@ -7,6 +7,8 @@ pack request form, my-packs) arrive in the next step of the design.
 from __future__ import annotations
 
 import secrets
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Protocol, get_args
 
 from fastapi import (
@@ -18,6 +20,7 @@ from fastapi import (
     Request,
     Response,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -35,14 +38,15 @@ from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
     STAGED_PREFIX,
     STORY_FILE,
+    PublishedStory,
     _build_client,
     _content_type,
-    list_published_stories,
+    list_family_shelf,
     publish_story,
     unpublish_story,
 )
 from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
-from src.workshop.records import InvalidTransition, PackRequest
+from src.workshop.records import InvalidTransition, PackRequest, RunRecord
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -50,18 +54,51 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/parent")
 
 
-def _published_at(manager: RunManager, family_token: str) -> dict[str, datetime]:
+def _published_at(runs: list[RunRecord]) -> dict[str, datetime]:
     """The family's published story ids, each with its approval (publish) time."""
     return {
         story_id: record.updated_at
-        for record in manager.store.list_runs(family_token=family_token)
+        for record in runs
         if record.state == "approved"
         for story_id in record.story_ids
     }
 
 
 def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
-    return set(_published_at(manager, family_token))
+    return set(_published_at(manager.store.list_runs(family_token=family_token)))
+
+
+@dataclass(frozen=True)
+class FamilyView:
+    """Everything a family's parent pages show, read once per request (AI-465)."""
+
+    runs: list[RunRecord]  # newest first
+    published_at: dict[str, datetime]
+    owned: list[PublishedStory]  # this family's published stories
+    shared: list[PublishedStory]  # the shared shelf
+
+    @property
+    def inflight_count(self) -> int:
+        return sum(1 for r in self.runs if r.state in ("queued", "running", "staged"))
+
+
+def _family_view(manager: RunManager, settings: Settings, family_token: str) -> FamilyView:
+    """Read the family's runs and its shelf together: two independent R2 reads
+    overlap, so the page waits for the slower one, not their sum. Blocking —
+    callers run it off the event loop."""
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        runs_read = pool.submit(manager.store.list_runs, family_token=family_token)
+        shelf_read = pool.submit(list_family_shelf, settings, family_token)
+        runs = sorted(runs_read.result(), key=lambda r: r.created_at, reverse=True)
+        shelf = shelf_read.result()
+    published_at = _published_at(runs)
+    return FamilyView(
+        runs=runs,
+        published_at=published_at,
+        # A family sees only its own overlay lane — never another family's.
+        owned=[s for s in shelf if s.family_token == family_token and s.id in published_at],
+        shared=[s for s in shelf if s.family_token is None],
+    )
 
 
 Manager = Annotated[RunManager, Depends(get_run_manager)]
@@ -151,28 +188,18 @@ async def parent_home(
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
     # Provisioned parents get the packs page with their own runs, newest first.
-    runs = manager.store.list_runs(family_token=ctx.family_token)
-    runs.sort(key=lambda r: r.created_at, reverse=True)
-    # Count in-flight (queued/running/staged) runs for tab badge.
-    inflight_count = sum(1 for r in runs if r.state in ("queued", "running", "staged"))
-    # Count owned published stories for tab badge.
-    owned = _owned_story_ids(manager, ctx.family_token)
-    owned_count = sum(
-        1
-        for s in list_published_stories(settings)
-        if s.family_token == ctx.family_token and s.id in owned
-    )
+    view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
     return templates.TemplateResponse(
         request,
         "parent/packs.html",
         {
             **context,
             "family_token": ctx.family_token,  # seeds same-device overlay adoption
-            "runs": runs,
+            "runs": view.runs,
             "cap_message": None,
             "live": ["queued", "running"],
-            "inflight_count": inflight_count,
-            "owned_count": owned_count,
+            "inflight_count": view.inflight_count,
+            "owned_count": len(view.owned),
         },
     )
 
@@ -198,14 +225,9 @@ async def parent_stories(
     if ctx.family_token is None:
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
-    published_at = _published_at(manager, ctx.family_token)
-    all_published = list_published_stories(settings)
-    # A family sees only its own overlay lane — never another family's overlay.
-    all_stories = [
-        s for s in all_published if s.family_token == ctx.family_token and s.id in published_at
-    ]
-    # Shared shelf stories (family_token is None) visible to every family.
-    shared_stories = [s for s in all_published if s.family_token is None]
+    view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
+    published_at = view.published_at
+    all_stories = view.owned
     # Collect available languages with counts for the filter panel.
     lang_counts: dict[str, int] = {}
     for s in all_stories:
@@ -218,21 +240,18 @@ async def parent_stories(
         stories = sorted(stories, key=lambda s: s.title.lower())
     else:
         stories = sorted(stories, key=lambda s: published_at[s.id], reverse=True)
-    # Count in-flight runs for the Being Made tab badge.
-    all_runs = manager.store.list_runs(family_token=ctx.family_token)
-    inflight_count = sum(1 for r in all_runs if r.state in ("queued", "running", "staged"))
     return templates.TemplateResponse(
         request,
         "parent/stories.html",
         {
             **context,
             "stories": stories,
-            "shared_stories": shared_stories,
+            "shared_stories": view.shared,
             "lang_counts": lang_counts,
             "active_lang": active_lang,
             "sort": sort or "newest",
             "owned_count": len(all_stories),
-            "inflight_count": inflight_count,
+            "inflight_count": view.inflight_count,
         },
     )
 
@@ -258,9 +277,8 @@ async def parent_make(
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
     # One story at a time: show the cap up front, not after the form is filled.
-    cap = blocking_cap(
-        manager.store.list_runs(family_token=ctx.family_token), settings.parent_daily_run_cap
-    )
+    runs = await run_in_threadpool(manager.store.list_runs, family_token=ctx.family_token)
+    cap = blocking_cap(runs, settings.parent_daily_run_cap)
     return templates.TemplateResponse(
         request,
         "parent/make.html",
@@ -309,25 +327,17 @@ async def request_pack(
     try:
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
-        runs = manager.store.list_runs(family_token=ctx.family_token)
-        runs.sort(key=lambda r: r.created_at, reverse=True)
-        inflight_count = sum(1 for r in runs if r.state in ("queued", "running", "staged"))
-        owned = _owned_story_ids(manager, ctx.family_token)
-        owned_count = sum(
-            1
-            for s in list_published_stories(settings)
-            if s.family_token == ctx.family_token and s.id in owned
-        )
+        view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
         context: dict[str, object] = {
             "door": "parent",
             "fapi_host": fapi_host(settings),
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "family_token": ctx.family_token,  # seeds same-device overlay adoption
-            "runs": runs,
+            "runs": view.runs,
             "cap_message": str(cap),
             "cap_active": cap.active,
-            "inflight_count": inflight_count,
-            "owned_count": owned_count,
+            "inflight_count": view.inflight_count,
+            "owned_count": len(view.owned),
         }
         return templates.TemplateResponse(request, "parent/packs.html", context)
     background.add_task(manager.execute, record)
@@ -342,11 +352,14 @@ async def pack_progress(
     settings: Annotated[Settings, Depends(get_settings)],
     manager: Manager,
 ) -> HTMLResponse:
-    record = manager.store.load(ctx.family_token, run_id)  # tenancy: load is family-scoped
+    # Polled every 2 s while a run is live: keep its R2 reads off the event loop.
+    record = await run_in_threadpool(manager.store.load, ctx.family_token, run_id)  # tenancy
     if record is None:
         raise HTTPException(status_code=404)
     staged_stories = (
-        _staged_story_summaries(record.story_ids, settings) if record.state == "staged" else []
+        await run_in_threadpool(_staged_story_summaries, record.story_ids, settings)
+        if record.state == "staged"
+        else []
     )
     return templates.TemplateResponse(
         request,
@@ -404,29 +417,36 @@ async def parent_staged_story(
     Tenancy: the run is located by story_id and then confirmed family-scoped —
     a parent cannot reach another family's staged story (returns 404).
     """
-    # Find the run that contains this story, then confirm it belongs to this family.
-    record = None
     run_id = request.query_params.get("run")
-    if run_id:
-        candidate = manager.store.load(ctx.family_token, run_id)
-        if candidate and story_id in candidate.story_ids:
-            record = candidate
-    if record is None:
-        # Fall back: scan this family's runs only.
-        for candidate in manager.store.list_runs(family_token=ctx.family_token):
-            if story_id in candidate.story_ids:
+
+    def read_owned_story() -> tuple[RunRecord, Story] | None:
+        # Find the run that contains this story, then confirm it belongs to this family.
+        record = None
+        if run_id:
+            candidate = manager.store.load(ctx.family_token, run_id)
+            if candidate and story_id in candidate.story_ids:
                 record = candidate
-                break
-    if record is None:
+        if record is None:
+            # Fall back: scan this family's runs only.
+            for candidate in manager.store.list_runs(family_token=ctx.family_token):
+                if story_id in candidate.story_ids:
+                    record = candidate
+                    break
+        if record is None:
+            return None
+        # Load the staged story from the pending bucket.
+        try:
+            obj = _build_client(settings).get_object(
+                Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}"
+            )
+        except Exception:
+            return None
+        return record, Story.model_validate_json(obj["Body"].read())
+
+    found = await run_in_threadpool(read_owned_story)
+    if found is None:
         raise HTTPException(status_code=404)
-    # Load the staged story from the pending bucket.
-    client = _build_client(settings)
-    bucket = settings.pending_bucket
-    try:
-        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}")
-    except Exception:
-        raise HTTPException(status_code=404) from None
-    story = Story.model_validate_json(obj["Body"].read())
+    record, story = found
     return templates.TemplateResponse(
         request,
         "parent/review.html",
@@ -448,26 +468,46 @@ async def parent_staged_asset(
     ctx: Annotated[ParentContext, Depends(require_parent)],
     settings: Annotated[Settings, Depends(get_settings)],
     manager: Manager,
+    run: str | None = None,
 ) -> Response:
-    """Serve a staged asset (image/audio) family-scoped."""
+    """Serve a staged asset (image/audio) family-scoped.
+
+    The review page passes ``?run=`` so ownership is one family-scoped record
+    read instead of a scan of every run the family has — per asset, that is
+    the difference between one R2 call and a dozen (AI-465).
+    """
     if "/" in name or ".." in name:
         raise HTTPException(status_code=404)
-    # Confirm family owns a run containing this story.
-    owned = any(
-        story_id in r.story_ids for r in manager.store.list_runs(family_token=ctx.family_token)
-    )
-    if not owned:
+
+    def read_owned_asset() -> bytes | None:
+        # Tenancy: load() and list_runs() are both scoped to the session's family.
+        if run:
+            record = manager.store.load(ctx.family_token, run)
+            owned = record is not None and story_id in record.story_ids
+        else:
+            owned = any(
+                story_id in r.story_ids
+                for r in manager.store.list_runs(family_token=ctx.family_token)
+            )
+        if not owned:
+            return None
+        try:
+            obj = _build_client(settings).get_object(
+                Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}"
+            )
+        except Exception:
+            return None
+        return obj["Body"].read()
+
+    body = await run_in_threadpool(read_owned_asset)
+    if body is None:
         raise HTTPException(status_code=404)
-    client = _build_client(settings)
-    bucket = settings.pending_bucket
-    try:
-        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}")
-    except Exception:
-        raise HTTPException(status_code=404) from None
     return Response(
-        content=obj["Body"].read(),
+        content=body,
         media_type=_content_type(name),
-        headers={"Cache-Control": "private, no-cache"},
+        # Asset names embed a content hash, so a name's bytes never change:
+        # the browser may keep them (privately) instead of refetching each visit.
+        headers={"Cache-Control": "private, max-age=86400, immutable"},
     )
 
 

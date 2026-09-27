@@ -146,12 +146,15 @@ class RunManager:
             self._store.save(record)
             return record
 
-    def reap_stale(self) -> list[RunRecord]:
+    def reap_stale(self, runs: list[RunRecord] | None = None) -> list[RunRecord]:
         """Retire live runs (queued/running) whose heartbeat is too old to belong
         to a process that is still alive — a deploy or crash left them stranded
         (AI-417). Each transitions to failed with INTERRUPTED_NOTE. Terminal and
         review-waiting states (staged/approved/rejected/failed) are never swept.
         The threshold is generous by design so a genuinely-slow run is safe.
+
+        Pass ``runs`` when the caller has just listed the store (the bench does)
+        to sweep that list instead of reading every record again (AI-465).
 
         Throttled by reap_min_interval_seconds: the progress poll calls this every
         ~2s, so without a gate the store is swept continuously. Skipping a sweep
@@ -166,7 +169,8 @@ class RunManager:
         # One sweep, filtered in memory: list_runs already fetches every record
         # and filters state in Python, so two state-filtered calls doubled the
         # R2 round-trips for no gain.
-        live = [r for r in self._store.list_runs() if r.state in ("queued", "running")]
+        swept = self._store.list_runs() if runs is None else runs
+        live = [r for r in swept if r.state in ("queued", "running")]
         reaped: list[RunRecord] = []
         for record in live:
             updated = record.updated_at
