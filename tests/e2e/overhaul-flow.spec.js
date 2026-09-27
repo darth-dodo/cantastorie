@@ -59,25 +59,16 @@ test('full flow: family cover star present when family entry exists', async ({ p
   if (count > 0) {
     await expect(familyCovers.first()).toBeAttached();
   } else {
-    // No family cover in seed data — assert cover-cards (grid cells) are present.
-    // cover buttons have `overflow:hidden` themselves; use cover-card (the wrapper)
-    // which is not clipped and is the safe visibility anchor.
-    await expect(page.locator('.cover-card').first()).toBeVisible();
+    // No family cover in seed data — assert the covers themselves render.
+    await expect(page.locator('.cover').first()).toBeVisible();
   }
 });
 
 test('full flow: opening a cover shows player screen', async ({ page }) => {
   await page.goto('/play?lang=en');
 
-  // Wait for shelf to be ready — use cover-card (the flex wrapper around each
-  // cover button) as the visibility anchor; cover buttons themselves have
-  // overflow:hidden which Playwright may report as hidden.
-  await expect(page.locator('.cover-card').first()).toBeVisible();
-
-  // Cover buttons have CSS overflow:hidden (art clipping) and sit inside a
-  // flex/scroll container. Playwright's visibility + viewport checks can refuse
-  // a real click. Dispatch the click event directly to work around both issues.
-  await page.locator('.covers .cover').first().dispatchEvent('click');
+  await expect(page.locator('.cover').first()).toBeVisible();
+  await page.locator('.covers .cover').first().click();
 
   // Player screen must appear.
   await expect(page.locator('.screen.player')).toBeVisible();
@@ -88,10 +79,8 @@ test('full flow: opening a cover shows player screen', async ({ page }) => {
 
 test('full flow: player → back → shelf', async ({ page }) => {
   await page.goto('/play?lang=en');
-  await expect(page.locator('.cover-card').first()).toBeVisible();
-  // dispatchEvent — cover buttons have overflow:hidden (art clipping) + may sit
-  // outside the scroll viewport; see note above.
-  await page.locator('.covers .cover').first().dispatchEvent('click');
+  await expect(page.locator('.cover').first()).toBeVisible();
+  await page.locator('.covers .cover').first().click();
   await expect(page.locator('.screen.player')).toBeVisible();
 
   // Tap exit (back to stories).
@@ -242,3 +231,21 @@ for (const palette of PALETTES) {
     expect(realErrors).toHaveLength(0);
   });
 }
+
+test('every shelf cover is a real tap target, art or not', async ({ page }) => {
+  // Regression: inside the centred .cover-card column a width-less .cover
+  // collapsed to 0×0 when it had no <img> — the shelf showed captions only.
+  await page.goto('/play?lang=en');
+  await expect(page.locator('.cover').first()).toBeVisible();
+  const sizes = await page.locator('.covers .cover').evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { w: r.width, h: r.height };
+    })
+  );
+  expect(sizes.length).toBeGreaterThan(0);
+  for (const s of sizes) {
+    expect(s.w).toBeGreaterThanOrEqual(48);
+    expect(s.h).toBeGreaterThanOrEqual(48);
+  }
+});

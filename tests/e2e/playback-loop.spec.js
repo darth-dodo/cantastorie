@@ -9,7 +9,10 @@ import { expect, test } from "@playwright/test";
 const STORY_BASE = "/static/content/it/stories/la-barchetta-e-la-luna/";
 
 async function wakeAndOpenTheStory(page) {
-  await page.goto("/play?theme=dusk");
+  // The fixture story "La barchetta e la luna" lives in the Italian shelf;
+  // explicitly request ?lang=it so the first cover is always that story
+  // (not the EN cosmo-space-cowboy which uses MP3 and has different prompt paths).
+  await page.goto("/play?lang=it&theme=dusk");
   // Given the shelf: the first tap anywhere wakes the sound...
   await page.locator(".greeting").click();
   await page.waitForFunction(() => window.__shell?.engine.unlocked === true);
@@ -49,8 +52,9 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
 
     // ...and the end screen offers replay and back-to-shelf pictures.
     await expect(page.locator(".end")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Again!" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Another story" })).toBeVisible();
+    // The end screen speaks the story's language (Italian fixture).
+    await expect(page.getByRole("button", { name: "Di nuovo!" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Un'altra storia?" })).toBeVisible();
   });
 
   test("the end prompt plays on the end screen, and replay starts the story over", async ({ page }) => {
@@ -63,8 +67,8 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
     await expect(page.locator(".end")).toBeVisible({ timeout: 30_000 });
     expect(endPromptRequests.length).toBeGreaterThan(0);
 
-    // When "Again!" is tapped, the story begins again from page 1...
-    await page.getByRole("button", { name: "Again!" }).click();
+    // When "Di nuovo!" (Again!) is tapped, the story begins again from page 1...
+    await page.getByRole("button", { name: "Di nuovo!" }).click();
     await expect(page.locator(".player")).toBeVisible();
     await expect(page.locator(".page-wash.current")).toHaveAttribute("data-page", "0");
 

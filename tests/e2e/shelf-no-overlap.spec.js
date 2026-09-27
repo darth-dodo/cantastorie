@@ -24,11 +24,12 @@ test("shelf covers do not overlap on the 7-cover EN manifest", async ({ page }) 
   page.on("pageerror", (e) => errors.push(e.message));
 
   await page.goto(`${PROD}/play?lang=en`, { waitUntil: "networkidle" });
-  await page.waitForSelector(".covers .cover");
+  // Each cover is a .cover-card: the tappable .cover button plus its caption.
+  await page.waitForSelector(".cover-card");
   await page.waitForTimeout(1500);
 
   const covers = await page.evaluate(() => {
-    return [...document.querySelectorAll(".covers .cover")].map((c) => {
+    return [...document.querySelectorAll(".cover-card")].map((c) => {
       const r = c.getBoundingClientRect();
       return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left) };
     });
@@ -36,8 +37,8 @@ test("shelf covers do not overlap on the 7-cover EN manifest", async ({ page }) 
 
   expect(covers.length, "expected the EN manifest's 7 covers").toBeGreaterThanOrEqual(5);
 
-  // Cluster covers into columns by their left edge (viewport-agnostic: side-by-
-  // side covers share a left; the two columns are the distinct left values).
+  // Cluster cover-cards into columns by their left edge (viewport-agnostic: side-by-
+  // side cards share a left; the two columns are the distinct left values).
   const lefts = [...new Set(covers.map((c) => c.left))].sort((a, b) => a - b);
   const columns = lefts.map((l) => covers.filter((c) => c.left === l).sort((a, b) => a.top - b.top));
 

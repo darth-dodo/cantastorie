@@ -53,8 +53,10 @@ test("family overlay merges onto the shared shelf", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
 
   // Shared-only first (no token yet) to establish the baseline count.
-  await page.goto("/?lang=en", { waitUntil: "networkidle" });
-  await page.waitForSelector(".cover-caption");
+  // The child player lives at /play (the root "/" is the marketing landing
+  // page, added in AI-433, which has no shelf).
+  await page.goto("/play?lang=en", { waitUntil: "networkidle" });
+  await page.waitForSelector(".cover-card");
   const sharedCount = await page.locator(".cover-caption").count();
   expect(sharedCount, "expected the shared EN fixture shelf to render").toBeGreaterThan(0);
 
@@ -69,7 +71,7 @@ test("family overlay merges onto the shared shelf", async ({ page }) => {
   );
 
   await page.reload({ waitUntil: "networkidle" });
-  await page.waitForSelector(".cover-caption");
+  await page.waitForSelector(".cover-card");
 
   const captions = await page.locator(".cover-caption").allTextContents();
   expect(captions.length, "overlay should add exactly one story").toBe(sharedCount + 1);
@@ -83,8 +85,9 @@ test("no family token → shared shelf only, zero overlay requests", async ({ pa
     if (r.url().includes("/families/")) overlayRequests.push(r.url());
   });
 
-  await page.goto("/?lang=en", { waitUntil: "networkidle" });
-  await page.waitForSelector(".cover-caption");
+  // The child player lives at /play (see above).
+  await page.goto("/play?lang=en", { waitUntil: "networkidle" });
+  await page.waitForSelector(".cover-card");
 
   expect(
     overlayRequests,

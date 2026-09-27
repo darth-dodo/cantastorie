@@ -89,7 +89,8 @@ test("a tapped choice leads to that arm's ending", async ({ page }) => {
 
   // With no further taps, the arm plays to its end screen.
   await expect(page.locator(".end")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Again!" })).toBeVisible();
+  // The end screen speaks the story's language: "Di nuovo!" is Italian "Again!".
+  await expect(page.getByRole("button", { name: "Di nuovo!" })).toBeVisible();
 });
 
 // Layout regression guard for commit 699cb9e (AI-428). Task 11 added

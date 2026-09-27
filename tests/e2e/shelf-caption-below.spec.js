@@ -20,20 +20,22 @@ test("story title renders below the cover image, not as an overlay", async ({ pa
   page.on("pageerror", (e) => errors.push(e.message));
 
   await page.goto(`${PROD}/play?lang=en`, { waitUntil: "networkidle" });
-  await page.waitForSelector(".covers .cover");
+  // Each cover is a .cover-card: the tappable .cover button plus its caption.
+  await page.waitForSelector(".cover-card");
   await page.waitForTimeout(1500);
 
   // offsetTop/offsetHeight are layout-space and ignore the wobble transform:
   // getBoundingClientRect would skew the rotated box and falsely show overlap.
   const covers = await page.evaluate(() => {
-    return [...document.querySelectorAll(".covers .cover")].map((c) => {
-      const img = c.querySelector("img.cover-art");
-      const span = c.querySelector("span");
+    return [...document.querySelectorAll(".cover-card")].map((card) => {
+      const img = card.querySelector("img.cover-art");
+      const span = card.querySelector("span.cover-caption");
+      const btn = card.querySelector("button.cover");
       return {
-        imgBottom: img.offsetTop + img.offsetHeight,
-        spanTop: span.offsetTop,
-        spanText: span.textContent.trim(),
-        ariaLabel: c.getAttribute("aria-label"),
+        imgBottom: img ? img.offsetTop + img.offsetHeight : null,
+        spanTop: span ? span.offsetTop : null,
+        spanText: span ? span.textContent.trim() : "",
+        ariaLabel: btn ? btn.getAttribute("aria-label") : "",
       };
     });
   });
@@ -41,16 +43,17 @@ test("story title renders below the cover image, not as an overlay", async ({ pa
   expect(covers.length, "expected the EN manifest's 7 covers").toBeGreaterThanOrEqual(5);
 
   for (const [i, c] of covers.entries()) {
+    if (c.imgBottom === null) continue; // wash-only cover: no <img> to sit below
     expect(c.spanTop, `cover ${i}: caption (${c.spanTop}) overlaps or sits above the image bottom (${c.imgBottom})`).toBeGreaterThanOrEqual(c.imgBottom - 1);
     // Title must be present and match the story title (aria-label).
     expect(c.spanText, `cover ${i}: caption text is empty`).not.toBe("");
     expect(c.spanText, `cover ${i}: caption should equal the story title`).toBe(c.ariaLabel);
   }
 
-  // Regression: #59 overlap fix must hold — no two covers in a column overlap.
+  // Regression: #59 overlap fix must hold — no two cover-cards in a column overlap.
   // Layout-space offsets ignore the wobble transform, unlike getBoundingClientRect.
   const boxes = await page.evaluate(() =>
-    [...document.querySelectorAll(".covers .cover")].map((c) => ({
+    [...document.querySelectorAll(".cover-card")].map((c) => ({
       top: c.offsetTop,
       bottom: c.offsetTop + c.offsetHeight,
       left: c.offsetLeft,

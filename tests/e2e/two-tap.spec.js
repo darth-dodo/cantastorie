@@ -16,7 +16,9 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
   });
 
   await page.goto("/play?theme=light&speed=600");
-  await expect(page.locator(".shelf .cover")).toHaveCount(4);
+  // The dev fixture EN manifest has 3 stories (cosmo-space-cowboy, pip-the-pirate,
+  // bruno-birthday-bear). Count 3, not 4.
+  await expect(page.locator(".shelf .cover")).toHaveCount(3);
 
   const start = Date.now();
 
@@ -39,9 +41,18 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
   expect(offOrigin).toEqual([]);
 });
 
-test("the parent corner exists but leads nowhere yet", async ({ page }) => {
+// Task 8 of the design overhaul replaced the old .parent-corner element with a
+// language sticker (.lang-sticker) and a settings gear (.settings-gear) in the
+// shelf bottom row. The parent-corner stub is gone; settings is the grown-up
+// surface now. This test verifies the settings gear is present and that tapping
+// it stays on the shelf (settings sheet opens but shelf is still the active
+// screen beneath it).
+test("the settings gear opens the settings sheet and shelf stays underneath", async ({ page }) => {
   await page.goto("/play?theme=light");
-  await expect(page.locator(".parent-corner")).toBeVisible();
-  await page.locator(".parent-corner").click();
-  await expect(page.locator(".shelf")).toBeVisible(); // still on the shelf
+  await expect(page.locator(".settings-gear")).toBeVisible();
+  await page.locator(".settings-gear").click();
+  // The settings sheet opens…
+  await expect(page.locator(".settings-sheet")).toBeVisible();
+  // …but the shelf is still present in the DOM beneath the overlay.
+  await expect(page.locator(".shelf")).toBeAttached();
 });
