@@ -24,6 +24,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, PrivateAttr, ValidationError
 
 from src.pipeline.models import Language, Theme
+from src.pipeline.publish import CLIENT_CONFIG, STAGED_PREFIX, child_prefixes, parallel_map
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -130,6 +131,7 @@ def _build_client(settings: Settings) -> S3Client:
         aws_access_key_id=settings.r2_access_key_id.get_secret_value() or None,
         aws_secret_access_key=settings.r2_secret_access_key.get_secret_value() or None,
         region_name="auto",
+        config=CLIENT_CONFIG,
     )
 
 
@@ -189,24 +191,42 @@ class RunStore:
         family_token: str | None = None,
         state: RunState | None = None,
     ) -> list[RunRecord]:
-        prefix = f"{PENDING_PREFIX}/{family_token}/runs/" if family_token else f"{PENDING_PREFIX}/"
-        records: list[RunRecord] = []
-        paginator = self._client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
-                if "/runs/" not in key or not key.endswith(".json"):
-                    continue  # staged artifacts share pending/; only records are runs/*.json
-                try:
-                    response = self._client.get_object(Bucket=self._bucket, Key=key)
-                    body = response["Body"].read()
-                    record = RunRecord.model_validate(json.loads(body))
-                    record._etag = response.get("ETag")
-                except (json.JSONDecodeError, ValidationError) as error:
-                    logging.getLogger(__name__).warning(
-                        f"Skipping malformed run record at {key}: {error}"
-                    )
-                    continue
-                if state is None or record.state == state:
-                    records.append(record)
-        return records
+        # Only runs/ folders hold records. Listing each owner's runs/ directly
+        # skips the staged artifacts (every page's audio and image) that share
+        # pending/ — the operator's all-families read used to page through them.
+        if family_token:
+            owners = [family_token]
+        else:
+            staged_dir = STAGED_PREFIX.removeprefix(f"{PENDING_PREFIX}/")
+            owners = [
+                name
+                for name in child_prefixes(self._client, self._bucket, f"{PENDING_PREFIX}/")
+                if name != staged_dir
+            ]
+        keys = sorted(
+            key for owner_keys in parallel_map(self._run_keys, owners) for key in owner_keys
+        )
+        # One round trip of wall time for all the records, not one per run.
+        loaded = parallel_map(self._load_key, keys)
+        return [r for r in loaded if r is not None and (state is None or r.state == state)]
+
+    def _run_keys(self, owner: str) -> list[str]:
+        prefix = f"{PENDING_PREFIX}/{owner}/runs/"
+        return [
+            obj["Key"]
+            for page in self._client.get_paginator("list_objects_v2").paginate(
+                Bucket=self._bucket, Prefix=prefix
+            )
+            for obj in page.get("Contents", [])
+            if obj["Key"].endswith(".json")
+        ]
+
+    def _load_key(self, key: str) -> RunRecord | None:
+        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        try:
+            record = RunRecord.model_validate(json.loads(response["Body"].read()))
+        except (json.JSONDecodeError, ValidationError) as error:
+            logging.getLogger(__name__).warning(f"Skipping malformed run record at {key}: {error}")
+            return None
+        record._etag = response.get("ETag")
+        return record

@@ -63,7 +63,7 @@ def _make_client(
 ) -> TestClient:
     private_key = generate_rsa_keypair()
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
-    monkeypatch.setattr(parent_module, "list_published_stories", lambda settings: [])
+    monkeypatch.setattr(parent_module, "list_family_shelf", lambda settings, family_token: [])
     settings = clerk_settings(clerk_issuer=ISSUER)
     app = FastAPI()
     app.include_router(parent_router)

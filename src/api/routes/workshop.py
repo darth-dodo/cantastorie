@@ -23,6 +23,7 @@ from functools import lru_cache
 from typing import Annotated, Protocol, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from src.api.auth import verify_clerk_session
@@ -33,12 +34,14 @@ from src.pipeline.models import Language, Story, Theme
 from src.pipeline.publish import (
     STAGED_PREFIX,
     STORY_FILE,
+    PublishedStory,
     _build_client,
     _content_type,
     delete_staged_story,
     list_orphan_story_dirs,
-    list_published_stories,
     publish_story,
+    published_manifests,
+    stories_from_manifests,
     unpublish_story,
 )
 from src.workshop.manager import RunManager
@@ -187,8 +190,15 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
     if not scope.is_operator:
         # No dead-end: a signed-in parent belongs in the parent area.
         return RedirectResponse(home_path(scope.is_operator), status_code=303)
-    manager.reap_stale()  # retire zombie runs before the bench renders them (AI-417)
-    runs = sorted(manager.store.list_runs(), key=lambda r: r.created_at, reverse=True)
+
+    def read_runs() -> list[RunRecord]:
+        # One read of the store: the reaper sweeps the same list (AI-465), then
+        # retire zombie runs before the bench renders them (AI-417).
+        runs = manager.store.list_runs()
+        reaped = {r.id: r for r in manager.reap_stale(runs)}
+        return [reaped.get(r.id, r) for r in runs]
+
+    runs = sorted(await run_in_threadpool(read_runs), key=lambda r: r.created_at, reverse=True)
     step_order = ["write", "revise", "safety", "narrate", "illustrate", "assemble"]
 
     def _fail_step(record: RunRecord) -> str | None:
@@ -230,11 +240,21 @@ async def library(request: Request, settings: WorkshopSettings) -> Response:
         return _to_login()
     if not scope.is_operator:
         return RedirectResponse(home_path(scope.is_operator), status_code=303)
-    stories = sorted(list_published_stories(settings), key=lambda s: (s.language, s.title))
+
+    def read_library() -> tuple[list[PublishedStory], list[str]]:
+        # Read every manifest once; the stories and the orphan check share it.
+        manifests = published_manifests(settings)
+        return (
+            stories_from_manifests(manifests),
+            list_orphan_story_dirs(settings, manifests=manifests),
+        )
+
+    published, orphans = await run_in_threadpool(read_library)
+    stories = sorted(published, key=lambda s: (s.language, s.title))
     return templates.TemplateResponse(
         request,
         "workshop/library.html",
-        _base_ctx(settings, stories=stories, orphans=list_orphan_story_dirs(settings)),
+        _base_ctx(settings, stories=stories, orphans=orphans),
     )
 
 
@@ -322,9 +342,14 @@ async def run_progress(
     scope = await _scope(request, settings)
     if scope is None or not scope.is_operator:
         raise HTTPException(status_code=404)
-    manager.reap_stale()  # a stale run's own poll heals it, so it stops polling (AI-417)
-    record = _record_or_404(manager, scope, run_id)
-    staged_stories = _staged_story_summaries(record.story_ids, settings)
+
+    def read_progress() -> tuple[RunRecord, list[dict[str, object]]]:
+        # Polled every 2 s: all of this stays off the event loop (AI-465).
+        manager.reap_stale()  # a stale run's own poll heals it, so it stops polling (AI-417)
+        record = _record_or_404(manager, scope, run_id)
+        return record, _staged_story_summaries(record.story_ids, settings)
+
+    record, staged_stories = await run_in_threadpool(read_progress)
     return templates.TemplateResponse(
         request,
         "workshop/_progress.html",
@@ -504,14 +529,22 @@ async def staged_asset(
         raise HTTPException(status_code=404)
     if "/" in name or ".." in name:
         raise HTTPException(status_code=404)
-    client = _build_client(settings)
-    bucket = settings.pending_bucket
-    try:
-        obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}")
-    except Exception:
-        raise HTTPException(status_code=404) from None
+
+    def read_asset() -> bytes | None:
+        try:
+            obj = _build_client(settings).get_object(
+                Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}"
+            )
+        except Exception:
+            return None
+        return obj["Body"].read()
+
+    body = await run_in_threadpool(read_asset)
+    if body is None:
+        raise HTTPException(status_code=404)
     return Response(
-        content=obj["Body"].read(),
+        content=body,
         media_type=_content_type(name),
-        headers={"Cache-Control": "private, no-cache"},
+        # Content-hashed names never change bytes: cache privately (AI-465).
+        headers={"Cache-Control": "private, max-age=86400, immutable"},
     )

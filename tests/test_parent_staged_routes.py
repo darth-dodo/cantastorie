@@ -52,8 +52,57 @@ def test_own_staged_asset_is_served_privately(monkeypatch: pytest.MonkeyPatch, s
     r = client.get("/parent/staged/story-abc/assets/p1.wav")
     assert r.status_code == 200
     assert r.content == b"RIFF-bytes"
-    assert r.headers["cache-control"] == "private, no-cache"
+    # Content-hashed names never change bytes: cache privately, don't refetch.
+    assert r.headers["cache-control"] == "private, max-age=86400, immutable"
     assert s3.keys == ["pending/staged/story-abc/p1.wav"]
+
+
+class _CountingManager(_FakeManager):
+    """Counts full-run scans, the cost ?run= exists to avoid."""
+
+    def __init__(self, runs: dict[str, RunRecord]) -> None:
+        super().__init__(runs)
+        self.scans = 0
+        store_list = self.store.list_runs
+
+        def counted(**kwargs: Any) -> list[RunRecord]:
+            self.scans += 1
+            return store_list(**kwargs)
+
+        self.store.list_runs = counted  # type: ignore[method-assign]
+
+
+def test_asset_with_run_param_checks_ownership_without_scanning_runs(
+    monkeypatch: pytest.MonkeyPatch, s3: _FakeS3
+) -> None:
+    run = _staged_run()
+    manager = _CountingManager({run.id: run})
+    client = _make_client(monkeypatch, manager)
+    r = client.get(f"/parent/staged/story-abc/assets/p1.wav?run={run.id}")
+    assert r.status_code == 200
+    assert manager.scans == 0
+
+
+def test_asset_run_param_cannot_borrow_another_familys_run(
+    monkeypatch: pytest.MonkeyPatch, s3: _FakeS3
+) -> None:
+    """?run= names a run, but load() is scoped to the session's family."""
+    theirs = _staged_run(family_token=OTHER_TOKEN)
+    client = _make_client(monkeypatch, _FakeManager({theirs.id: theirs}))
+    r = client.get(f"/parent/staged/story-abc/assets/p1.wav?run={theirs.id}")
+    assert r.status_code == 404
+    assert s3.keys == []
+
+
+def test_asset_run_param_must_contain_the_story(
+    monkeypatch: pytest.MonkeyPatch, s3: _FakeS3
+) -> None:
+    """Own run, wrong story: a run id can't unlock a story it didn't make."""
+    run = _staged_run(story_id="story-abc")
+    client = _make_client(monkeypatch, _FakeManager({run.id: run}))
+    r = client.get(f"/parent/staged/story-xyz/assets/p1.wav?run={run.id}")
+    assert r.status_code == 404
+    assert s3.keys == []
 
 
 def test_another_familys_staged_asset_is_404_and_never_fetched(
