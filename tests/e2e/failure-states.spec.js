@@ -139,18 +139,40 @@ test.describe("When Things Go Wrong (product.md)", () => {
     await expect(page.locator(".audio-error")).toHaveCount(0);
   });
 
-  test("the sound drops while away: coming back and tapping the story wakes it again", async ({ page }) => {
+  test("the sound drops while away: coming back to the story wakes it, with no tap", async ({ page }) => {
     await openTheStoryAndHearPageOne(page);
 
-    // The context is dropped, then the page returns to view. Headless
-    // Chromium never hides the tab, so visibility is redefined to report
-    // "visible" before the event fires.
+    // The context is dropped while the page is away.
+    await page.evaluate(async () => {
+      await window.__contexts[0].suspend();
+    });
+    expect(await contextState(page)).toBe("suspended");
+
+    // Then the page returns to view. Headless Chromium never hides the tab,
+    // so visibility is redefined to report "visible" before the event fires.
     await page.evaluate(() => {
-      window.__contexts[0].suspend();
       Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true });
       Object.defineProperty(document, "hidden", { get: () => false, configurable: true });
       document.dispatchEvent(new Event("visibilitychange"));
     });
+
+    // And the sound wakes on its own, no tap. This leans on Chromium's
+    // sticky activation (the greeting tap already happened), which lets
+    // resume() succeed outside a gesture. iOS may refuse it, so the wake on
+    // return is best effort and the next tap (the test below) is the
+    // guaranteed one. Resume is asserted within 2 s, inside the watchdog's
+    // 2.5 s; even if the bird did appear, it would not change the context's
+    // state, so this assertion cannot flake on the watchdog.
+    await expect.poll(() => contextState(page), { timeout: 2_000 }).toBe("running");
+  });
+
+  test("the sound drops mid-story: the next tap on the story wakes it again", async ({ page }) => {
+    await openTheStoryAndHearPageOne(page);
+
+    await page.evaluate(async () => {
+      await window.__contexts[0].suspend();
+    });
+    expect(await contextState(page)).toBe("suspended");
 
     // Then a tap on the story wakes the sound. It is a raw tap on the page
     // art (no button there, so the story keeps playing), not a locator
