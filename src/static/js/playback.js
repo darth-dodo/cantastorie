@@ -8,17 +8,128 @@
 // Choice pages are respected but not owned here: audio end on one opens
 // the store's overlay and playback simply waits (the overlay, nudge, and
 // auto-continue are AI-370).
+//
+// A voice that freezes without failing (a suspended audio context, B9) is
+// caught by the stall watchdog: the story holds its exact spot and the
+// sleeping bird offers the tap that wakes it.
 
 // A hung start-prompt request must not freeze the story mute: after this
 // long the pages speak without their fanfare.
 export const STORY_START_LOAD_TIMEOUT_MS = 3000;
 
-export function createPlayback({ store, engine, prefetcher = null, prompts = {} }) {
+// A suspended audio context (B9) freezes the voice without any error: the
+// story looks like it is playing, but the room is silent. If the narration
+// position stands still this long while it should be moving, the sleeping
+// bird takes the stage so a tap can wake the story.
+export const STALL_TIMEOUT_MS = 2500;
+export const STALL_POLL_MS = 500;
+
+export function createPlayback({
+  store,
+  engine,
+  prefetcher = null,
+  prompts = {},
+  // Wrapped, not captured: the globals are looked up on each call.
+  setIntervalFn = (fn, ms) => globalThis.setInterval(fn, ms),
+  clearIntervalFn = (id) => globalThis.clearInterval(id),
+  isHidden = () => globalThis.document?.hidden === true,
+}) {
   let story = null;
   let narratingPage = null; // page index whose voice is live or held
   let starting = false; // the story start prompt is speaking; hold page 1
   let prevScreen = store.state.screen;
   let choiceWasOpen = store.state.choiceOpen; // to catch the open transition
+
+  // The stall watchdog: polls the engine's position while a page's voice
+  // should be moving, and counts how long it has stood still.
+  let watchdogId = null;
+  let watchedPage = null; // the page the stall clock is counting for
+  let lastPosition = null; // null: no sample yet since the clock reset
+  let stalledMs = 0;
+
+  function resetStallClock() {
+    watchedPage = narratingPage;
+    lastPosition = null;
+    stalledMs = 0;
+  }
+
+  function stopWatchdog() {
+    if (watchdogId === null) return;
+    clearIntervalFn(watchdogId);
+    watchdogId = null;
+  }
+
+  // The sleeping bird takes the stage. `hold` keeps the exact spot of a
+  // voice that froze (a stall); a voice that failed to load has none.
+  function wakeBird({ hold }) {
+    if (hold) engine.pauseNarration();
+    store.audioError();
+    // A stall never speaks: it means the audio clock itself is frozen, so a
+    // prompt started now could only play late — from its first word, on the
+    // retry tap, over the resumed story. The bird alone holds the stage.
+    if (hold) return;
+    // A load failure speaks the bird's line — banked by prefetch on the cover
+    // tap, so it plays even on the flaky network that caused the failure.
+    // Only into a running context, for the same reason a stall stays quiet.
+    if (prompts.audio_retry && engine.unlocked) {
+      engine.playPrompt(prompts.audio_retry).catch(() => {});
+    }
+  }
+
+  function pollWatchdog() {
+    if (engine.state !== "playing" || isHidden()) {
+      // Paused, ducked under a prompt, or still loading: a still position
+      // is expected, not a stall. A hidden tab is not the child's to hear:
+      // the wake on return gets its chance first, on a fresh clock.
+      lastPosition = null;
+      stalledMs = 0;
+      return;
+    }
+    const position = engine.position();
+    if (lastPosition === null || position !== lastPosition) {
+      lastPosition = position;
+      stalledMs = 0;
+      return;
+    }
+    stalledMs += STALL_POLL_MS;
+    if (stalledMs < STALL_TIMEOUT_MS) return;
+
+    stopWatchdog();
+    // Hold the exact spot first: the frozen clock means the held offset is
+    // where the child stopped hearing. narratingPage stays put, so the
+    // retry tap resumes mid-sentence instead of restarting the page.
+    wakeBird({ hold: true });
+  }
+
+  // Runs only while a page's voice should be audible. story and
+  // narratingPage keep an instance retired by a language switch quiet even
+  // though it still hears the store.
+  function updateWatchdog(state) {
+    const shouldRun =
+      story !== null &&
+      narratingPage !== null &&
+      state.screen === "player" &&
+      state.playing &&
+      !state.choiceOpen &&
+      !state.resumeOpen &&
+      !state.audioError &&
+      !starting;
+    if (!shouldRun) {
+      stopWatchdog();
+      return;
+    }
+    if (watchdogId === null) {
+      resetStallClock();
+      // The first sample is taken now, so a voice frozen from the start
+      // is caught STALL_TIMEOUT_MS later, not a poll after that.
+      if (engine.state === "playing" && !isHidden()) lastPosition = engine.position();
+      watchdogId = setIntervalFn(pollWatchdog, STALL_POLL_MS);
+    } else if (watchedPage !== narratingPage) {
+      // A manual next/previous tap mid-voice: no audio end passed between,
+      // so the new page's voice needs its own clock.
+      resetStallClock();
+    }
+  }
 
   function narrate(index) {
     const page = story?.pages[index];
@@ -29,18 +140,18 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
         onEnded: () => {
           if (narratingPage !== index) return; // a stale voice never turns the page
           narratingPage = null;
+          updateWatchdog(store.state);
           store.advance(); // Auto page turn: immediate on audio end
         },
       })
       .catch((err) => {
         if (narratingPage !== index) return; // a superseded voice's failure is noise
         narratingPage = null;
+        updateWatchdog(store.state);
         console.warn("narration failed", err);
-        store.audioError();
-        // The bird speaks its line — banked by prefetch on the cover tap,
-        // so it plays even on the flaky network that caused the failure.
-        if (prompts.audio_retry) engine.playPrompt(prompts.audio_retry).catch(() => {});
+        wakeBird({ hold: false });
       });
+    updateWatchdog(store.state); // after the call, so the first sample sees the new voice
   }
 
   // The end prompt speaks over the final scene — but only if the child is
@@ -75,6 +186,11 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
   }
 
   function sync(state) {
+    // First, before any early return: every one of those returns (the bird,
+    // an overlay, the start prompt, leaving the player) must also stop the
+    // watchdog, and the retry tap must restart it.
+    updateWatchdog(state);
+
     // The overlay just opened (choice-page audio ended): speak the labels. Do
     // this before any early return so the labels speak even while playback
     // otherwise waits out the choice.
@@ -146,6 +262,7 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
     clearStory() {
       story = null;
       narratingPage = null;
+      updateWatchdog(store.state); // a retired instance must never wake the bird
     },
 
     // The cover tap: prefetch everything (spoken prompts included — the
@@ -155,6 +272,7 @@ export function createPlayback({ store, engine, prefetcher = null, prompts = {} 
     async openStory(loaded) {
       story = loaded;
       narratingPage = null;
+      updateWatchdog(store.state);
       const promptUrls = [prompts.story_start, prompts.end, prompts.audio_retry].filter(Boolean);
       prefetcher?.prefetchStory(loaded, promptUrls); // fire and forget; load() dedupes
 

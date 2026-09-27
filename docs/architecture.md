@@ -114,6 +114,7 @@ src/
     ├── js/
     │   ├── fsm.js          Finite state machine (ported from hermano)
     │   ├── audio-engine.js AudioContext owner: unlock, play, crossfade, resume
+    │   ├── wake.js          Unlock on every activation + visibilitychange; fires the shelf greeting once
     │   ├── main.js         Composition root: boot, manifest, wiring, render loop
     │   ├── store.js        Player state + transitions
     │   ├── playback.js     Narration drives pages; pause/resume
@@ -251,7 +252,7 @@ shelf → story-loading → playing ⇄ paused
 
 One module owns a single `AudioContext`. Everything else asks it to play things.
 
-- **Unlock on first gesture.** Browsers block sound before a user gesture. The first tap anywhere on the shelf resumes the AudioContext and plays the shelf greeting — the two-tap budget absorbs it (first tap wakes and greets, cover tap starts the story).
+- **Unlock on every activation, and on return to view.** Browsers block sound before a user gesture, and mobile browsers can drop a running context back to suspended or (Safari) `interrupted` with no event at all when the tab backgrounds or the device sleeps. `wake.js` re-arms unlock on every activation-triggering event (no `once`) and on a visible `visibilitychange`, so the shelf greeting fires once on the first successful unlock and playback recovers without a reload — the two-tap budget absorbs it (first tap wakes and greets, cover tap starts the story). A narration stall watchdog turns a frozen voice into the sleeping-bird audio-error state instead of dead air. See [ADR-009](adr/ADR-009-audio-wake-and-stall-recovery.md).
 - **Crossfades via gain nodes.** Two sources overlapping with gain ramps — works on iOS where media-element volume is read-only.
 - **Exact-position resume** from buffer offsets, persisted locally on pause and page turn (localStorage now, IndexedDB when real stories land).
 - **Priority ducking**: prompt playback (nudges, confirmations) and narration never overlap.

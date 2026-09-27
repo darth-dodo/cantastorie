@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAudioEngine } from "../../src/static/js/audio-engine.js";
 import { init } from "../../src/static/js/main.js";
 
 // Vitest runs with cwd at the project root; import.meta.url is an http://
@@ -60,6 +61,11 @@ function fakeEngine() {
       narration = held;
       held = null;
       state = "playing";
+    },
+    // Always moving: these wiring specs never stall the voice (the stall
+    // watchdog has its own specs in playback.test.js).
+    position() {
+      return performance.now() / 1000;
     },
     async playPrompt(url, { onEnded } = {}) {
       prompt = { url, onEnded };
@@ -437,5 +443,156 @@ describe("shelf settings (language + theme)", () => {
     document.querySelector(".settings-gear").click();
     document.querySelector(".settings-done").click();
     expect(document.querySelector(".overlay.settings")).toBeNull();
+  });
+});
+
+describe("wake wiring (AI-461): main.js greets on the first real activation", () => {
+  it("a tap on the greeting header wakes the engine and speaks the greeting once", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const engine = fakeEngine();
+    const playPrompt = engine.playPrompt.bind(engine);
+    const promptUrls = [];
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn: manifestFetch, engine });
+
+    const greeting = document.querySelector(".greeting");
+    greeting.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    greeting.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+    greeting.click();
+
+    await vi.waitFor(() => expect(engine.unlocked).toBe(true));
+    // The greeting banks its buffer first, so it speaks a tick later.
+    await vi.waitFor(() => expect(promptUrls).toEqual(["/static/content/it/prompts/greeting.wav"]));
+
+    // A later, unrelated tap re-arms the wake but never greets a second time.
+    document.querySelector(".settings-gear").click();
+    expect(promptUrls).toEqual(["/static/content/it/prompts/greeting.wav"]);
+  });
+
+  it("a cover-first tap unlocks but never greets — the cover click starts the story instead", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const engine = fakeEngine();
+    const playPrompt = engine.playPrompt.bind(engine);
+    const promptUrls = [];
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn: routedFetch, engine });
+
+    document.querySelector(".cover").click();
+
+    await vi.waitFor(() => expect(engine.unlocked).toBe(true));
+    expect(promptUrls).not.toContain("/static/content/it/prompts/greeting.wav");
+  });
+
+  it("a greeting whose buffer lands after a story opened stays quiet, and the story still starts", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const engine = fakeEngine();
+    const greetingUrl = "/static/content/it/prompts/greeting.wav";
+    let landGreeting;
+    const greetingLanded = new Promise((resolve) => {
+      landGreeting = resolve;
+    });
+    // The real engine's playPrompt awaits the buffer, then silences any live
+    // prompt without firing its onEnded. The fake already drops the earlier
+    // prompt's onEnded; only the greeting's late buffer needs modelling.
+    const load = engine.load.bind(engine);
+    engine.load = async (url) => {
+      if (url === greetingUrl) await greetingLanded;
+      return load(url);
+    };
+    const playPrompt = engine.playPrompt.bind(engine);
+    const promptUrls = [];
+    engine.playPrompt = async (url, opts) => {
+      if (url === greetingUrl) await greetingLanded;
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn: routedFetch, engine });
+
+    // A shelf tap wakes the engine; the greeting's buffer is still in flight.
+    document.querySelector(".greeting").click();
+    await vi.waitFor(() => expect(engine.unlocked).toBe(true));
+
+    // The child taps a cover before it lands: "Si parte!" starts.
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(promptUrls).toContain(manifest.prompts.story_start));
+
+    // Now the greeting's buffer lands — on the player, not the shelf.
+    landGreeting();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(promptUrls).not.toContain(greetingUrl);
+
+    // The start prompt ends and page 1's voice begins.
+    engine.endPrompt();
+    await vi.waitFor(() => expect(engine.state).toBe("playing"));
+  });
+
+  it("with the real engine and playback, a late greeting never freezes the story start", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const greetingUrl = "/static/content/it/prompts/greeting.wav";
+    let landGreeting;
+    const greetingLanded = new Promise((resolve) => {
+      landGreeting = resolve;
+    });
+    // Each decoded buffer remembers its url, so a source can be told apart.
+    const taggingFetch = async (url) => {
+      const path = String(url);
+      if (path === greetingUrl) await greetingLanded;
+      if (path.endsWith("manifest.json") || path.endsWith("story.json")) return routedFetch(url);
+      return { ok: true, arrayBuffer: async () => ({ url: path }) };
+    };
+    // A minimal Web Audio context, as in audio-engine.test.js. Like the
+    // real one, stop() never fires onended synchronously; the spec fires the
+    // start prompt's natural end itself.
+    const ctx = {
+      currentTime: 0,
+      state: "suspended",
+      destination: {},
+      sources: [],
+      async resume() {
+        ctx.state = "running";
+      },
+      async decodeAudioData(data) {
+        return { duration: 10, url: data.url };
+      },
+      createGain: () => ({
+        gain: { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {} },
+        connect() {},
+      }),
+      createBufferSource: () => {
+        const source = { buffer: null, onended: null, connect() {}, start: vi.fn(), stop: vi.fn() };
+        ctx.sources.push(source);
+        return source;
+      },
+    };
+    const engine = createAudioEngine({ createContext: () => ctx, fetchFn: taggingFetch });
+    running = await init(document, { fetchFn: taggingFetch, engine });
+
+    // A shelf tap wakes the engine; the greeting's buffer is still in flight.
+    document.querySelector(".greeting").click();
+    await vi.waitFor(() => expect(engine.unlocked).toBe(true));
+
+    // A cover tap before it lands: "Si parte!" starts.
+    document.querySelector(".cover").click();
+    const startUrl = manifest.prompts.story_start;
+    await vi.waitFor(() =>
+      expect(ctx.sources.some((s) => s.buffer?.url === startUrl && s.start.mock.calls.length)).toBe(true),
+    );
+
+    // The greeting's buffer lands on the player.
+    landGreeting();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ctx.sources.some((s) => s.buffer?.url === greetingUrl)).toBe(false);
+
+    // "Si parte!" reaches its natural end, and page 1's voice begins.
+    const startSource = ctx.sources.find((s) => s.buffer?.url === startUrl);
+    await startSource.onended();
+    await vi.waitFor(() => expect(engine.state).toBe("playing"));
+    expect(running.store.state.screen).toBe("player");
   });
 });
