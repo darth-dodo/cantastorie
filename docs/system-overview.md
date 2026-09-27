@@ -61,7 +61,7 @@ The shell's `<meta name="asset-base">` tag is the only place the asset base URL 
 
 ## The Player (`src/static/js/`)
 
-Ten ES modules, no framework, no bundler. `main.js` is the composition root; everything else is a factory function with injected dependencies (`fetchFn`, `engine`, `storage`), which is what makes the Vitest + jsdom suites possible. The tenth, `palette-resolve.js`, holds theme/palette resolution as the importable twin of `palette.js` — a synchronous head script (deliberately *not* a module, so it can set `data-palette`/`data-theme` on `<html>` before first paint). `workshop.js` also lives in this directory but belongs to the workshop UI, not the player.
+Eleven ES modules, no framework, no bundler. `main.js` is the composition root; everything else is a factory function with injected dependencies (`fetchFn`, `engine`, `storage`), which is what makes the Vitest + jsdom suites possible. The tenth, `palette-resolve.js`, holds theme/palette resolution as the importable twin of `palette.js` — a synchronous head script (deliberately *not* a module, so it can set `data-palette`/`data-theme` on `<html>` before first paint). `workshop.js` also lives in this directory but belongs to the workshop UI, not the player.
 
 ```mermaid
 flowchart TD
@@ -69,6 +69,7 @@ flowchart TD
     store["store.js<br/>state + transitions"]
     playback["playback.js<br/>narration drives pages"]
     engine["audio-engine.js<br/>the only AudioContext"]
+    wake["wake.js<br/>unlock on activation + visibility"]
     fsm["fsm.js<br/>generic FSM (from hermano)"]
     prefetch["prefetch.js<br/>whole-story banking"]
     story["story.js<br/>story.json → playable"]
@@ -76,8 +77,9 @@ flowchart TD
     storage["storage.js<br/>persist progress locally"]
     palette["palette-resolve.js<br/>theme + palette resolution"]
 
-    main --> store & playback & engine & prefetch & story & screens & storage & palette
+    main --> store & playback & engine & wake & prefetch & story & screens & storage & palette
     playback --> store & engine & prefetch
+    wake --> engine
     engine --> fsm
     screens --> story & store
 ```
@@ -86,10 +88,11 @@ flowchart TD
 
 | Module | Owns | Key exports |
 |--------|------|-------------|
-| `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, **family-overlay merge** (when a `family_token` is in IndexedDB, fetch `families/{token}/{lang}/manifest.json` and append its stories — dedupe by id, shared wins; a token-less boot makes zero overlay requests; an overlay fetch failure falls back to the shared shelf and never throws), audio unlock on first gesture, spoken greeting, the render loop, the dev page-timer stand-in | `init(root, {fetchFn, engine, readFamilyToken})` → shell handle |
+| `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, **family-overlay merge** (when a `family_token` is in IndexedDB, fetch `families/{token}/{lang}/manifest.json` and append its stories — dedupe by id, shared wins; a token-less boot makes zero overlay requests; an overlay fetch failure falls back to the shared shelf and never throws), wires `wake.js` for audio unlock and the shelf greeting (skipped on `.cover`/`.settings-gear` targets), the render loop, the dev page-timer stand-in | `init(root, {fetchFn, engine, readFamilyToken})` → shell handle |
 | `store.js` | All player state and every legal transition; pure, no DOM, no audio; `choose(i)` records the tapped option in a `choices` array | `createStore`, `initialState` |
-| `playback.js` | The playback loop: story-start prompt, narrating the current page, auto page turn on audio end, pause/resume at exact position; `extendPath()` appends a tapped arm to the played path and recomputes the next choice page | `createPlayback` |
-| `audio-engine.js` | The single `AudioContext`; decoded-buffer cache; narration vs prompt channels; crossfades and ducking via gain ramps | `createAudioEngine`, `CROSSFADE_SECONDS` |
+| `playback.js` | The playback loop: story-start prompt, narrating the current page, auto page turn on audio end, pause/resume at exact position; `extendPath()` appends a tapped arm to the played path and recomputes the next choice page; a stall watchdog (visible + playing only) pauses at the frozen offset and shows the sleeping bird if narration position stops advancing for `STALL_TIMEOUT_MS` | `createPlayback` |
+| `audio-engine.js` | The single `AudioContext`; decoded-buffer cache; narration vs prompt channels; crossfades and ducking via gain ramps; `unlock()` resumes from any state that isn't `running`/`closed` (covers Safari's `interrupted`), and sets `navigator.audioSession.type = "playback"` where supported | `createAudioEngine`, `CROSSFADE_SECONDS` |
+| `wake.js` | `createWaker({ engine, root, doc, onFirstUnlock })`: capture-phase unlock listeners on every activation-triggering event (no `once`), plus unlock on a visible `visibilitychange`; fires `onFirstUnlock` exactly once, after the first successful unlock | `createWaker` |
 | `fsm.js` | Tiny generic FSM: frozen machine, warn-and-ignore invalid transitions | `createMachine`, `interpret` |
 | `prefetch.js` | On cover tap, bank every page's audio (decoded buffers) and image (HTTP cache), both branch arms included, plus each choice option's card image and spoken label; failures counted, never fatal | `createPrefetcher` |
 | `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs (choice-card images and label audio included); `pagesFrom(pageId)` walks one arm for branch following; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `shelf`, `story` |
