@@ -173,10 +173,16 @@ button.presses:active {
 
 /* Dusk: sphere-lit moon — radial highlight from upper-left, terminator shadow */
 [data-theme="dusk"] .mascot {
-  background: radial-gradient(circle at 34% 30%, #f7e7c3 0%, #d4ae70 50%, #8a6530 85%, #5c421e 100%);
+  background: radial-gradient(circle at 34% 30%, var(--moon-light), var(--moon-mid) 52%, var(--accent) 100%);
   box-shadow:
-    0 0 28px 8px rgba(242, 216, 167, 0.22),
-    inset -7px -5px 14px rgba(40, 20, 0, 0.55);
+    0 0 26px 7px var(--accent-22),
+    inset -7px -5px 14px var(--moon-shade);
+}
+
+[data-theme="dusk"] .mascot::before,
+[data-theme="dusk"] .mascot::after,
+[data-theme="dusk"] .mascot .smile {
+  background: var(--moon-ink);
 }
 
 /* Moon eyes — narrow slit at dusk */
@@ -207,7 +213,7 @@ button.presses:active {
 [data-theme="dusk"] .mascot .crater-a,
 [data-theme="dusk"] .mascot .crater-b,
 [data-theme="dusk"] .mascot .crater-c {
-  background: rgba(40, 20, 0, 0.22);
+  background: var(--moon-crater);
 }
 
 .covers {
@@ -239,13 +245,13 @@ button.presses:active {
   width: 72px;
   height: 72px;
   border-radius: 50% 42% 50% 40%;
-  background: var(--accent-warm, #e8c4a0);
+  background: var(--accent-22);
   opacity: 0.5;
 }
 
 .empty-shelf-text {
   font-size: 1.1rem;
-  color: var(--text-soft, #8a82a0);
+  color: var(--ink-soft);
   margin: 0;
   line-height: 1.5;
 }
@@ -448,7 +454,7 @@ button.presses:active {
   border-radius: 50% 50% 46% 54% / 54% 46% 50% 50%;
   background: var(--sticker);
   transform: rotate(-2deg);
-  box-shadow: 0 8px 18px rgba(74, 59, 46, 0.14), 0 0 0 4px rgba(224, 166, 63, 0.25);
+  box-shadow: var(--btn-shadow), 0 0 0 4px var(--primary-16);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -497,14 +503,14 @@ button.presses:active {
 @media (hover: hover) {
   .settings-gear:hover {
     transform: rotate(-2deg) scale(1.06);
-    box-shadow: 0 10px 22px rgba(74, 59, 46, 0.2), 0 0 0 4px rgba(224, 166, 63, 0.35);
+    box-shadow: var(--btn-shadow), 0 0 0 4px var(--primary-ring);
   }
 }
 
 [data-theme="dusk"] .settings-gear {
-  background: rgba(243, 233, 218, 0.08);
-  box-shadow: inset 0 0 0 2px rgba(245, 223, 174, 0.3), 0 0 24px rgba(245, 223, 174, 0.1);
-  color: #f3e9da;
+  background: var(--ghost);
+  box-shadow: inset 0 0 0 2px var(--primary-ring), 0 0 24px var(--primary-16);
+  color: var(--ink);
 }
 
 /* ── Settings sheet (bottom sheet, replaces centred panel) ────────── */
@@ -944,7 +950,7 @@ button.presses:active {
   border-radius: 50% 46% 54% 50% / 50% 54% 46% 50%;
   background: var(--sticker);
   transform: rotate(2deg);
-  box-shadow: 0 8px 18px rgba(74, 59, 46, 0.14), 0 0 0 4px rgba(127, 166, 168, 0.25);
+  box-shadow: var(--btn-shadow), 0 0 0 4px var(--info-20);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -966,13 +972,13 @@ button.presses:active {
 @media (hover: hover) {
   .lang-sticker:hover {
     transform: rotate(2deg) scale(1.06);
-    box-shadow: 0 10px 22px rgba(74, 59, 46, 0.2), 0 0 0 4px rgba(127, 166, 168, 0.35);
+    box-shadow: var(--btn-shadow), 0 0 0 4px var(--info-ring);
   }
 }
 
 [data-theme="dusk"] .lang-sticker {
-  background: rgba(243, 233, 218, 0.08);
-  box-shadow: inset 0 0 0 2px rgba(127, 166, 168, 0.3), 0 0 24px rgba(127, 166, 168, 0.1);
+  background: var(--ghost);
+  box-shadow: inset 0 0 0 2px var(--info-ring), 0 0 24px var(--info-20);
 }
 
 [data-theme="dusk"] .lang-sticker-label {

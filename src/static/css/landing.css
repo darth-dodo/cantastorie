@@ -114,8 +114,8 @@ body {
   flex: none;
   overflow: hidden;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #F2EDFB, #D6CBF0 52%, var(--accent) 100%);
-  box-shadow: inset -4px -3px 8px rgba(74, 58, 112, 0.4);
+  background: radial-gradient(circle at 34% 30%, var(--moon-light), var(--moon-mid) 52%, var(--accent) 100%);
+  box-shadow: inset -4px -3px 8px var(--moon-shade);
 }
 .l-moon-crater {
   position: absolute;
@@ -130,7 +130,7 @@ body {
   width: 6px;
   height: 2.5px;
   border-radius: 0 0 6px 6px;
-  background: #3A2F55;
+  background: var(--moon-ink);
 }
 .l-moon-eye-l { left: 7px; }
 .l-moon-eye-r { right: 9px; }
@@ -142,7 +142,7 @@ body {
   width: 8px;
   height: 4px;
   border-radius: 0 0 8px 8px;
-  background: #3A2F55;
+  background: var(--moon-ink);
 }
 
 /* Hero art: watercolor image, softened into the surface with a vignette */

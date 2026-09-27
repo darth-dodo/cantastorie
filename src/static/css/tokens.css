@@ -30,6 +30,13 @@
   --fade: 900ms ease;
   --fade-quick: 600ms ease;
   --settle: 250ms ease;
+
+  /* The mascot moon (handoff): orchid-lit sphere, same in both modes. */
+  --moon-light:  #F2EDFB;
+  --moon-mid:    #D6CBF0;
+  --moon-ink:    #3A2F55;
+  --moon-crater: rgba(112,92,158,.3);
+  --moon-shade:  rgba(74,58,112,.4);
 }
 
 /* ═══════════════════════════════════════════════════════════════════

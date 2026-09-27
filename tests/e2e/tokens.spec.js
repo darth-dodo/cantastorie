@@ -50,3 +50,20 @@ test("dusk shelf is painted from the indigo tokens, not the retired warm browns"
   expect(fade).toContain("rgb(28, 33, 48)");
   expect(caption).toBe("rgb(151, 160, 181)"); // --ink-soft dusk #97A0B5
 });
+
+test("dusk shelf chrome — moon, settings, language sticker — carries no warm literals", async ({ page }) => {
+  await page.goto("/play?lang=it&theme=dusk");
+  await page.waitForSelector(".shelf .cover");
+  const styles = await page.evaluate(() =>
+    [".mascot", ".settings-gear", ".lang-sticker"].map((sel) => {
+      const cs = getComputedStyle(document.querySelector(sel));
+      return `${sel} ${cs.backgroundImage} ${cs.backgroundColor} ${cs.boxShadow} ${cs.color}`;
+    }),
+  );
+  // The orchid moon from the handoff: #F2EDFB highlight.
+  expect(styles[0]).toContain("rgb(242, 237, 251)");
+  // Retired warm-palette values: honey, cream glow, parchment, browns.
+  for (const s of styles)
+    for (const warm of ["224, 166, 63", "245, 223, 174", "243, 233, 218", "212, 174, 112", "74, 59, 46"])
+      expect(s, s).not.toContain(warm);
+});
