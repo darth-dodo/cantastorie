@@ -280,3 +280,30 @@ def test_make_a_story_cta_links_to_make_route(monkeypatch: pytest.MonkeyPatch) -
     r = client.get("/parent/stories")
     assert r.status_code == 200
     assert "/parent/make" in r.text
+
+
+# ── Sort: Newest is by publish time, not by id ────────────────────────────────
+
+
+def test_sort_newest_orders_by_approval_time_not_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ids sort a < b < c, but c was published first and a last: newest = a, b, c
+    would be the id-reversal bug's c, b, a."""
+    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
+    base = datetime(2026, 9, 1, tzinfo=UTC)
+    runs = {}
+    stories = []
+    for story_id, days in (("a-story", 3), ("b-story", 2), ("c-story", 1)):
+        run = _make_approved_run(story_id=story_id).model_copy(
+            update={"updated_at": base + timedelta(days=days)}
+        )
+        runs[run.id] = run
+        stories.append(
+            PublishedStory(
+                id=story_id, title=story_id, language="it", cover="", family_token=VALID_TOKEN
+            )
+        )
+    client = _make_client(monkeypatch, _FakeManager(runs), stories=stories)
+    text = client.get("/parent/stories").text
+    assert text.index('data-story-id="a-story"') < text.index('data-story-id="b-story"')
+    assert text.index('data-story-id="b-story"') < text.index('data-story-id="c-story"')

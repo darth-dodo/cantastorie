@@ -393,7 +393,7 @@ export async function init(
                 else root.documentElement.setAttribute("data-palette", name);
               },
               onClose: () => closeSettings(),
-              // Past the grown-up gate: the parent area (Clerk decides the door).
+              // Past the grown-up gate: the parent area (it handles its own sign-in).
               onWorkshop: () => root.defaultView?.location.assign("/parent"),
               doc: root,
             }),

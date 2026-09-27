@@ -7,7 +7,7 @@ pack request form, my-packs) arrive in the next step of the design.
 from __future__ import annotations
 
 import secrets
-from typing import Annotated, Protocol, get_args
+from typing import TYPE_CHECKING, Annotated, Protocol, get_args
 
 from fastapi import (
     APIRouter,
@@ -44,16 +44,24 @@ from src.pipeline.publish import (
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import InvalidTransition, PackRequest
 
+if TYPE_CHECKING:
+    from datetime import datetime
+
 router = APIRouter(prefix="/parent")
 
 
-def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
+def _published_at(manager: RunManager, family_token: str) -> dict[str, datetime]:
+    """The family's published story ids, each with its approval (publish) time."""
     return {
-        story_id
+        story_id: record.updated_at
         for record in manager.store.list_runs(family_token=family_token)
         if record.state == "approved"
         for story_id in record.story_ids
     }
+
+
+def _owned_story_ids(manager: RunManager, family_token: str) -> set[str]:
+    return set(_published_at(manager, family_token))
 
 
 Manager = Annotated[RunManager, Depends(get_run_manager)]
@@ -189,10 +197,12 @@ async def parent_stories(
     if ctx.family_token is None:
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
-    owned = _owned_story_ids(manager, ctx.family_token)
+    published_at = _published_at(manager, ctx.family_token)
     all_published = list_published_stories(settings)
     # A family sees only its own overlay lane — never another family's overlay.
-    all_stories = [s for s in all_published if s.family_token == ctx.family_token and s.id in owned]
+    all_stories = [
+        s for s in all_published if s.family_token == ctx.family_token and s.id in published_at
+    ]
     # Shared shelf stories (family_token is None) visible to every family.
     shared_stories = [s for s in all_published if s.family_token is None]
     # Collect available languages with counts for the filter panel.
@@ -202,15 +212,11 @@ async def parent_stories(
     # Apply language filter.
     active_lang = lang if lang and lang in lang_counts else None
     stories = [s for s in all_stories if active_lang is None or s.language == active_lang]
-    # Apply sort: "az" = A-Z by title; default/anything else = newest first
-    # (list_published_stories sorts by (family_token, language, id) which is
-    # effectively insertion order; reverse gives newest-first as a proxy).
+    # Sort: "az" = A-Z by title; default = newest published first.
     if sort == "az":
         stories = sorted(stories, key=lambda s: s.title.lower())
     else:
-        # Keep the default order — stories were appended in publish order,
-        # reversing gives newest first.
-        stories = list(reversed(stories))
+        stories = sorted(stories, key=lambda s: published_at[s.id], reverse=True)
     # Count in-flight runs for the Being Made tab badge.
     all_runs = manager.store.list_runs(family_token=ctx.family_token)
     inflight_count = sum(1 for r in all_runs if r.state in ("queued", "running", "staged"))
