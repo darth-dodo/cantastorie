@@ -19,6 +19,7 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
+from src.workshop import manager as manager_module
 from src.workshop.manager import OPERATOR_TOKEN, RunCapExceeded, RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
 
@@ -95,6 +96,31 @@ def test_a_generation_error_lands_failed_with_the_reason(s3: S3Client) -> None:
     [record] = store.list_runs(family_token="family-abc")
     assert record.state == "failed"
     assert record.error == "narration provider unreachable"
+
+
+def test_a_generation_error_is_reported_to_sentry(
+    s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """execute() swallows the exception to land the run failed, so Sentry's
+    request integration never sees it — the manager must report it explicitly."""
+    captured: list[BaseException] = []
+    monkeypatch.setattr(manager_module.sentry_sdk, "capture_exception", captured.append)
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    boom = RuntimeError("narration provider unreachable")
+
+    def explode(req: PackRequest, st: Settings) -> list[str]:
+        raise boom
+
+    manager = RunManager(store, settings, generate_pack=explode)
+
+    async def run() -> None:
+        record = await manager.submit("family-abc", REQUEST)
+        await manager.execute(record)
+
+    asyncio.run(run())
+
+    assert captured == [boom]
 
 
 def test_the_running_state_is_persisted_before_generation_starts(s3: S3Client) -> None:

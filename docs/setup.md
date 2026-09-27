@@ -196,6 +196,21 @@ the dashboard rather than the "coming soon" page.
 
 ---
 
+## Sentry (optional error monitoring, ADR-009)
+
+1. Create a Sentry project (platform: **FastAPI**) in an **EU-region**
+   organization, so the DSN host is `*.ingest.de.sentry.io`.
+2. Set `SENTRY_DSN` in Render → Environment. `SENTRY_ENVIRONMENT` is already
+   set by `render.yaml` (`production`, or `preview` on PR previews), and the
+   release comes from Render's `RENDER_GIT_COMMIT` automatically.
+3. Leave `SENTRY_DSN` unset to turn Sentry off entirely — the SDK never initializes.
+
+Sentry is server-side only. Events carry no request bodies, no stack-frame
+locals, no IPs, and filtered auth/cookie headers; failed workshop and parent
+runs are reported even though the run itself lands `failed` gracefully.
+
+---
+
 ## 5. Verify (the AI-365 acceptance)
 
 On a phone on **cellular** (not home wifi), open the Render URL and confirm:

@@ -1,4 +1,6 @@
-"""LangSmith observability wiring for the FastAPI app and the authoring pipeline.
+"""Observability wiring for the FastAPI app and the authoring pipeline.
+
+LangSmith traces (ADR-007); Sentry reports exceptions (ADR-009).
 
 Called once at startup (create_app, CLI generate) to sync the Pydantic settings
 into the env vars the LangSmith SDK reads. When tracing is off (the default),
@@ -11,6 +13,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
+import sentry_sdk
 from langsmith import traceable
 from langsmith.wrappers import wrap_openai
 from openai import AsyncOpenAI
@@ -33,6 +36,24 @@ def init_observability(settings: Settings) -> None:
     else:
         os.environ.pop("LANGSMITH_TRACING", None)
         os.environ.pop("LANGSMITH_API_KEY", None)
+
+
+def init_error_monitoring(settings: Settings) -> None:
+    dsn = settings.sentry_dsn.get_secret_value()
+    if not dsn:
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=settings.sentry_environment,
+        release=settings.sentry_release or None,
+        # Errors only — LangSmith is the tracing layer (ADR-007).
+        traces_sample_rate=0.0,
+        # Parent requests and pipeline prompts can carry a child's name: no
+        # PII headers/IPs, no request bodies, no stack-frame locals (ADR-009).
+        send_default_pii=False,
+        max_request_body_size="never",
+        include_local_variables=False,
+    )
 
 
 def build_traced_openai_client(settings: Settings) -> AsyncOpenAI:

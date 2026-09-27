@@ -56,6 +56,15 @@ services:
       - key: PYTHON_VERSION
         value: "3.12"
 
+      # Sentry error monitoring (ADR-009). The DSN is set in the dashboard;
+      # previews report under their own environment so they never page as
+      # production. The release comes from Render's RENDER_GIT_COMMIT.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+        previewValue: preview
+
       # --- Previews are read-only --------------------------------------------
       # A PR preview must never publish to the live bucket, write a family's
       # data, or spend generation credit. Blank Clerk keys make /parent and

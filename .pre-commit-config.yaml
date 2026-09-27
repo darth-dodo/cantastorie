@@ -51,12 +51,14 @@ repos:
           - pydantic-settings>=2.0.0
           - fastapi>=0.115.0
           - jinja2>=3.1.0
-          - pydantic-ai>=0.4.0
+          # Pinned to uv.lock: a newer pydantic-ai changes Agent output typing
+          - pydantic-ai==2.5.0
           - typer>=0.15.0
           - httpx>=0.28.0
           - boto3>=1.35.0
           - boto3-stubs[s3]>=1.35.0
           - langsmith>=0.3.0
+          - sentry-sdk>=2.0.0
           - openai>=1.0.0
         args: [--config-file=pyproject.toml, src]
         pass_filenames: false

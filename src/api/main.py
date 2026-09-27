@@ -16,13 +16,15 @@ from src.api.routes.player import router as player_router
 from src.api.routes.published import router as published_router
 from src.api.routes.workshop import router as workshop_router
 from src.config import get_settings
-from src.observability import init_observability
+from src.observability import init_error_monitoring, init_observability
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 def create_app() -> FastAPI:
-    init_observability(get_settings())
+    settings = get_settings()
+    init_observability(settings)
+    init_error_monitoring(settings)
     app = FastAPI(title="Cantastorie")
     app.add_middleware(TracingMiddleware)
 

@@ -69,6 +69,7 @@ graph LR
 | App hosting | Render | Hermano's render.yaml precedent |
 | Parent authentication | Clerk (parent area only; [ADR-003](adr/ADR-003-parent-authentication-clerk.md)) | Magic-link / OAuth sign-in; JWT verified via JWKS (PyJWT, no vendor SDK); the child player stays account-free |
 | Child persistence | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
+| Observability | LangSmith tracing ([ADR-007](adr/ADR-007-langsmith-observability.md)); Sentry errors, server-side only ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)) | Traces for LLM/narration/image calls; grouped, release-tagged exceptions for the app, workshop runs, and CLI — inert when unconfigured, no browser SDK |
 | Testing | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows verified in a real browser |
 
 **One key to run the default pipeline: `OPENROUTER_API_KEY`.** With default narration on Gemini TTS via OpenRouter ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the whole default pipeline — story, safety, glosses, images, and narration — runs on the single OpenRouter key. ElevenLabs is retired ([ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)). Two bounded, flagged exceptions exist: the word-timing pass uses a pipeline-only `DEEPGRAM_API_KEY` (OpenRouter does not carry the Deepgram models — verified at AI-391), and voice cloning ([ADR-006](adr/ADR-006-family-voice-narration.md)) uses `MISTRAL_API_KEY` for Voxtral voice profiles — that single capability and no other code path. Keys live only in the pipeline environment (and later the Phase 2 service) — never in the browser, never needed at story time.
@@ -108,7 +109,7 @@ src/
 │   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, GlossMap
 │   ├── providers.py        OpenRouter transport (chat, images, TTS)
 │   └── publish.py          R2 staging + publish, manifest update, immutable naming
-├── observability.py        LangSmith tracing for pipeline and app
+├── observability.py        LangSmith tracing + Sentry error monitoring for pipeline and app
 ├── templates/              Jinja2: index.html (player shell) + workshop/ screens
 └── static/
     ├── js/
@@ -329,6 +330,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | Nothing about the child leaves the browser | Story-time traffic is bucket-direct asset fetches only; no cookies; no server-side state; R2 access logs disabled |
 | No child accounts | The child player is account-free; a parent signs in via Clerk (ADR-003) only to request and review stories — the child path carries no Clerk script or cookie |
 | Zero unapproved assets reachable | Only the publish step writes to `published/`; the audit script (slice 5, then CI) verifies every manifest entry resolves to approved content and nothing else is listed |
+| Error reports carry no child data | Sentry is server-side only (no browser SDK); events omit request bodies, stack-frame locals, IPs, and auth/cookie headers ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)) |
 | Keys never reach the browser | The OpenRouter key (and the pipeline-only Deepgram and Mistral keys — timing pass and voice cloning respectively) exist only in pipeline/service environments |
 
 ---

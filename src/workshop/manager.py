@@ -19,6 +19,8 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import sentry_sdk
+
 from src.pipeline.generate import generate_story
 
 if TYPE_CHECKING:
@@ -142,6 +144,9 @@ class RunManager:
                 )
                 record = record.advance("staged", story_ids=[p.rsplit("/", 1)[-1] for p in staged])
             except Exception as error:
+                # Swallowed to land the run failed, so no integration sees it —
+                # report explicitly (a no-op when Sentry is not initialized).
+                sentry_sdk.capture_exception(error)
                 record = record.advance("failed", error=str(error))
             self._store.save(record)
             return record
