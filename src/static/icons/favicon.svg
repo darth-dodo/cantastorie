@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The orchid moon (design-system moon tokens, accent rim) sleeping on a
+       dusk tile (the dusk surface). Geometry is the shelf mascot's, scaled
+       from 58px to a 44px moon. Source for the PNG and ICO icons: regenerate
+       them with scripts/generate_favicons.mjs after editing. -->
+  <defs>
+    <radialGradient id="moon" cx="34%" cy="30%" r="96%">
+      <stop offset="0" stop-color="#F2EDFB"/>
+      <stop offset=".52" stop-color="#D6CBF0"/>
+      <stop offset="1" stop-color="#A88BE0"/>
+    </radialGradient>
+    <radialGradient id="shade" cx="34%" cy="30%" r="80%">
+      <stop offset=".6" stop-color="#4A3A70" stop-opacity="0"/>
+      <stop offset="1" stop-color="#4A3A70" stop-opacity=".4"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#1C2130"/>
+  <circle cx="32" cy="32" r="25" fill="#A88BE0" opacity=".18"/>
+  <circle cx="32" cy="32" r="22" fill="url(#moon)"/>
+  <circle cx="32" cy="32" r="22" fill="url(#shade)"/>
+  <g fill="#705C9E">
+    <circle cx="41.5" cy="19.5" r="4.2" opacity=".3"/>
+    <circle cx="38.4" cy="44.5" r="2.7" opacity=".26"/>
+    <circle cx="18" cy="40" r="1.9" opacity=".22"/>
+  </g>
+  <g fill="#3A2F55">
+    <path d="M19.9 30.5h9.1a4.55 3.2 0 0 1-9.1 0z"/>
+    <path d="M35.8 30.5h9.1a4.55 3.2 0 0 1-9.1 0z"/>
+    <path d="M27.6 38.8h10.6a5.3 5.3 0 0 1-10.6 0z"/>
+  </g>
+</svg>
