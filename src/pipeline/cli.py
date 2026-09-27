@@ -10,7 +10,7 @@ from typing import Literal, cast, get_args
 import typer
 
 from src.config import get_settings
-from src.observability import init_observability
+from src.observability import init_error_monitoring, init_observability
 from src.pipeline.generate import generate_story
 from src.pipeline.models import Language, Theme
 from src.pipeline.publish import audit_published_bucket, publish_story
@@ -48,6 +48,7 @@ def generate(
 
     settings = get_settings()
     init_observability(settings)
+    init_error_monitoring(settings)
     staged = generate_story(
         cast("Theme", theme),
         cast("Language", language),

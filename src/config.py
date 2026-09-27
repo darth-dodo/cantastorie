@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Self
 
-from pydantic import SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -122,6 +122,17 @@ class Settings(BaseSettings):
     langsmith_project: str = "cantastorie"
     langsmith_tracing: bool = False
     langsmith_endpoint: str = "https://api.smith.langchain.com"
+
+    # Sentry error monitoring (ADR-009) — exceptions from the FastAPI app and the
+    # pipeline, server-side only (the child player loads no Sentry script). An
+    # empty DSN (the default) means Sentry never initializes and no data leaves
+    # the process. The release defaults to Render's RENDER_GIT_COMMIT, which the
+    # SDK does not auto-detect, so every event names the deployed commit.
+    sentry_dsn: SecretStr = SecretStr("")
+    sentry_environment: str = "development"
+    sentry_release: str = Field(
+        default="", validation_alias=AliasChoices("sentry_release", "RENDER_GIT_COMMIT")
+    )
 
     @property
     def pending_bucket(self) -> str:

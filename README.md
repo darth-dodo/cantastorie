@@ -165,6 +165,7 @@ What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [A
   - [ADR-006: Nonna Narrates](docs/adr/ADR-006-family-voice-narration.md) — family voice cloning, proposed
   - [ADR-007: LangSmith Observability](docs/adr/ADR-007-langsmith-observability.md) — app-wide tracing
   - [ADR-008: Gemini TTS Defaults, Mistral Cloning](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) — default voices on Gemini via OpenRouter; cloning scoped to Voxtral on the Mistral API
+  - [ADR-009: Sentry Error Monitoring](docs/adr/ADR-009-sentry-error-monitoring.md) — server-side exception reporting, errors only, no child data
 
 ---
 
