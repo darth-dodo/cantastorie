@@ -61,6 +61,11 @@ function fakeEngine() {
       held = null;
       state = "playing";
     },
+    // Always moving: these wiring specs never stall the voice (the stall
+    // watchdog has its own specs in playback.test.js).
+    position() {
+      return performance.now() / 1000;
+    },
     async playPrompt(url, { onEnded } = {}) {
       prompt = { url, onEnded };
     },
