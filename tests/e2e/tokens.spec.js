@@ -34,3 +34,19 @@ test('indigo dusk — --rest and --primary are distinct', async ({ page }) => {
   });
   expect(rest).not.toBe(primary);
 });
+
+test("dusk shelf is painted from the indigo tokens, not the retired warm browns", async ({ page }) => {
+  await page.goto("/play?lang=it&theme=dusk");
+  await page.waitForSelector(".shelf .cover");
+  const { bg, fade, caption } = await page.evaluate(() => {
+    const shelf = document.querySelector(".shelf");
+    return {
+      bg: getComputedStyle(shelf).backgroundImage + " " + getComputedStyle(shelf).backgroundColor,
+      fade: getComputedStyle(shelf, "::after").backgroundImage,
+      caption: getComputedStyle(document.querySelector(".cover-caption")).color,
+    };
+  });
+  expect(bg).toContain("rgb(28, 33, 48)"); // --surface dusk #1C2130
+  expect(fade).toContain("rgb(28, 33, 48)");
+  expect(caption).toBe("rgb(151, 160, 181)"); // --ink-soft dusk #97A0B5
+});
