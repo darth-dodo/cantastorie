@@ -12,7 +12,7 @@ import typer
 from src.config import get_settings
 from src.observability import init_error_monitoring, init_observability
 from src.pipeline.generate import generate_story
-from src.pipeline.models import Language, Theme
+from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.publish import audit_published_bucket, publish_story
 
 app = typer.Typer(help="Cantastorie authoring pipeline", no_args_is_help=True)
@@ -44,6 +44,9 @@ def generate(
         raise typer.Exit(1)
     if shape not in ("linear", "branching"):
         typer.echo(f"Unknown shape {shape!r}; linear or branching")
+        raise typer.Exit(1)
+    if len(premise) > PREMISE_MAX_LENGTH:
+        typer.echo(f"Premise is {len(premise)} characters; the bound is {PREMISE_MAX_LENGTH}")
         raise typer.Exit(1)
 
     settings = get_settings()

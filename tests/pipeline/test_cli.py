@@ -112,6 +112,25 @@ def test_generate_rejects_a_theme_outside_the_locked_set() -> None:
     assert "dragons" in result.output
 
 
+def test_generate_rejects_a_premise_over_the_bound() -> None:
+    """AI-470: the same 300-character bound as PackRequest applies here — the
+    CLI is another way to reach the writer prompt, not a separate rule."""
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--theme",
+            "the_sleepy_sea",
+            "--language",
+            "it",
+            "--premise",
+            "x" * 301,
+        ],
+    )
+    assert result.exit_code != 0
+    assert "300" in result.output
+
+
 def test_generate_forwards_an_optional_premise(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
