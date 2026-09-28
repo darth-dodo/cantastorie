@@ -83,6 +83,30 @@ test.describe("A Story Night, Start to Finish (product.md)", () => {
   });
 });
 
+test.describe("Always boot to the shelf (AI-468)", () => {
+  test("a reload mid-story lands on the shelf, not a mock-view player", async ({ page }) => {
+    await wakeAndOpenTheStory(page);
+
+    // Let the story turn a page so there's real progress saved.
+    await expect(page.locator(".page-wash.current")).toHaveAttribute("data-page", "1", {
+      timeout: 10_000,
+    });
+
+    await page.reload();
+
+    // The shelf comes back — never the player running on the mock view
+    // (which has no real story loaded and would end in ~30s).
+    await expect(page.locator(".shelf")).toBeVisible();
+    await expect(page.locator(".player")).toHaveCount(0);
+
+    // Progress survived the reload: reopening the same cover offers resume.
+    await page.getByRole("button", { name: STORY_TITLE }).click();
+    await expect(page.locator(".overlay .prompt strong")).toHaveText("Welcome back!", {
+      timeout: 5_000,
+    });
+  });
+});
+
 test.describe("Whole-story prefetch (architecture.md -> The Player)", () => {
   test("every page's audio and image is fetched on the cover tap, before the story needs it", async ({ page }) => {
     const storyAssetRequests = new Set();
