@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
+from functools import partial
 from typing import TYPE_CHECKING
 
 from src.config import Settings, get_settings
 from src.pipeline.models import Story
-from src.pipeline.publish import PUBLISHED_PREFIX, THEME_WASH, _build_client, _load_manifest
+from src.pipeline.publish import (
+    PUBLISHED_PREFIX,
+    THEME_WASH,
+    _build_client,
+    _load_manifest,
+    _write_manifest,
+)
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from mypy_boto3_s3 import S3Client
 
 
@@ -35,35 +43,45 @@ def repair_manifests(
             if len(parts) != 2 or parts[1] != "manifest.json":
                 continue
 
-            manifest, _ = _load_manifest(client, settings.r2_bucket, parts[0])
+            language = parts[0]
             changed = False
-            for entry in manifest.get("stories", []):
-                story_id = entry["id"]
-                story_bytes = client.get_object(
-                    Bucket=settings.r2_bucket,
-                    Key=f"{PUBLISHED_PREFIX}/stories/{story_id}/story.json",
-                )["Body"].read()
-                story = Story.model_validate_json(story_bytes)
-                expected_wash = THEME_WASH[story.theme]
-                if entry.get("wash") != expected_wash:
-                    entry["wash"] = expected_wash
-                    changed = True
 
-                for field in ("story", "cover"):
-                    url = entry[field]
-                    if not url.startswith(("http://", "https://")):
-                        entry[field] = f"{public_base}/{url.lstrip('/')}"
+            def mutate(manifest: dict[str, Any]) -> None:
+                nonlocal changed
+                for entry in manifest.get("stories", []):
+                    story_id = entry["id"]
+                    story_bytes = client.get_object(
+                        Bucket=settings.r2_bucket,
+                        Key=f"{PUBLISHED_PREFIX}/stories/{story_id}/story.json",
+                    )["Body"].read()
+                    story = Story.model_validate_json(story_bytes)
+                    expected_wash = THEME_WASH[story.theme]
+                    if entry.get("wash") != expected_wash:
+                        entry["wash"] = expected_wash
                         changed = True
+
+                    for field in ("story", "cover"):
+                        url = entry[field]
+                        if not url.startswith(("http://", "https://")):
+                            entry[field] = f"{public_base}/{url.lstrip('/')}"
+                            changed = True
+
+            if dry_run:
+                manifest, _ = _load_manifest(client, settings.r2_bucket, language)
+                mutate(manifest)
+            else:
+                # Same helper publish and unpublish write through (H5): IfMatch
+                # + retry on a conflicting concurrent write, short Cache-Control.
+                _write_manifest(
+                    client,
+                    settings.r2_bucket,
+                    key,
+                    load=partial(_load_manifest, client, settings.r2_bucket, language),
+                    mutate=mutate,
+                )
 
             if changed:
                 repaired.append(key)
-                if not dry_run:
-                    client.put_object(
-                        Bucket=settings.r2_bucket,
-                        Key=key,
-                        Body=json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"),
-                        ContentType="application/json",
-                    )
 
     return repaired
 
