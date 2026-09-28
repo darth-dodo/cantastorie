@@ -56,7 +56,7 @@ function pickLang(params, saved) {
 // A manifest that never answers is treated like one that failed: the clouds
 // screen (or, for the family overlay, the shared shelf alone). The signal
 // bounds the body read too, not just the headers.
-export const MANIFEST_FETCH_TIMEOUT_MS = 6000;
+export const MANIFEST_FETCH_TIMEOUT_MS = 8000;
 
 async function fetchManifest(assetBase, fetchFn, lang, timeoutMs) {
   try {
@@ -235,17 +235,15 @@ export async function init(
 
   async function fetchShelf(targetLang) {
     if (!fetchFn) return null;
+    // The overlay is fetched alongside the shared manifest, so a slow
+    // overlay never adds its own wait on top of the shared one.
+    const overlayPending = familyToken // no token → zero overlay requests
+      ? fetchOverlayManifest(assetBase, fetchFn, familyToken, targetLang, manifestTimeoutMs)
+      : null;
     const shared = await fetchManifest(assetBase, fetchFn, targetLang, manifestTimeoutMs);
     if (shared === null) return null; // cold-load: let the clouds screen handle it
-    if (!familyToken) return shared; // no token → zero overlay requests
-    const overlay = await fetchOverlayManifest(
-      assetBase,
-      fetchFn,
-      familyToken,
-      targetLang,
-      manifestTimeoutMs,
-    );
-    return mergeOverlay(shared, overlay);
+    if (!overlayPending) return shared;
+    return mergeOverlay(shared, await overlayPending);
   }
 
   let manifest = await fetchShelf(lang);
@@ -253,7 +251,9 @@ export async function init(
   // Same-origin on purpose — NOT assetBase. assetBase is the R2 bucket in
   // prod, which is unreachable in the very offline case this screen handles;
   // the offline prompt must come from the origin that served this page.
-  const offlinePromptUrl = `/static/content/${lang}/prompts/offline.wav`;
+  // A function, not a constant: the cover-load clouds speak in the current
+  // language after a switch.
+  const offlinePromptUrl = () => `/static/content/${lang}/prompts/offline.wav`;
 
   while (fetchFn && manifest === null) {
     await new Promise((resolve) => {
@@ -262,7 +262,7 @@ export async function init(
           // The tap is also the wake gesture: unlock, speak, retry.
           engine
             .unlock()
-            .then(() => engine.playPrompt(offlinePromptUrl))
+            .then(() => engine.playPrompt(offlinePromptUrl()))
             .catch((err) => console.warn("offline prompt skipped", err));
           resolve();
         }),
@@ -278,39 +278,71 @@ export async function init(
   let activeStory = null;
   const storyCache = new Map();
 
+  // Every cover open (and a language switch) bumps the sequence. An open
+  // that returns from its load to a stale sequence was superseded (a double
+  // tap, a second cover, a new language) and must do nothing.
+  let openSeq = 0;
+
+  // A published story that won't load never plays the silent mock: the
+  // child stays on the shelf and the clouds speak (the cover tap already
+  // woke the sound). Tapping the clouds retries that same story.
+  function showStoryOffline(entry) {
+    shown = { ...shown, screen: null }; // the next render rebuilds whatever is due
+    app.replaceChildren(
+      buildOffline(() => {
+        engine.unlock().catch((err) => console.warn("unlock failed", err));
+        openCover(entry).catch((err) => console.warn("cover retry failed", err));
+      }),
+    );
+    if (engine.unlocked) {
+      engine
+        .playPrompt(offlinePromptUrl())
+        .catch((err) => console.warn("offline prompt skipped", err));
+    }
+  }
+
   // coverEl is the tapped button: it shimmers (.cover.loading) while the
   // story.json is on its way, so a slow network is never an inert tap.
   async function openCover(entry, coverEl = null) {
+    const seq = ++openSeq;
+    const superseded = () => seq !== openSeq || store.state.screen !== "shelf";
     if (entry?.story && fetchFn) {
       coverEl?.classList.add("loading");
+      let loaded;
       try {
         let pending = storyCache.get(entry.story);
         if (!pending) {
-          // A timeout rejects like any failure: the catch below evicts the
-          // cached promise, so the next tap fetches afresh.
+          // A timeout rejects like any failure and the cached promise is
+          // evicted, so the next tap fetches afresh.
           pending = loadStory(entry.story, fetchFn, { timeoutMs: storyTimeoutMs });
           storyCache.set(entry.story, pending);
           pending.catch(() => storyCache.delete(entry.story));
         }
-        const loaded = await pending;
-        activeStory = loaded;
-        // A save left mid-branch replays here: fold the recorded picks over the
-        // loaded story so the arm the child chose is back on the played path
-        // BEFORE playback.openStory runs — its unfinished check (page <
-        // pageCount) must see the rebuilt path, and the restored page index must
-        // point into it. A pick that no longer fits the graph (republished
-        // story) discards the save and starts fresh; never a crash.
-        const savedChoices = store.state.choices ?? [];
-        const replayed = savedChoices.length === 0 || replayResume(loaded, savedChoices);
-        await playback.openStory(loaded);
-        if (!replayed) store.resumeRestart();
-        return;
+        loaded = await pending;
       } catch (err) {
-        console.warn("story unavailable, using the page timer", err);
+        if (superseded()) return;
+        console.warn("story unavailable, showing the clouds", err);
+        showStoryOffline(entry);
+        return;
       } finally {
         coverEl?.classList.remove("loading");
       }
+      if (superseded()) return;
+      activeStory = loaded;
+      // A save left mid-branch replays here: fold the recorded picks over the
+      // loaded story so the arm the child chose is back on the played path
+      // BEFORE playback.openStory runs — its unfinished check (page <
+      // pageCount) must see the rebuilt path, and the restored page index must
+      // point into it. A pick that no longer fits the graph (republished
+      // story) discards the save and starts fresh; never a crash.
+      const savedChoices = store.state.choices ?? [];
+      const replayed = savedChoices.length === 0 || replayResume(loaded, savedChoices);
+      await playback.openStory(loaded);
+      if (!replayed) store.resumeRestart();
+      return;
     }
+    // Only a cover with no story.json at all (the dev/mock shelf) runs on
+    // the page timer.
     activeStory = null;
     playback.clearStory();
     store.openStory({ pageCount: PAGE_COUNT, choicePage: CHOICE_PAGE });
@@ -320,6 +352,7 @@ export async function init(
     if (newLang === lang) return;
     lang = newLang;
     saveLang(lang);
+    openSeq += 1; // a cover still loading in the old language is dropped
     storyCache.clear();
     activeStory = null;
     playback.clearStory();

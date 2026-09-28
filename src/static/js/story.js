@@ -28,7 +28,7 @@ export function orderPages(storyJson) {
 // A story.json is a few KB; a network that accepts the request and never
 // answers (captive portal, half-dead radio) must not leave the cover tap
 // inert. The signal bounds the body read too, not just the headers.
-export const STORY_FETCH_TIMEOUT_MS = 6000;
+export const STORY_FETCH_TIMEOUT_MS = 10000;
 
 export async function loadStory(url, fetchFn, { timeoutMs = STORY_FETCH_TIMEOUT_MS } = {}) {
   const res = await fetchFn(url, { signal: AbortSignal.timeout(timeoutMs) });

@@ -654,8 +654,7 @@ describe("a network that never answers (B8, AI-473)", () => {
     running = await init(document, { fetchFn: spyFetch, engine: fakeEngine() });
     expect(signals).toHaveLength(1);
     expect(signals[0]).toBeInstanceOf(AbortSignal);
-    expect(MANIFEST_FETCH_TIMEOUT_MS).toBeGreaterThan(0);
-    expect(MANIFEST_FETCH_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
+    expect(MANIFEST_FETCH_TIMEOUT_MS).toBe(8000);
   });
 
   it("a hung manifest times out into the clouds; a tap once it answers brings the shelf", async () => {
@@ -694,7 +693,7 @@ describe("a network that never answers (B8, AI-473)", () => {
     expect(document.querySelectorAll(".shelf .cover")).toHaveLength(manifest.stories.length);
   });
 
-  it("a hung story.json shimmers the cover, times out to the page timer, and the next tap retries", async () => {
+  it("a hung published story shimmers, then the clouds speak on the shelf; a tap retries that story", async () => {
     document.body.innerHTML = '<main id="app"></main>';
     let storyUp = false;
     let storyJsonFetches = 0;
@@ -705,24 +704,130 @@ describe("a network that never answers (B8, AI-473)", () => {
       }
       return routedFetch(url);
     };
-    running = await init(document, { fetchFn, engine: fakeEngine(), storyTimeoutMs: 50 });
+    const engine = fakeEngine();
+    const promptUrls = [];
+    const playPrompt = engine.playPrompt.bind(engine);
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn, engine, storyTimeoutMs: 50 });
+    const savedBefore = localStorage.getItem("cantastorie-shell");
 
     // The tap shows the cover is working on it, not an inert button.
     document.querySelector(".cover").click();
     expect(document.querySelector(".cover").classList.contains("loading")).toBe(true);
 
-    // The timeout falls into the existing failure path: the page timer.
-    await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
+    // The timeout never plays the silent mock story: the clouds take the
+    // stage, speak their line, and the child is still on the shelf.
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    expect(document.querySelector(".player")).toBeNull();
+    expect(running.store.state.screen).toBe("shelf");
     expect(running.playback.hasStory()).toBe(false);
+    await vi.waitFor(() => expect(promptUrls).toContain("/static/content/en/prompts/offline.wav"));
 
-    // Back on the shelf, the shimmer is gone and the next tap fetches afresh.
-    running.store.toShelf();
-    await vi.waitFor(() => expect(document.querySelector(".shelf")).not.toBeNull());
-    expect(document.querySelector(".cover.loading")).toBeNull();
+    // The failed attempt saved no progress for that story.
+    expect(localStorage.getItem("cantastorie-shell")).toBe(savedBefore);
+
+    // Still hung: a tap retries and, on the next timeout, fresh clouds come back.
+    const firstClouds = document.querySelector(".offline");
+    firstClouds.click();
+    await vi.waitFor(() => expect(storyJsonFetches).toBe(2));
+    await vi.waitFor(() => {
+      const clouds = document.querySelector(".offline");
+      expect(clouds).not.toBeNull();
+      expect(clouds).not.toBe(firstClouds);
+    });
+
+    // The network returns: the next tap on the clouds opens that very story.
     storyUp = true;
-    document.querySelector(".cover").click();
+    document.querySelector(".offline").click();
     await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
-    expect(storyJsonFetches).toBe(2);
+    expect(storyJsonFetches).toBe(3);
+    await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
+    expect(document.querySelector(".bead")).not.toBeNull();
+  });
+
+  it("a double tap on a gated load opens the story once, and replays the saved path once", async () => {
+    const branchingStory = JSON.parse(
+      readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
+    );
+    // A save left mid-arm-b, so each open would fold the pick over loaded.pages.
+    localStorage.setItem("cantastorie-shell", JSON.stringify({ screen: "shelf", page: 7, choices: [1] }));
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url) => {
+      const path = String(url);
+      if (path.includes("dev-branching")) {
+        await gate;
+        return { ok: true, json: async () => branchingStory };
+      }
+      return routedFetch(url);
+    };
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const openStory = vi.spyOn(running.playback, "openStory");
+
+    const cover = [...document.querySelectorAll(".shelf .cover")].at(-1);
+    cover.click();
+    cover.click();
+    release();
+
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(openStory).toHaveBeenCalledTimes(1);
+    // Six shared pages plus the four-page arm b, folded over exactly once.
+    expect(openStory.mock.calls[0][0].pages).toHaveLength(10);
+  });
+
+  it("a tap on a second cover while the first loads opens only the second", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const branchingStory = JSON.parse(
+      readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
+    );
+    const fetchFn = async (url) => {
+      const path = String(url);
+      if (path.includes("la-barchetta") && path.endsWith("story.json")) await gate; // the first cover is slow
+      if (path.includes("dev-branching")) return { ok: true, json: async () => branchingStory };
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const openStory = vi.spyOn(running.playback, "openStory");
+    const covers = [...document.querySelectorAll(".shelf .cover")];
+    covers[0].click(); // la barchetta, gated
+    covers.at(-1).click(); // dev-branching, answers at once
+    await vi.waitFor(() => expect(openStory).toHaveBeenCalledTimes(1));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(openStory).toHaveBeenCalledTimes(1);
+    expect(openStory.mock.calls[0][0].id).toBe("dev-branching");
+  });
+
+  it("a language switch during a cover load drops the stale open", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url) => {
+      if (String(url).endsWith("story.json")) await gate;
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const oldPlayback = running.playback;
+    const openStory = vi.spyOn(oldPlayback, "openStory");
+    document.querySelector(".cover").click();
+    await running.switchLanguage("es");
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(openStory).not.toHaveBeenCalled();
+    expect(running.store.state.screen).toBe("shelf");
   });
 
   it("a successful load clears the cover shimmer", async () => {

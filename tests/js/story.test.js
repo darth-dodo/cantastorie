@@ -100,8 +100,7 @@ describe("a hung story.json (B8, AI-473)", () => {
     };
     await loadStory(FIXTURE_URL, spyFetch);
     expect(seen).toBeInstanceOf(AbortSignal);
-    expect(STORY_FETCH_TIMEOUT_MS).toBeGreaterThan(0);
-    expect(STORY_FETCH_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
+    expect(STORY_FETCH_TIMEOUT_MS).toBe(10_000);
   });
 });
 
