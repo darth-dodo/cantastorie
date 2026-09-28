@@ -114,6 +114,19 @@ published/prompts/it/…
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
 
+### `CONTENT_DIR` and the resume cost (B5, AI-477)
+
+`CONTENT_DIR` is the pipeline's `ArtifactCache` (ADR-001): every step's output — outline, draft, safety verdict, gloss, narration audio, illustrations — is written there the instant it's produced, keyed by a hash of its inputs, so a resumed run finds completed steps as pure lookups instead of re-buying them. The app now resumes any run still `queued`/`running` on boot (a FastAPI `lifespan`, `src/api/main.py`), which is exactly when this cache matters most: the deploy that just restarted the process is also the deploy that wiped `/tmp`.
+
+**Decision: accept the cost, no Render persistent disk for now.** A resumed run after a deploy re-pays the API calls for every step that hadn't finished before the restart — its cache is gone, so those steps run from scratch even though the R2 run record and any *already-staged* artifacts are untouched. This is bounded and rare in practice:
+
+- It only affects a run genuinely interrupted mid-generation, not staged/approved/rejected work (that's durable in R2 either way).
+- H3 gates `autoDeploy` on CI passing, so most deploys stop landing mid-generation by accident — the remaining trigger is a real crash or a deliberate redeploy while a run happens to be live.
+- The product's volume is household-scale (ADR-005) — packs of 1–3 stories, runs measured in minutes, rarely concurrent — so the worst case is re-buying a handful of provider calls for one run, not a fleet of them.
+- A persistent disk is cheap in isolation, but it's still standing infrastructure (provisioning, attaching to the Starter instance, and — because Render disks pin a service to one instance — a constraint the app already accepts implicitly, not one this decision should be the reason to make explicit) for a cost that's already small and self-bounding.
+
+Revisit this if run volume grows enough that repeated deploys start re-buying real money, or once H3's CI-gated deploys still land mid-run often enough to be a pattern worth measuring — at that point a small disk mounted at `CONTENT_DIR` is the straightforward fix, not an architecture change.
+
 ### Preview environments (AI-464)
 
 `render.yaml` turns on Render **preview environments**: every pull request gets its own short-lived copy of the Blueprint on a temporary `onrender.com` URL. The preview is rebuilt on each push and deleted when the PR merges or closes, or after 3 idle days (`expireAfterDays`). Render posts the URL on the PR, so a change can be opened on a phone before it merges.
