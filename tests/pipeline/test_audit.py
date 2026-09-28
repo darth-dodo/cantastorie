@@ -266,6 +266,24 @@ def test_audit_fails_when_any_pending_object_sits_in_the_public_bucket(
     assert any("pending/abc/runs/r1.json" in v for v in result.violations)
 
 
+def test_audit_sweep_is_anchored_to_the_pending_prefix(tmp_path: Path, s3: S3Client) -> None:
+    """Given a published story whose key merely contains the word "pending",
+    When the audit runs,
+    Then the pending/ sweep does not flag it — only keys under the top-level
+    pending/ prefix are violations.
+    """
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path, story_id="pending-x")
+    stage_story(assembled, settings, client=s3)
+    _stage_prompts(s3)
+    publish_story(assembled.story.id, settings, client=s3)
+    assert s3.head_object(Bucket=BUCKET, Key="published/stories/pending-x/story.json")
+
+    result = audit_published_bucket(settings, client=s3)
+
+    assert result.violations == []
+
+
 def test_audit_reports_manifests_checked_count(tmp_path: Path, s3: S3Client) -> None:
     """Given stories published in two languages,
     When audit runs,

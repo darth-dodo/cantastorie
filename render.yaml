@@ -82,9 +82,12 @@ services:
       # refuses to boot unless R2_PENDING_BUCKET names a private bucket
       # separate from R2_BUCKET (B1): pending/ holds unreviewed stories and
       # run records keyed by the family token, and the public bucket serves
-      # every key it holds.
+      # every key it holds. Previews blank the endpoint: no R2 client can
+      # reach the live bucket, and the validator is skipped, so a preview
+      # boots whether or not Render copies R2_PENDING_BUCKET.
       - key: R2_ENDPOINT_URL
         sync: false
+        previewValue: ""
       - key: R2_BUCKET
         sync: false
       - key: R2_PUBLIC_BASE
