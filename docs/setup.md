@@ -54,6 +54,20 @@ Set **`R2_PENDING_BUCKET=cantastorie-pending`** wherever R2 is configured: the R
 
 The audit (`python -m src.pipeline.cli audit`, run by CI on every push to `main`) sweeps the public bucket's `pending/` prefix and fails on any object it finds there.
 
+**Token scope.** Render and CI use one R2 API token for both buckets. Publishing copies objects from `cantastorie-pending` into `cantastorie`, and all pending reads and writes go to `cantastorie-pending`. So that token needs **Object Read & Write on both `cantastorie` and `cantastorie-pending`**. A token scoped only to the public bucket does not fail loudly: the parent review page shows "no staged story" (a 404), because the staged-story read in `src/api/routes/parent.py` swallows the exception and returns nothing.
+
+#### Migrating to the private pending bucket
+
+Do these in order, before merging the change that enforces the separate bucket (AI-469):
+
+1. Create the bucket: `wrangler r2 bucket create cantastorie-pending -J eu`.
+2. Scope the R2 API token used by Render and CI to Object Read & Write on both `cantastorie` and `cantastorie-pending`.
+3. Inventory `pending/` in the **public** bucket. To list it, run `uv run python -m src.pipeline.cli audit` locally from the enforcing branch, with the live R2 vars and `R2_PENDING_BUCKET=cantastorie-pending` in `.env`. Every `pending/` key is reported. Copy in-flight run records and staged packs to `cantastorie-pending`, then delete them from the public bucket. Use `wrangler r2 object get` / `put` / `delete … -J eu` for single keys. Treat every family token found under `pending/{token}/` as leaked, and rotate or re-provision it.
+4. Set `R2_PENDING_BUCKET=cantastorie-pending` in the Render dashboard.
+5. Add the GitHub Actions secret `R2_PENDING_BUCKET=cantastorie-pending`.
+6. Merge.
+7. Confirm the deploy is live and the `main` R2 Bucket Audit job is green.
+
 ### Access logs OFF
 
 R2 does not log object access by default — the goal is to keep it that way, so there is provably nothing recording what a child plays. Verify no event-notification pipeline is attached (a bare "no configurations found" is the healthy answer):
@@ -110,6 +124,7 @@ Without `ASSET_BASE`, the player falls back to the app's own `/static/content` m
 |----------|--------------|-----|
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL` | empty | With Clerk unset, `/parent` and `/workshop` answer **404**, which closes every write path |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `OPENROUTER_API_KEY` | `preview-disabled` | A second lock: nothing can publish or generate even if a route slips past |
+| `R2_ENDPOINT_URL` | empty | No R2 client can reach the live bucket, and the R2 config check (which requires a separate pending bucket) is skipped, so a preview boots either way |
 | `ASSET_BASE` | `/static/content` | Same-origin dev fixtures. The R2 CORS policy (`deploy/r2-cors.json`) lists exact origins, so a preview host could not fetch published stories |
 
 `tests/test_render_previews.py` builds settings from these `previewValue`s and asserts the result: landing, player and `/health` answer 200; the parent area and workshop answer 404.
