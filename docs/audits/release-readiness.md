@@ -184,6 +184,8 @@ The player tests seed `{ screen: "shelf" }` explicitly, with a comment noting it
 
 **Fix**: normalize on load. Persist progress only and always boot to the shelf; the resume overlay already reconstructs the rest.
 
+Fixed in code (AI-468).
+
 ---
 
 ### B8 — No timeout on any player fetch, so a slow-but-alive network is a permanent blank screen
@@ -437,7 +439,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)
 - [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
-- [ ] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
+- [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
 - [ ] Spoken prompts shipped for every language in the selector, or the selector gated to complete languages (H6)

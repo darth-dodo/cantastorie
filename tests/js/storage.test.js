@@ -44,4 +44,45 @@ describe("progress persistence", () => {
     expect(() => save({ screen: "player", page: 1 }, blocked)).not.toThrow();
     expect(load(blocked)).toBeNull();
   });
+
+  it("always boots to the shelf, even when the save left the player mid-story (AI-468)", () => {
+    const storage = memStorage({
+      [KEY]: JSON.stringify({
+        screen: "player",
+        page: 4,
+        playing: true,
+        choiceOpen: false,
+        resumeOpen: false,
+        audioError: false,
+        choices: [1],
+        pageCount: 8,
+        choicePage: 2,
+      }),
+    });
+    const restored = load(storage);
+    expect(restored.screen).toBe("shelf");
+    // Progress and the chosen path survive, so reopening the cover still
+    // offers the resume overlay and replays the picked branch.
+    expect(restored.page).toBe(4);
+    expect(restored.choices).toEqual([1]);
+  });
+
+  it("drops transient UI flags tied to a live player session on load (AI-468)", () => {
+    const storage = memStorage({
+      [KEY]: JSON.stringify({
+        screen: "player",
+        page: 2,
+        playing: false,
+        choiceOpen: true,
+        resumeOpen: true,
+        audioError: true,
+        choices: [],
+      }),
+    });
+    const restored = load(storage);
+    expect(restored.playing).toBe(true);
+    expect(restored.choiceOpen).toBe(false);
+    expect(restored.resumeOpen).toBe(false);
+    expect(restored.audioError).toBe(false);
+  });
 });
