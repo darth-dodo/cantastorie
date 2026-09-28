@@ -219,6 +219,8 @@ On return the context is suspended, so `start()` schedules nothing audible and `
 
 **Fix**: make unlock idempotent and re-run it on `visibilitychange`; add a narration watchdog that flips to the existing audio-error state if playback position stops advancing.
 
+**Fixed in code** 2026-09-27 (Linear AI-461; see [`docs/plans/2026-09-27-audio-wake.md`](../plans/2026-09-27-audio-wake.md)). The plan's real-device checklist is still pending; B9 is confirmed fixed only once it passes on real devices.
+
 ---
 
 ## High
@@ -437,7 +439,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
 - [ ] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
-- [ ] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
+- [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
 - [ ] Spoken prompts shipped for every language in the selector, or the selector gated to complete languages (H6)
 - [ ] Path allowlist and tests on `/published/{path}` (H7)
 - [ ] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)

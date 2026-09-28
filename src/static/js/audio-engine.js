@@ -42,7 +42,18 @@ export function createAudioEngine({
   let playEpoch = 0;
 
   function ensureContext() {
-    ctx ??= createContext();
+    if (ctx) return ctx;
+    ctx = createContext();
+    // iOS mutes/ducks other apps' audio unless the session declares itself
+    // "playback". Not every browser exposes navigator.audioSession, and the
+    // ones that do can still throw on assignment — best effort only.
+    try {
+      if (globalThis.navigator?.audioSession) {
+        globalThis.navigator.audioSession.type = "playback";
+      }
+    } catch {
+      // ignored — narration still plays without it
+    }
     return ctx;
   }
 
@@ -116,10 +127,19 @@ export function createAudioEngine({
       return ctx !== null && ctx.state === "running";
     },
 
-    // Call from the first user gesture: browsers allow no sound before it.
+    // Call on every tap that could start audio, not just the first gesture:
+    // iOS/Safari can drop a running context to "interrupted" (backgrounding,
+    // a phone call) with no event, so each activation must be ready to wake
+    // it again. Cheap and idempotent — safe to call unconditionally.
     async unlock() {
       ensureContext();
-      if (ctx.state === "suspended") await ctx.resume();
+      if (ctx.state !== "running" && ctx.state !== "closed") {
+        try {
+          await ctx.resume();
+        } catch (err) {
+          console.warn("audio-engine: unlock failed to resume the context", err);
+        }
+      }
     },
 
     async load(url) {

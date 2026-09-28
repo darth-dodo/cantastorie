@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAudioEngine } from "../../src/static/js/audio-engine.js";
 
 // A fake Web Audio context that records what the engine asks of it.
@@ -58,6 +58,10 @@ beforeEach(() => {
 });
 
 describe("unlock", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("resumes a suspended context once, from a gesture", async () => {
     expect(engine.unlocked).toBe(false);
     await engine.unlock();
@@ -65,6 +69,70 @@ describe("unlock", () => {
     expect(engine.unlocked).toBe(true);
     await engine.unlock();
     expect(ctx.resume).toHaveBeenCalledOnce(); // idempotent
+  });
+
+  it("resumes an interrupted context too, not just a suspended one", async () => {
+    ctx.state = "interrupted";
+    await engine.unlock();
+    expect(ctx.resume).toHaveBeenCalledOnce();
+    expect(engine.unlocked).toBe(true);
+  });
+
+  it("does not resume an already-running context", async () => {
+    ctx.state = "running";
+    await engine.unlock();
+    expect(ctx.resume).not.toHaveBeenCalled();
+  });
+
+  it("does not resume a closed context", async () => {
+    ctx.state = "closed";
+    await engine.unlock();
+    expect(ctx.resume).not.toHaveBeenCalled();
+  });
+
+  it("two concurrent unlock() calls create one context and don't throw", async () => {
+    const createContext = vi.fn(() => fakeContext());
+    const concurrentEngine = createAudioEngine({ createContext, fetchFn: okFetch });
+    await expect(Promise.all([concurrentEngine.unlock(), concurrentEngine.unlock()])).resolves.not.toThrow();
+    expect(createContext).toHaveBeenCalledOnce();
+  });
+
+  it("swallows a rejected resume(): unlock() resolves and unlocked stays false", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    ctx.resume = vi.fn(async () => {
+      throw new Error("resume denied");
+    });
+    await expect(engine.unlock()).resolves.toBeUndefined();
+    expect(engine.unlocked).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it("sets navigator.audioSession.type to 'playback' once, on first ensureContext()", async () => {
+    const audioSession = { type: "auto" };
+    vi.stubGlobal("navigator", { audioSession });
+
+    await engine.unlock();
+    expect(audioSession.type).toBe("playback");
+
+    audioSession.type = "auto"; // simulate the platform resetting it
+    await engine.load("p1.mp3"); // a later ensureContext() call — same context
+    expect(audioSession.type).toBe("auto"); // not touched again
+  });
+
+  it("does nothing when navigator.audioSession is absent", async () => {
+    vi.stubGlobal("navigator", {});
+    await expect(engine.unlock()).resolves.toBeUndefined();
+  });
+
+  it("does not throw when the audioSession.type setter throws", async () => {
+    const audioSession = {};
+    Object.defineProperty(audioSession, "type", {
+      set() {
+        throw new Error("not supported here");
+      },
+    });
+    vi.stubGlobal("navigator", { audioSession });
+    await expect(engine.unlock()).resolves.toBeUndefined();
   });
 });
 

@@ -7,6 +7,7 @@ import { load, save } from "./storage.js";
 import { createAudioEngine } from "./audio-engine.js";
 import { createPlayback } from "./playback.js";
 import { createPrefetcher } from "./prefetch.js";
+import { createWaker } from "./wake.js";
 import { loadStory, shelf as fallbackShelf } from "./story.js";
 import { VALID_PALETTES, resolveTheme, loadThemeMode } from "./palette-resolve.js";
 import {
@@ -307,22 +308,29 @@ export async function init(
     render(store.state);
   }
 
-  root.addEventListener(
-    "pointerdown",
-    (event) => {
+  const doc = root.ownerDocument ?? root;
+  const waker = createWaker({
+    engine,
+    root,
+    doc,
+    onFirstUnlock: (event) => {
+      const url = manifest?.prompts?.greeting;
+      if (!url || event.target.closest(".cover") || event.target.closest(".settings-gear")) {
+        return;
+      }
+      // Bank the buffer first and greet only if the child is still on the
+      // shelf, like the end prompt. A greeting landing after a cover tap
+      // would silence "Si parte!" — a silenced prompt never fires its
+      // onEnded, so the story would never be released to start.
       engine
-        .unlock()
+        .load(url)
         .then(() => {
-          const url = manifest?.prompts?.greeting;
-          if (url && !event.target.closest(".cover") && !event.target.closest(".settings-gear")) {
-            return engine.playPrompt(url);
-          }
-          return undefined;
+          if (store.state.screen !== "shelf") return undefined;
+          return engine.playPrompt(url);
         })
         .catch((err) => console.warn("greeting skipped", err));
     },
-    { capture: true, once: true },
-  );
+  });
 
   let settingsOpen = false;
   let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen: false };
@@ -439,7 +447,10 @@ export async function init(
     manifestLoaded: manifest !== null,
     lang,
     switchLanguage,
-    stop: () => clearInterval(timer),
+    stop: () => {
+      clearInterval(timer);
+      waker.dispose();
+    },
   };
   if (root.defaultView) root.defaultView.__shell = shell;
   return shell;
