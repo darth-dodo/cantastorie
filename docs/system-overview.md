@@ -266,7 +266,7 @@ An app factory (`create_app`) that initializes observability, adds LangSmith's `
 | Router | Path | What it does |
 |--------|------|--------------|
 | `player.py` | `/` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
-| `published.py` | `/published` | R2 content proxy for dev/prod parity |
+| `published.py` | `/published` | R2 content proxy for dev/prod parity. Unauthenticated, so it serves only the key shapes `publish_story` writes (`{lang}/manifest.json`, `stories/{id}/…`, `prompts/{lang}/…`, optionally under `families/{token}/`); anything else, including encoded dot segments, is a 404 before R2 is asked. Streams the body and passes through R2's `Cache-Control`/`ETag` |
 | `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, the my-packs list with progress polling, and **approving a staged pack to the family's private overlay** (`POST /parent/packs/{id}/approve` → `publish_story(..., family_token=…)`) — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
 | `workshop.py` | `/workshop` | Clerk-gated operator screens, operator role (Jinja2 + HTMX): start a run, watch step progress, review the staged story, publish. `src/workshop/manager.py` orchestrates runs in-process and reaps stale ones; `records.py` persists run records to the R2 pending bucket, surviving Render's ephemeral disk |
 

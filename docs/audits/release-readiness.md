@@ -321,6 +321,8 @@ Whether the storage edge normalizes dot segments is an untested assumption, and 
 
 **Fix**: allowlist the path shape, narrow the exception, re-emit the upstream cache headers, and add tests.
 
+Fixed in code (AI-471).
+
 ### H8 — Authorization denials are untested on six destructive or paid workshop routes
 
 Coverage on `src/api/routes/workshop.py` shows the non-operator branch missing on lines 280, 353, 355, 376, 397, 412 and 442 — `POST /workshop/runs` (spends money), `/runs/{id}/approve` (publishes to the shared shelf), `/reject`, `/again` (spends money), `/runs/{id}/delete` and `/staged/{id}/delete` (both destructive).
@@ -441,7 +443,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
 - [ ] Spoken prompts shipped for every language in the selector, or the selector gated to complete languages (H6)
-- [ ] Path allowlist and tests on `/published/{path}` (H7)
+- [x] Path allowlist and tests on `/published/{path}` (H7)
 - [ ] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
 - [ ] `premise` capped server-side on `PackRequest` (H2)
