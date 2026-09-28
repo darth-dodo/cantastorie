@@ -278,6 +278,8 @@ Render deploys on push to `main` without waiting for CI, so a merge failing lint
 
 **Fix**: `autoDeploy: false` with deployment gated on CI success; install from the lockfile.
 
+Fixed in code (AI-479). Still to do by an operator: set the `RENDER_DEPLOY_HOOK_URL` secret, confirm Auto-Deploy is off in the Render dashboard, and rehearse one rollback ([setup.md](../setup.md#deploys-are-gated-on-ci-ai-479)).
+
 ### H4 — No global spend ceiling
 
 Caps are per-family (`src/workshop/manager.py:98-115`): one active run plus a daily limit. Sign-up is open, so N accounts yield N times the cap, and operator submissions are exempt entirely. There is no global daily run counter and no spend limit enforced in code.
