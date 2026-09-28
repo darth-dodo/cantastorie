@@ -12,14 +12,17 @@ import boto3
 import pytest
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
+from pydantic import ValidationError
 
 from src.config import Settings
+from src.pipeline.models import PREMISE_MAX_LENGTH
 from src.workshop import records
 from src.workshop.records import (
     InvalidTransition,
     PackRequest,
     RunStore,
     new_run,
+    pack_request_error_message,
 )
 
 BUCKET = "cantastorie-published"
@@ -260,3 +263,30 @@ def test_operator_listing_reads_every_family_but_never_pages_staged_artifacts(
     assert {r.id for r in store.list_runs()} == {r.id for r in runs}
     assert not any(p.startswith("pending/staged") for p in listed_prefixes)
     assert "pending/" not in listed_prefixes[1:]  # only the one delimiter listing
+
+
+def test_premise_over_the_bound_is_rejected() -> None:
+    """AI-470: the field bound, not just the form's maxlength, blocks a
+    direct POST that skips the DOM entirely."""
+    with pytest.raises(ValidationError):
+        PackRequest(
+            theme="the_sleepy_sea", language="it", count=1, premise="x" * (PREMISE_MAX_LENGTH + 1)
+        )
+
+
+def test_premise_at_the_bound_is_accepted() -> None:
+    request = PackRequest(
+        theme="the_sleepy_sea", language="it", count=1, premise="x" * PREMISE_MAX_LENGTH
+    )
+    assert request.premise == "x" * PREMISE_MAX_LENGTH
+
+
+def test_pack_request_error_message_is_friendly_for_a_too_long_premise() -> None:
+    try:
+        PackRequest(theme="the_sleepy_sea", language="it", count=1, premise="x" * 301)
+    except ValidationError as error:
+        message = pack_request_error_message(error)
+    else:
+        pytest.fail("expected a ValidationError")
+    assert "loc" not in message
+    assert "300" in message

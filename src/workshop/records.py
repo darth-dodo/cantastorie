@@ -23,7 +23,7 @@ import boto3
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, PrivateAttr, ValidationError
 
-from src.pipeline.models import Language, Theme
+from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.publish import CLIENT_CONFIG, STAGED_PREFIX, child_prefixes, parallel_map
 
 if TYPE_CHECKING:
@@ -70,8 +70,18 @@ class PackRequest(BaseModel):
     theme: Theme
     language: Language
     count: int = Field(ge=1, le=3)
-    premise: str | None = None
+    premise: str | None = Field(default=None, max_length=PREMISE_MAX_LENGTH)
     shape: Literal["linear", "branching"] = "linear"
+
+
+def pack_request_error_message(error: ValidationError) -> str:
+    """A short, human sentence for a PackRequest validation failure — never the
+    raw pydantic error, which a plain form POST would otherwise render as
+    unstyled JSON in the browser."""
+    for err in error.errors():
+        if err["loc"] == ("premise",) and err["type"] == "string_too_long":
+            return f"That story idea is too long — keep it to {PREMISE_MAX_LENGTH} characters or fewer."
+    return "That request wasn't valid — check the fields and try again."
 
 
 class RunRecord(BaseModel):
