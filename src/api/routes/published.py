@@ -1,53 +1,79 @@
 """Proxy published content from R2 so dev and prod read from the same bucket.
 
-In dev (no R2 public URL) and in prod (bucket-direct via the app), this route
-serves everything under /published/ — manifests, story.json, audio, images.
-The player's ASSET_BASE is set to "/published" so it fetches through here.
+When the player's ASSET_BASE is "/published", it fetches manifests, story.json,
+audio and images through this route instead of bucket-direct. The route is
+unauthenticated, so it serves only the key shapes publish_story writes (H7):
+
+    {lang}/manifest.json
+    stories/{story-id}/{file}.{json|mp3|wav|webp}
+    prompts/{lang}/{file}.{mp3|wav}
+
+each optionally under families/{32-hex token}/ — a family's overlay lane, which
+the public bucket already serves to anyone holding the token. Anything else,
+including dot segments in any encoding, is a 404 before R2 is asked.
 """
 
+import logging
+import re
+from collections.abc import Iterator
 from typing import Annotated, Any
 
-import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 
 from src.config import Settings, get_settings
+from src.pipeline.publish import CONTENT_TYPES, PUBLISHED_PREFIX, _build_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-CONTENT_TYPES = {
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
-    ".webp": "image/webp",
-    ".json": "application/json",
-}
+_SEGMENT = r"[A-Za-z0-9][A-Za-z0-9_-]*"
+_FILE = rf"{_SEGMENT}(?:\.[A-Za-z0-9_-]+)*"
+_LANG = r"[a-z]{2}"
+PUBLISHED_PATH = re.compile(
+    rf"(?:families/[0-9a-f]{{32}}/)?"
+    rf"(?:{_LANG}/manifest\.json"
+    rf"|stories/{_SEGMENT}/{_FILE}\.(?:json|mp3|wav|webp)"
+    rf"|prompts/{_LANG}/{_FILE}\.(?:mp3|wav))"
+)
+CHUNK_SIZE = 64 * 1024
 
 
-def _s3_client(settings: Settings) -> Any:
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.r2_endpoint_url,
-        aws_access_key_id=settings.r2_access_key_id.get_secret_value(),
-        aws_secret_access_key=settings.r2_secret_access_key.get_secret_value(),
-        region_name="auto",
-    )
+def _stream(body: Any) -> Iterator[bytes]:
+    try:
+        yield from body.iter_chunks(CHUNK_SIZE)
+    finally:
+        body.close()
 
 
 @router.get("/published/{path:path}")
-async def published_asset(
+def published_asset(
     path: str, settings: Annotated[Settings, Depends(get_settings)]
-) -> Response:
-    if not settings.r2_bucket:
-        raise HTTPException(status_code=404, detail="R2 not configured")
+) -> StreamingResponse:
+    if not settings.r2_bucket or not PUBLISHED_PATH.fullmatch(path):
+        raise HTTPException(status_code=404)
 
-    key = f"published/{path}"
-    client: Any = _s3_client(settings)
     try:
-        response = client.get_object(Bucket=settings.r2_bucket, Key=key)
-    except Exception as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        response = _build_client(settings).get_object(
+            Bucket=settings.r2_bucket, Key=f"{PUBLISHED_PREFIX}/{path}"
+        )
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code not in {"NoSuchKey", "404"}:
+            logger.warning("published proxy: R2 %s for %s", code or "error", path)
+        raise HTTPException(status_code=404) from exc
 
-    body = response["Body"].read()
-    suffix = "." + path.rsplit(".", 1)[-1] if "." in path else ""
-    media_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
-    return Response(content=body, media_type=media_type)
+    upstream = {
+        "Cache-Control": response.get("CacheControl"),
+        "ETag": response.get("ETag"),
+        "Content-Length": response.get("ContentLength"),
+    }
+    headers = {name: str(value) for name, value in upstream.items() if value is not None}
+    suffix = path[path.rfind(".") :]
+    return StreamingResponse(
+        _stream(response["Body"]),
+        media_type=CONTENT_TYPES[suffix],
+        headers=headers,
+    )
