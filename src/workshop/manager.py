@@ -188,5 +188,10 @@ class RunManager:
         return reaped
 
     async def resume_on_boot(self) -> list[RunRecord]:
-        pending = [r for r in self._store.list_runs() if r.state in ("queued", "running")]
+        # list_runs() is sync boto3 I/O; off the event loop (AI-477) so a
+        # caller that schedules this as a background task — src/api/main.py's
+        # lifespan — never stalls request handling, including /health, while
+        # this listing runs.
+        all_runs = await asyncio.to_thread(self._store.list_runs)
+        pending = [r for r in all_runs if r.state in ("queued", "running")]
         return [await self.execute(record) for record in pending]
