@@ -1,15 +1,18 @@
 """The unauthenticated /published/{path} proxy (H7, AI-471)."""
 
+import asyncio
 from collections.abc import Iterator
 from urllib.parse import unquote
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.api.main import create_app
+from src.api.routes import published
 from src.config import Settings, get_settings
 
 BUCKET = "cantastorie-test"
@@ -53,6 +56,10 @@ def _put(s3: S3Client, key: str, body: bytes, **extra: str) -> None:
         ("stories/pip-the-pirate-en-0397c7d0/p1.3f9a1c2b.mp3", "audio/mpeg"),
         ("stories/pip-the-pirate-en-0397c7d0/p1.3f9a1c2b.wav", "audio/wav"),
         ("stories/pip-the-pirate-en-0397c7d0/p1.3f9a1c2b.webp", "image/webp"),
+        ("stories/pip-the-pirate-en-0397c7d0/cover.3f9a1c2b.webp", "image/webp"),
+        ("stories/pip-the-pirate-en-0397c7d0/p3.opt0.3f9a1c2b.webp", "image/webp"),
+        ("stories/pip-the-pirate-en-0397c7d0/p3.opt1.3f9a1c2b.wav", "audio/wav"),
+        ("stories/pip-the-pirate-en-0397c7d0/a1.3f9a1c2b.wav", "audio/wav"),
         ("prompts/it/shelf_greeting.abc123.mp3", "audio/mpeg"),
         (f"families/{TOKEN}/en/manifest.json", "application/json"),
         (f"families/{TOKEN}/stories/bear-en-00000001/p2.aa11bb22.webp", "image/webp"),
@@ -150,3 +157,62 @@ def test_unconfigured_r2_is_404() -> None:
     r = TestClient(app).get("/published/en/manifest.json")
 
     assert r.status_code == 404
+
+
+class _Body:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def iter_chunks(self, _size: int) -> Iterator[bytes]:
+        yield b"x"
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _Client:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.body = _Body()
+
+    def get_object(self, **_: str) -> dict:
+        if self.error:
+            raise self.error
+        return {"Body": self.body}
+
+
+def _stub(monkeypatch: pytest.MonkeyPatch, stub: _Client) -> Settings:
+    monkeypatch.setattr(published, "_build_client", lambda _settings: stub)
+    return Settings(_env_file=None, r2_bucket=BUCKET)
+
+
+def test_body_closes_even_if_the_stream_never_starts(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _Client()
+    settings = _stub(monkeypatch, stub)
+
+    response = published.published_asset("en/manifest.json", settings)
+    assert response.background is not None
+    asyncio.run(response.background())
+
+    assert stub.body.closed
+
+
+def test_access_denied_is_a_generic_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    error = ClientError({"Error": {"Code": "AccessDenied", "Message": "nope"}}, "GetObject")
+    settings = _stub(monkeypatch, _Client(error))
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    r = TestClient(app).get("/published/en/manifest.json")
+
+    assert r.status_code == 404
+    assert "AccessDenied" not in r.text
+
+
+def test_a_non_client_error_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _stub(monkeypatch, _Client(RuntimeError("boom")))
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    with pytest.raises(RuntimeError, match="boom"):
+        TestClient(app).get("/published/en/manifest.json")

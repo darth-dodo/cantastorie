@@ -21,6 +21,7 @@ from typing import Annotated, Any
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from src.config import Settings, get_settings
 from src.pipeline.publish import CONTENT_TYPES, PUBLISHED_PREFIX, _build_client
@@ -72,8 +73,12 @@ def published_asset(
     }
     headers = {name: str(value) for name, value in upstream.items() if value is not None}
     suffix = path[path.rfind(".") :]
+    body = response["Body"]
+    # The background close covers a client that disconnects before the first
+    # chunk, when the generator never starts and its finally never runs.
     return StreamingResponse(
-        _stream(response["Body"]),
+        _stream(body),
         media_type=CONTENT_TYPES[suffix],
         headers=headers,
+        background=BackgroundTask(body.close),
     )
