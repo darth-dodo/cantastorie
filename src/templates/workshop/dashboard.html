@@ -9,6 +9,7 @@
 
   <div class="ws-card ws-start-card">
     <div class="ws-card-title">Start a run</div>
+    {% if form_error %}<p class="ws-login-error" data-form-error>{{ form_error }}</p>{% endif %}
     <form method="post" action="/workshop/runs" class="ws-run-form">
       <div class="ws-field-grid">
         <div class="ws-field-block ws-field-full">
@@ -22,7 +23,7 @@
         </div>
         <div class="ws-field-block ws-field-full" data-custom-premise hidden>
           <span class="ws-field-label">Your story</span>
-          <input name="premise" type="text" maxlength="300" class="ws-field"
+          <input name="premise" type="text" maxlength="{{ premise_max_length }}" class="ws-field"
                  placeholder="a small boat wants to see the moon" />
         </div>
         <div class="ws-field-block">

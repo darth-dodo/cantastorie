@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
@@ -34,7 +34,7 @@ from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     get_run_manager,
 )
 from src.config import Settings, get_settings
-from src.pipeline.models import Language, Story, Theme
+from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Story, Theme
 from src.pipeline.publish import (
     STAGED_PREFIX,
     STORY_FILE,
@@ -46,7 +46,12 @@ from src.pipeline.publish import (
     unpublish_story,
 )
 from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
-from src.workshop.records import InvalidTransition, PackRequest, RunRecord
+from src.workshop.records import (
+    InvalidTransition,
+    PackRequest,
+    RunRecord,
+    pack_request_error_message,
+)
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -256,6 +261,29 @@ async def parent_stories(
     )
 
 
+async def _make_ctx(
+    family_token: str,
+    settings: Settings,
+    manager: RunManager,
+    *,
+    form_error: str | None = None,
+) -> dict[str, object]:
+    # One story at a time: show the cap up front, not after the form is filled.
+    runs = await run_in_threadpool(manager.store.list_runs, family_token=family_token)
+    cap = blocking_cap(runs, settings.parent_daily_run_cap)
+    return {
+        "door": "parent",
+        "fapi_host": fapi_host(settings),
+        "publishable_key": settings.clerk_publishable_key.get_secret_value(),
+        "themes": THEMES,
+        "languages": LANGUAGES,
+        "cap_message": str(cap) if cap else None,
+        "cap_active": cap.active if cap else None,
+        "form_error": form_error,
+        "premise_max_length": PREMISE_MAX_LENGTH,
+    }
+
+
 @router.get("/make", response_class=HTMLResponse)
 async def parent_make(
     request: Request,
@@ -276,19 +304,8 @@ async def parent_make(
     if ctx.family_token is None:
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
-    # One story at a time: show the cap up front, not after the form is filled.
-    runs = await run_in_threadpool(manager.store.list_runs, family_token=ctx.family_token)
-    cap = blocking_cap(runs, settings.parent_daily_run_cap)
     return templates.TemplateResponse(
-        request,
-        "parent/make.html",
-        {
-            **context,
-            "themes": THEMES,
-            "languages": LANGUAGES,
-            "cap_message": str(cap) if cap else None,
-            "cap_active": cap.active if cap else None,
-        },
+        request, "parent/make.html", await _make_ctx(ctx.family_token, settings, manager)
     )
 
 
@@ -323,7 +340,13 @@ async def request_pack(
 ) -> Response:
     # One story at a time: the parent surface never batches a pack, so count is
     # fixed at 1 here rather than read from the form.
-    pack = PackRequest(theme=theme, language=language, count=1, premise=premise or None)  # type: ignore[arg-type]
+    try:
+        pack = PackRequest(theme=theme, language=language, count=1, premise=premise or None)  # type: ignore[arg-type]
+    except ValidationError as error:
+        ctx_dict = await _make_ctx(
+            ctx.family_token, settings, manager, form_error=pack_request_error_message(error)
+        )
+        return templates.TemplateResponse(request, "parent/make.html", ctx_dict, status_code=422)
     try:
         record = await manager.submit(ctx.family_token, pack)
     except RunCapExceeded as cap:
