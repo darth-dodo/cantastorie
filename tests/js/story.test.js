@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { loadStory, orderPages } from "../../src/static/js/story.js";
+import { STORY_FETCH_TIMEOUT_MS, loadStory, orderPages } from "../../src/static/js/story.js";
 
 // The dev fixture is the contract: story.json exactly as AI-357 pins it.
 const fixture = JSON.parse(
@@ -77,6 +77,31 @@ describe("loading a story.json (schema pinned by AI-357)", () => {
 
     const notFound = async () => ({ ok: false, status: 404 });
     await expect(loadStory(FIXTURE_URL, notFound)).rejects.toThrow(/404/);
+  });
+});
+
+describe("a hung story.json (B8, AI-473)", () => {
+  // A network that accepts the request and never answers, but honors an
+  // abort signal the way a real fetch does.
+  const hungFetch = (_url, { signal } = {}) =>
+    new Promise((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(signal.reason));
+    });
+
+  it("gives up after the timeout instead of hanging forever", async () => {
+    await expect(loadStory(FIXTURE_URL, hungFetch, { timeoutMs: 20 })).rejects.toThrow();
+  });
+
+  it("passes an abort signal to fetch by default, bounded by STORY_FETCH_TIMEOUT_MS", async () => {
+    let seen = null;
+    const spyFetch = async (url, init) => {
+      seen = init?.signal ?? null;
+      return fetchFixture(url);
+    };
+    await loadStory(FIXTURE_URL, spyFetch);
+    expect(seen).toBeInstanceOf(AbortSignal);
+    expect(STORY_FETCH_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(STORY_FETCH_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
   });
 });
 

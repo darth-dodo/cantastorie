@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAudioEngine } from "../../src/static/js/audio-engine.js";
-import { init } from "../../src/static/js/main.js";
+import { MANIFEST_FETCH_TIMEOUT_MS, init } from "../../src/static/js/main.js";
 
 // Vitest runs with cwd at the project root; import.meta.url is an http://
 // URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
@@ -633,5 +633,114 @@ describe("wake wiring (AI-461): main.js greets on the first real activation", ()
     await startSource.onended();
     await vi.waitFor(() => expect(engine.state).toBe("playing"));
     expect(running.store.state.screen).toBe("player");
+  });
+});
+
+describe("a network that never answers (B8, AI-473)", () => {
+  // Accepts the request, never responds, but honors an abort signal the way
+  // a real fetch does: captive portal, hotel Wi-Fi, a half-dead radio.
+  const hang = (_url, { signal } = {}) =>
+    new Promise((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(signal.reason));
+    });
+
+  it("the manifest fetch carries an abort signal bounded by MANIFEST_FETCH_TIMEOUT_MS", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const signals = [];
+    const spyFetch = async (url, opts) => {
+      if (String(url).endsWith("manifest.json")) signals.push(opts?.signal ?? null);
+      return manifestFetch(url);
+    };
+    running = await init(document, { fetchFn: spyFetch, engine: fakeEngine() });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(MANIFEST_FETCH_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(MANIFEST_FETCH_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
+  });
+
+  it("a hung manifest times out into the clouds; a tap once it answers brings the shelf", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let manifestUp = false;
+    const fetchFn = (url, opts) => {
+      if (String(url).endsWith("manifest.json") && !manifestUp) return hang(url, opts);
+      return routedFetch(url);
+    };
+
+    const pending = init(document, { fetchFn, engine: fakeEngine(), manifestTimeoutMs: 30 });
+
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    expect(document.querySelector(".cover")).toBeNull();
+
+    manifestUp = true;
+    document.querySelector(".offline").click();
+    running = await pending;
+    expect(running.manifestLoaded).toBe(true);
+    expect(document.querySelectorAll(".shelf .cover").length).toBeGreaterThan(0);
+  });
+
+  it("a hung family overlay times out and the shared shelf still renders", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const fetchFn = (url, opts) => {
+      if (String(url).includes("/families/")) return hang(url, opts);
+      return routedFetch(url);
+    };
+    running = await init(document, {
+      fetchFn,
+      engine: fakeEngine(),
+      manifestTimeoutMs: 30,
+      readFamilyToken: async () => "0123456789abcdef0123456789abcdef",
+    });
+    expect(running.manifestLoaded).toBe(true);
+    expect(document.querySelectorAll(".shelf .cover")).toHaveLength(manifest.stories.length);
+  });
+
+  it("a hung story.json shimmers the cover, times out to the page timer, and the next tap retries", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let storyUp = false;
+    let storyJsonFetches = 0;
+    const fetchFn = (url, opts) => {
+      if (String(url).endsWith("story.json")) {
+        storyJsonFetches += 1;
+        if (!storyUp) return hang(url, opts);
+      }
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine(), storyTimeoutMs: 50 });
+
+    // The tap shows the cover is working on it, not an inert button.
+    document.querySelector(".cover").click();
+    expect(document.querySelector(".cover").classList.contains("loading")).toBe(true);
+
+    // The timeout falls into the existing failure path: the page timer.
+    await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
+    expect(running.playback.hasStory()).toBe(false);
+
+    // Back on the shelf, the shimmer is gone and the next tap fetches afresh.
+    running.store.toShelf();
+    await vi.waitFor(() => expect(document.querySelector(".shelf")).not.toBeNull());
+    expect(document.querySelector(".cover.loading")).toBeNull();
+    storyUp = true;
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(storyJsonFetches).toBe(2);
+  });
+
+  it("a successful load clears the cover shimmer", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url) => {
+      if (String(url).endsWith("story.json")) await gate;
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const cover = document.querySelector(".cover");
+    cover.click();
+    expect(cover.classList.contains("loading")).toBe(true);
+    release();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(cover.classList.contains("loading")).toBe(false);
   });
 });

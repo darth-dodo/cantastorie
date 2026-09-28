@@ -266,7 +266,7 @@ export function buildShelf(
         img.loading = "lazy";
         cover.appendChild(img);
       }
-      cover.addEventListener("click", () => onOpen(entry));
+      cover.addEventListener("click", () => onOpen(entry, cover));
       const caption = el("span", "cover-caption");
       caption.textContent = name;
       card.append(cover, caption);

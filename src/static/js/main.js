@@ -8,7 +8,7 @@ import { createAudioEngine } from "./audio-engine.js";
 import { createPlayback } from "./playback.js";
 import { createPrefetcher } from "./prefetch.js";
 import { createWaker } from "./wake.js";
-import { loadStory, shelf as fallbackShelf } from "./story.js";
+import { STORY_FETCH_TIMEOUT_MS, loadStory, shelf as fallbackShelf } from "./story.js";
 import { VALID_PALETTES, resolveTheme, loadThemeMode } from "./palette-resolve.js";
 import {
   buildShelf,
@@ -53,9 +53,16 @@ function pickLang(params, saved) {
   return /^[a-z]{2}$/.test(lang) ? lang : "en";
 }
 
-async function fetchManifest(assetBase, fetchFn, lang) {
+// A manifest that never answers is treated like one that failed: the clouds
+// screen (or, for the family overlay, the shared shelf alone). The signal
+// bounds the body read too, not just the headers.
+export const MANIFEST_FETCH_TIMEOUT_MS = 6000;
+
+async function fetchManifest(assetBase, fetchFn, lang, timeoutMs) {
   try {
-    const res = await fetchFn(`${assetBase}/${lang}/manifest.json`);
+    const res = await fetchFn(`${assetBase}/${lang}/manifest.json`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     if (!res.ok) throw new Error(`manifest fetch failed (${res.status})`);
     return await res.json();
   } catch (err) {
@@ -75,10 +82,12 @@ const FAMILY_TOKEN_RE = /^[0-9a-f]{32}$/;
 // Anonymous, bucket-direct, no credentials, no auth SDK — the child player
 // stays sign-in-free. Any failure (404, network, bad token) resolves to null:
 // the shared shelf must still render, never blocking bedtime.
-async function fetchOverlayManifest(assetBase, fetchFn, token, lang) {
+async function fetchOverlayManifest(assetBase, fetchFn, token, lang, timeoutMs) {
   if (!token || !FAMILY_TOKEN_RE.test(token)) return null;
   try {
-    const res = await fetchFn(`${assetBase}/families/${token}/${lang}/manifest.json`);
+    const res = await fetchFn(`${assetBase}/families/${token}/${lang}/manifest.json`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
@@ -199,6 +208,8 @@ export async function init(
     fetchFn = globalThis.fetch?.bind(globalThis),
     engine = null,
     readFamilyToken = () => readFamilyTokenFromIndexedDB(root.defaultView ?? globalThis),
+    manifestTimeoutMs = MANIFEST_FETCH_TIMEOUT_MS,
+    storyTimeoutMs = STORY_FETCH_TIMEOUT_MS,
   } = {},
 ) {
   const app = root.querySelector("#app");
@@ -224,10 +235,16 @@ export async function init(
 
   async function fetchShelf(targetLang) {
     if (!fetchFn) return null;
-    const shared = await fetchManifest(assetBase, fetchFn, targetLang);
+    const shared = await fetchManifest(assetBase, fetchFn, targetLang, manifestTimeoutMs);
     if (shared === null) return null; // cold-load: let the clouds screen handle it
     if (!familyToken) return shared; // no token → zero overlay requests
-    const overlay = await fetchOverlayManifest(assetBase, fetchFn, familyToken, targetLang);
+    const overlay = await fetchOverlayManifest(
+      assetBase,
+      fetchFn,
+      familyToken,
+      targetLang,
+      manifestTimeoutMs,
+    );
     return mergeOverlay(shared, overlay);
   }
 
@@ -261,12 +278,17 @@ export async function init(
   let activeStory = null;
   const storyCache = new Map();
 
-  async function openCover(entry) {
+  // coverEl is the tapped button: it shimmers (.cover.loading) while the
+  // story.json is on its way, so a slow network is never an inert tap.
+  async function openCover(entry, coverEl = null) {
     if (entry?.story && fetchFn) {
+      coverEl?.classList.add("loading");
       try {
         let pending = storyCache.get(entry.story);
         if (!pending) {
-          pending = loadStory(entry.story, fetchFn);
+          // A timeout rejects like any failure: the catch below evicts the
+          // cached promise, so the next tap fetches afresh.
+          pending = loadStory(entry.story, fetchFn, { timeoutMs: storyTimeoutMs });
           storyCache.set(entry.story, pending);
           pending.catch(() => storyCache.delete(entry.story));
         }
@@ -285,6 +307,8 @@ export async function init(
         return;
       } catch (err) {
         console.warn("story unavailable, using the page timer", err);
+      } finally {
+        coverEl?.classList.remove("loading");
       }
     }
     activeStory = null;
@@ -384,8 +408,8 @@ export async function init(
             SUBS[lang] ?? "Which story today?",
             stories,
             () => openSettings(),
-            (entry) => {
-              openCover(entry).catch((err) => console.warn("cover tap failed", err));
+            (entry, coverEl) => {
+              openCover(entry, coverEl).catch((err) => console.warn("cover tap failed", err));
             },
             lang,
             (newLang) => switchLanguage(newLang),
