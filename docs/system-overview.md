@@ -11,7 +11,7 @@ Where this document and the code disagree, the code has moved on — fix this do
 
 ## The System at a Glance
 
-One FastAPI app serves a static shell, proxies published content from R2, and hosts the operator workshop; everything the child experiences after page load happens in the browser. The authoring pipeline is a plain-Python package in the same repo, runnable two ways: as a CLI, and in-process through the workshop's `RunManager`. The app and the pipeline share `src/config.py` and the `story.json` contract.
+One FastAPI app serves a static shell, offers an optional same-origin proxy onto the R2 bucket for dev parity, and hosts the operator workshop; everything the child experiences after page load happens in the browser. The authoring pipeline is a plain-Python package in the same repo, runnable two ways: as a CLI, and in-process through the workshop's `RunManager`. The app and the pipeline share `src/config.py` and the `story.json` contract.
 
 ```mermaid
 flowchart LR
@@ -23,7 +23,7 @@ flowchart LR
 
     subgraph App["FastAPI app (Render)"]
         T["/ — Jinja2 player shell"]
-        PUB["/published/* — R2 proxy"]
+        PUB["/published/* — optional R2 proxy<br/>(dev parity, not the prod path)"]
         WS["/workshop — operator UI<br/>(Clerk sign-in, HTMX)"]
         PA["/parent/api/provision<br/>(Clerk-verified)"]
         S["/static — js, css"]
@@ -44,7 +44,8 @@ flowchart LR
     R2["Cloudflare R2<br/>published/ · pending/"]
 
     Browser -- "page load" --> T
-    P -- "manifests, story.json,<br/>audio, images" --> PUB
+    P -- "manifests, story.json,<br/>audio, images (bucket-direct)" --> R2
+    P -. "dev parity only" .-> PUB
     PUB --> R2
     PA -- "family-token write" --> CK
     RM --> GEN
@@ -53,7 +54,7 @@ flowchart LR
     RM -- "run records" --> R2
 ```
 
-The shell's `<meta name="asset-base">` tag is the only place the asset base URL lives. Its default is the `/static/content/` dev fixture; deployed configuration points it at `/published`, the app route that proxies the R2 bucket so dev and prod read the same published content ([`src/api/routes/published.py`](../src/api/routes/published.py)).
+The shell's `<meta name="asset-base">` tag is the only place the asset base URL lives. Its default is the `/static/content/` dev fixture. Production sets `ASSET_BASE` to the R2 bucket's public URL plus `/published` (e.g. `https://pub-<hash>.r2.dev/published`), so playback is bucket-direct and never touches the app ([`src/config.py`](../src/config.py), [`setup.md`](setup.md)). Setting `ASSET_BASE=/published` instead routes playback through [`src/api/routes/published.py`](../src/api/routes/published.py), an optional same-origin proxy for local or dev parity against a real bucket — not the production path.
 
 **Trust boundary:** every provider secret — the OpenRouter key, the Clerk secret key, the LangSmith key, the R2 access keys — exists only in the server/pipeline environment as `SecretStr`, unwrapped at its transport boundary. The browser never sees a key; a played story costs zero API calls.
 
@@ -266,7 +267,7 @@ An app factory (`create_app`) that initializes observability, adds LangSmith's `
 | Router | Path | What it does |
 |--------|------|--------------|
 | `player.py` | `/` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
-| `published.py` | `/published` | R2 content proxy for dev/prod parity. Unauthenticated, so it serves only the key shapes `publish_story` writes (`{lang}/manifest.json`, `stories/{id}/…`, `prompts/{lang}/…`, optionally under `families/{token}/`); anything else, including encoded dot segments, is a 404 before R2 is asked. Streams the body and passes through R2's `Cache-Control`/`ETag` |
+| `published.py` | `/published` | Optional same-origin R2 proxy for local/dev parity against a real bucket (production playback is bucket-direct). Unauthenticated, so it serves only the key shapes `publish_story` writes (`{lang}/manifest.json`, `stories/{id}/…`, `prompts/{lang}/…`, optionally under `families/{token}/`); anything else, including encoded dot segments, is a 404 before R2 is asked. Streams the body and passes through R2's `Cache-Control`/`ETag` |
 | `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, the my-packs list with progress polling, and **approving a staged pack to the family's private overlay** (`POST /parent/packs/{id}/approve` → `publish_story(..., family_token=…)`) — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
 | `workshop.py` | `/workshop` | Clerk-gated operator screens, operator role (Jinja2 + HTMX): start a run, watch step progress, review the staged story, publish. `src/workshop/manager.py` orchestrates runs in-process and reaps stale ones; `records.py` persists run records to the R2 pending bucket, surviving Render's ephemeral disk |
 
@@ -312,7 +313,7 @@ The provider and Clerk tests mock at the httpx-transport seam, so logic is teste
 | Stand-in | Real thing | Arrives with |
 |----------|-----------|--------------|
 | Page timer (3.8 s) for unpublished covers | Narration `onEnded` → `advance()` (already live for published stories) | more published stories |
-| `/static/content/` as the *default* `asset_base` | The `/published` R2 proxy (live) — deployed config points there; the fixture remains the dev default | dev config catching up |
+| `/static/content/` as the *default* `asset_base` | Production sets `ASSET_BASE` to the R2 public URL + `/published` (bucket-direct); `ASSET_BASE=/published` (the app proxy) is an optional dev-parity setting; the fixture remains the dev default | per-deploy `ASSET_BASE` |
 | `localStorage` progress | IndexedDB (progress, settings, lockout, family token) | slice 2 |
 | Empty word timings in `story.json` | Deepgram STT transcription pass | slice 6 (reading mode) |
 | No gloss step in the pipeline | Word-to-English gloss maps (cheap model) | slice 6 (reading mode) |
