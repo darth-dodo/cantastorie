@@ -48,7 +48,8 @@ if TYPE_CHECKING:
 
 PUBLISHED_PREFIX = "published"
 FAMILIES_SEGMENT = "families"
-STAGED_PREFIX = "pending/staged"
+PENDING_PREFIX = "pending"
+STAGED_PREFIX = f"{PENDING_PREFIX}/staged"
 STORY_FILE = "story.json"
 
 # The tenancy boundary in R2-key form. A family_token becomes a path prefix, so
@@ -698,8 +699,10 @@ def audit_published_bucket(
     that every manifest entry resolves to real objects **inside that lane's own
     asset root**, that no URL points into ``pending/`` / outside ``published/``
     / into another lane (a cross-tenant leak), that every story.json's audio and
-    image files exist, and that no orphan story directory lurks unlisted. Zero
-    child-reachable unapproved or cross-tenant asset is the invariant.
+    image files exist, that no orphan story directory lurks unlisted, and that
+    the public bucket holds nothing under ``pending/`` (that content belongs in
+    the private pending bucket). Zero child-reachable unapproved or
+    cross-tenant asset is the invariant.
     """
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
@@ -744,6 +747,16 @@ def audit_published_bucket(
                 listed.add(sid)
                 story_violations, _ = _check_story_assets(client, bucket, sid, root)
                 violations.extend(story_violations)
+
+    # pending/ belongs in the private pending bucket. The public bucket serves
+    # every key under its URL, so any pending/ object here is exposed (B1).
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{PENDING_PREFIX}/"
+    ):
+        violations.extend(
+            f"{item['Key']}: pending/ object in the public bucket — belongs in R2_PENDING_BUCKET"
+            for item in page.get("Contents", [])
+        )
 
     # Orphans: check every lane root that has a stories/ area, not only those
     # with a manifest (a family whose only manifest was deleted still leaves a

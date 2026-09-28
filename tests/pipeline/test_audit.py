@@ -248,6 +248,24 @@ def test_audit_fails_when_a_story_directory_exists_but_is_not_listed_in_any_mani
     assert any("orphan-story" in v for v in result.violations)
 
 
+def test_audit_fails_when_any_pending_object_sits_in_the_public_bucket(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Given a public bucket holding an object under pending/ (a staged story
+    or a run record that should live in the private pending bucket),
+    When the audit runs,
+    Then it reports a violation naming the key — the public bucket serves
+    every key under its URL, so any pending/ object is exposed (B1).
+    """
+    s3.put_object(Bucket=BUCKET, Key="pending/x", Body=b"leak")
+    s3.put_object(Bucket=BUCKET, Key="pending/abc/runs/r1.json", Body=b"{}")
+
+    result = audit_published_bucket(_settings(tmp_path), client=s3)
+
+    assert any("pending/x" in v for v in result.violations)
+    assert any("pending/abc/runs/r1.json" in v for v in result.violations)
+
+
 def test_audit_reports_manifests_checked_count(tmp_path: Path, s3: S3Client) -> None:
     """Given stories published in two languages,
     When audit runs,
