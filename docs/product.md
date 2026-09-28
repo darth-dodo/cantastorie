@@ -91,7 +91,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
 | **Parent dashboard** | 🔄 In progress | Story rows with a single destructive delete of this family's own **private shelf** (the family overlay); language tabs and kill switch planned |
 | **Private family shelf** | ✅ Shipped | A family's approved packs publish to a private overlay (`published/families/{token}/…`) that only that family's child sees; the child player merges it onto the shared shelf. Never promoted to global — private stays private |
-| **Pack requests & review** | 🔄 In progress | Parents request 1–3 stories on a theme and approve a staged pack to their private shelf; full preview UI planned |
+| **Pack requests & review** | 🔄 In progress | Parents request 1–3 stories on a theme, review every page (text, audio, image) on a full preview, and approve it to their private shelf — approve is refused until every staged story has been reviewed; regenerate planned |
 | **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
 | **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
 | **Authoring pipeline** | 🔄 In progress | Generates story text, narration, watercolor images, word timings, and glosses for approval — all steps ship except word timings (Deepgram pass) and glosses |

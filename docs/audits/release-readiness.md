@@ -91,6 +91,8 @@ The practical effect is that every family-lane story reaching a child is vetted 
 
 **Fix**: add a family-scoped staged-story view (the operator's `workshop/story.html` can be reused, scoped by `ctx.family_token` through the run record) and gate the approve button on it. Until that exists, remove the "nothing reaches a child unseen" copy from the parent lane.
 
+**Fixed in code** 2026-09-28 (Linear AI-475). The Being-made row has no approve fallback; opening a story's review page records it on the run, and `POST /parent/packs/{id}/approve` answers 409 unless every staged story was reviewed and still exists.
+
 ---
 
 ### B3 — A live `/parent` link sits on the child's shelf
@@ -450,7 +452,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] `R2_PENDING_BUCKET` set to a separate private bucket, present in `render.yaml`, and enforced by a validator that refuses `pending_bucket == r2_bucket` (B1) — `render.yaml` and validator done (AI-469); setting the bucket in Render is an operator step
 - [ ] Audit extended to sweep `Prefix="pending/"` on the public bucket, with a test; run once against the live bucket (B1) — sweep and test done (AI-469); the live run is an operator step
 - [x] `docs/setup.md:51` corrected, or made true by the above (B1)
-- [ ] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
+- [x] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
 - [x] No provider image-safety setting exists (OpenRouter exposes none); `calm_pictures` moved to a post-illustration vision judge (B4)
 - [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
