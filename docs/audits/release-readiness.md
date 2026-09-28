@@ -214,7 +214,7 @@ The failure-state e2e tests use `route.abort()`, which rejects instantly; no tes
 
 **Fix**: wrap both fetches in `AbortSignal.timeout(...)` — the codebase already uses this pattern for the story-start prompt — falling into the existing offline screen and page-timer fallbacks.
 
-Fixed in code (AI-473).
+Fixed in code (AI-473). After review, a published cover whose story fails to load shows the clouds instead of the page timer, and narration loads time out too.
 
 ---
 
