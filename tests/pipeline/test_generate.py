@@ -24,9 +24,10 @@ from pydantic_ai.models.test import TestModel
 from src.config import Settings
 from src.pipeline.content_rules import check_story
 from src.pipeline.generate import generate_story
-from src.pipeline.models import Story
+from src.pipeline.models import IMAGE_SAFETY_CRITERIA, Story
 from src.pipeline.providers import NarrationClient
 from src.pipeline.publish import STAGED_PREFIX, STORY_FILE
+from src.pipeline.steps.image_safety import ImageSafetyRejectedError
 from src.pipeline.steps.narrate import IT_UTTERANCES
 
 _PAGE = " ".join(["The water sings shh shh."] * 8)
@@ -42,11 +43,22 @@ _PASSING_REPORT = {
             "kindness_resolves",
             "within_limits",
             "right_language",
-            "calm_pictures",
             "nothing_real",
         )
     ]
 }
+
+
+def _calm_judge() -> TestModel:
+    """A vision-judge double that passes every image on all three criteria."""
+    return TestModel(
+        custom_output_args={
+            "verdicts": [
+                {"criterion": c, "passed": True, "reason": "ok"} for c in IMAGE_SAFETY_CRITERIA
+            ]
+        }
+    )
+
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
@@ -111,6 +123,7 @@ def _generate(tmp_path: Path, s3: S3Client) -> tuple[Settings, str]:
         revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
         narration_client=_fake_narration(),
         image_transport=_fake_images(),
+        image_safety_model=_calm_judge(),
     )
     return settings, staged
 
@@ -181,6 +194,7 @@ def test_rerunning_generate_reproduces_an_identical_staged_story(
         revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
         narration_client=_fake_narration(),
         image_transport=_fake_images(),
+        image_safety_model=_calm_judge(),
     )
     assert _staged_json(s3, staged_again) == first
 
@@ -198,9 +212,41 @@ def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path, s3: S3C
             revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
             narration_client=_fake_narration(),
             image_transport=_fake_images(),
+            image_safety_model=_calm_judge(),
             premise=premise,
         )
 
     plain = run(None)
     premised = run("A birthday at sea.")
     assert plain != premised
+
+
+def test_an_image_that_never_passes_fails_the_run_and_stages_nothing(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Given a vision judge that rejects every image as containing text,
+    When generate runs,
+    Then it raises ImageSafetyRejectedError naming the reason (the workshop
+    records str(error) on the failed run) and nothing reaches R2.
+    """
+    failing_judge = TestModel(
+        custom_output_args={
+            "verdicts": [
+                {"criterion": c, "passed": c != "no_text", "reason": "a sign reads OPEN"}
+                for c in IMAGE_SAFETY_CRITERIA
+            ]
+        }
+    )
+    with pytest.raises(ImageSafetyRejectedError, match="no_text: a sign reads OPEN"):
+        generate_story(
+            "the_sleepy_sea",
+            "it",
+            _settings(tmp_path),
+            write_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            safety_model=TestModel(custom_output_args=_PASSING_REPORT),
+            revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            narration_client=_fake_narration(),
+            image_transport=_fake_images(),
+            image_safety_model=failing_judge,
+        )
+    assert s3.list_objects_v2(Bucket=BUCKET).get("KeyCount", 0) == 0

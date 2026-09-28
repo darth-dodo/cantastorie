@@ -37,7 +37,6 @@ SafetyRule = Literal[
     "kindness_resolves",
     "within_limits",
     "right_language",
-    "calm_pictures",
     "nothing_real",
 ]
 
@@ -49,8 +48,18 @@ SAFETY_RULES: tuple[SafetyRule, ...] = (
     "kindness_resolves",
     "within_limits",
     "right_language",
-    "calm_pictures",
     "nothing_real",
+)
+
+# **Calm pictures** (docs/product.md "Safety") is judged on the rendered
+# images by the image safety step, not on the story text: at text-gate time
+# no image exists yet, so a text verdict on it could only ever pass (B4).
+ImageSafetyCriterion = Literal["no_text", "nothing_frightening", "calm"]
+
+IMAGE_SAFETY_CRITERIA: tuple[ImageSafetyCriterion, ...] = (
+    "no_text",
+    "nothing_frightening",
+    "calm",
 )
 
 
@@ -116,7 +125,28 @@ class SafetyReport(BaseModel):
     def covers_all_rules_exactly_once(self) -> Self:
         seen = [verdict.rule for verdict in self.verdicts]
         if sorted(seen) != sorted(SAFETY_RULES):
-            raise ValueError("safety report must contain each of the nine rules exactly once")
+            raise ValueError("safety report must contain each of the eight text rules exactly once")
+        return self
+
+    @property
+    def passed(self) -> bool:
+        return all(verdict.passed for verdict in self.verdicts)
+
+
+class ImageSafetyVerdict(BaseModel):
+    criterion: ImageSafetyCriterion
+    passed: bool
+    reason: str
+
+
+class ImageSafetyReport(BaseModel):
+    verdicts: list[ImageSafetyVerdict]
+
+    @model_validator(mode="after")
+    def covers_all_criteria_exactly_once(self) -> Self:
+        seen = [verdict.criterion for verdict in self.verdicts]
+        if sorted(seen) != sorted(IMAGE_SAFETY_CRITERIA):
+            raise ValueError("image safety report must contain each criterion exactly once")
         return self
 
     @property

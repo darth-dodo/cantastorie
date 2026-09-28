@@ -4,6 +4,10 @@ docs/product.md "Safety" enforcement: the safety node verdicts each story
 per rule at temperature 0; any fail routes to revise; two fails reject.
 The cross-family invariant is enforced by Settings at load time — a shared
 writer/judge blind spot is the failure mode that matters.
+
+Eight rules are judged here, on the text. **Calm pictures** is judged on the
+rendered images by steps/image_safety.py: no image exists at this point, so
+a text verdict on it could only pass (B4).
 """
 
 from pydantic_ai import Agent
@@ -16,15 +20,15 @@ from src.pipeline.models import SafetyReport, Story
 from src.pipeline.providers import build_model
 
 # Bump when the instructions change: prompt text is a cache-key input by proxy.
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 
 SAFETY_TEMPERATURE = 0.0
 SAFETY_MODEL_SETTINGS = ModelSettings(temperature=SAFETY_TEMPERATURE)
 
-# The nine rules and their meanings, verbatim from docs/product.md "Safety".
+# The eight text rules and their meanings, verbatim from docs/product.md "Safety".
 SAFETY_INSTRUCTIONS = """\
 You are a strict safety judge for bedtime stories aimed at pre-readers aged
-3-6. Judge the story you are given against each of these nine rules and
+3-6. Judge the story you are given against each of these eight rules and
 return one verdict per rule — every rule, exactly once, with a short reason:
 
 - mildest_peril_only: no violence beyond the mildest peril.
@@ -37,7 +41,6 @@ return one verdict per rule — every rule, exactly once, with a short reason:
   250-600 words total, no sentence over 20 words.
 - right_language: the story language matches the language declared in the
   story data.
-- calm_pictures: any image descriptions contain no text and nothing frightening.
 - nothing_real: no real people, real places presented as real, or religious
   instruction.
 
@@ -62,7 +65,7 @@ def safety_gate(
     *,
     model: Model | None = None,
 ) -> SafetyReport:
-    """Verdict all nine rules for this exact story; unchanged story, zero calls."""
+    """Verdict all eight text rules for this exact story; unchanged story, zero calls."""
     llm = model if model is not None else build_model(settings.safety_model, settings)
     inputs = {
         "story": story.model_dump(mode="json"),

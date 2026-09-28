@@ -130,7 +130,7 @@ def author_story(
     """write → gate → bounded revise: the one loop the pipeline owns.
 
     Every candidate — the original and each revision — must clear both the
-    content limits (as code) and all nine safety verdicts. Two failed
+    content limits (as code) and all eight text safety verdicts. Two failed
     revisions reject the story. The shape selects a linear or branching
     writer; revise infers it from the story it is correcting.
     """

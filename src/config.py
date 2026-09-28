@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     safety_model: str = "openai/gpt-4.1-mini"
     gloss_model: str = "google/gemini-2.5-flash-lite"
     image_model: str = "google/gemini-3.1-flash-lite-image"
+    # The vision judge for rendered images (B4) must stay a different family
+    # than the image model, for the same reason the text judge differs from
+    # the writer. gpt-4.1-mini accepts image input on OpenRouter.
+    image_safety_model: str = "openai/gpt-4.1-mini"
 
     # Narration — Gemini 3.1 Flash TTS via OpenRouter (ADR-008). One house voice
     # ("Kore") is pinned across every language (overridable via NARRATION_VOICES);
@@ -168,6 +172,15 @@ class Settings(BaseSettings):
         if self.write_model.split("/")[0] == self.safety_model.split("/")[0]:
             raise ValueError(
                 "safety_model must come from a different model family than write_model"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def image_judge_is_a_different_family_than_the_image_model(self) -> Self:
+        # A model grading its own family's pictures shares its blind spots.
+        if self.image_model.split("/")[0] == self.image_safety_model.split("/")[0]:
+            raise ValueError(
+                "image_safety_model must come from a different model family than image_model"
             )
         return self
 
