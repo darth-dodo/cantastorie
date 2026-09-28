@@ -290,6 +290,8 @@ The manifest is the index of an entire shelf and the code's own docstring calls 
 
 **Fix**: route every manifest write through the existing optimistic-concurrency helper.
 
+Fixed in code (AI-474).
+
 ### H6 — The default language ships zero spoken prompts
 
 Measured from the shipped content directories:
@@ -447,7 +449,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] `premise` capped server-side on `PackRequest` (H2)
 - [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3)
 - [ ] Staging keyed by tenant, with a content hash bound to the approval (H1)
-- [ ] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
+- [x] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
 - [ ] `--workers 1` and `numInstances: 1` made explicit with the reason, or the family cap made a conditional write (M11)
 - [ ] `/health/ready` checking config and R2; `healthCheckPath` repointed (M1)
 - [ ] R2 object versioning or nightly manifest snapshots enabled (M13)

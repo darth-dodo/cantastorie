@@ -420,6 +420,77 @@ def test_unpublish_updates_manifest_before_deleting_assets(
     assert events == ["manifest", "assets"]
 
 
+def test_unpublish_writes_the_manifest_with_a_short_cache_control(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    settings = _settings(tmp_path)
+    story_id = "story-one"
+    manifest = {"language": "it", "stories": [{"id": story_id}]}
+    s3.put_object(
+        Bucket=BUCKET,
+        Key="published/it/manifest.json",
+        Body=json.dumps(manifest).encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(Bucket=BUCKET, Key=f"published/stories/{story_id}/story.json", Body=b"story")
+
+    unpublish_story(story_id, settings, client=s3)
+
+    manifest_obj = s3.get_object(Bucket=BUCKET, Key="published/it/manifest.json")
+    assert manifest_obj["CacheControl"] == "public, max-age=60"
+
+
+def test_unpublish_retries_a_manifest_conflict_without_losing_a_concurrent_publish(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H5: a publish racing an unpublish must not silently lose either change.
+
+    The unpublish write must carry IfMatch, so a concurrent publish that lands
+    between its read and its write causes a PreconditionFailed that it retries
+    — re-reading the latest manifest (which now includes the concurrent
+    publish) before removing only the story it targeted.
+    """
+    settings = _settings(tmp_path)
+    to_remove = "to-remove"
+    concurrent = "concurrent-story"
+    manifest = {
+        "language": "it",
+        "prompts": {},
+        "stories": [{"id": to_remove}],
+    }
+    s3.put_object(
+        Bucket=BUCKET,
+        Key="published/it/manifest.json",
+        Body=json.dumps(manifest).encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(Bucket=BUCKET, Key=f"published/stories/{to_remove}/story.json", Body=b"story")
+
+    put_object = s3.put_object
+    manifest_key = "published/it/manifest.json"
+    raced = False
+
+    def race_a_concurrent_publish(**kwargs: Any) -> dict[str, Any]:
+        nonlocal raced
+        if kwargs["Key"] == manifest_key and not raced:
+            raced = True
+            current = _manifest(s3)
+            current["stories"].append({"id": concurrent})
+            put_object(
+                Bucket=BUCKET,
+                Key=manifest_key,
+                Body=json.dumps(current).encode(),
+                ContentType="application/json",
+            )
+        return put_object(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", race_a_concurrent_publish)
+
+    unpublish_story(to_remove, settings, client=s3)
+
+    assert sorted(entry["id"] for entry in _manifest(s3)["stories"]) == [concurrent]
+
+
 def test_publishing_a_second_story_appends_to_the_manifest(tmp_path: Path, s3: S3Client) -> None:
     settings = _settings(tmp_path)
     first = _assembled(tmp_path, story_id="story-one", title="Prima")

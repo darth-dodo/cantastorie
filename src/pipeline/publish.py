@@ -303,6 +303,69 @@ def _upsert_story(manifest: dict[str, Any], story: Story, public_base: str) -> N
     stories.append(entry)
 
 
+def _write_manifest(
+    client: S3Client,
+    bucket: str,
+    key: str,
+    *,
+    load: Callable[[], tuple[dict[str, Any], str | None]],
+    mutate: Callable[[dict[str, Any]], None],
+) -> tuple[dict[str, Any], bool]:
+    """Load-mutate-write a manifest under optimistic concurrency.
+
+    The one path every manifest write goes through — publish, unpublish, and
+    the repair script alike. ``load`` is called fresh on every attempt (so a
+    losing race always retries against the latest state, never a stale copy)
+    and returns the current manifest plus its ETag (``None`` when the manifest
+    doesn't exist yet). ``mutate`` edits that manifest in place.
+
+    The write carries ``IfMatch`` on the ETag (omitted for a not-yet-existing
+    manifest, an unconditional create) and ``Cache-Control: public,
+    max-age=60`` — the manifest is "the one volatile file" (see module
+    docstring), so every writer keeps its cache lifetime short, unpublish and
+    repair included. A ``PreconditionFailed`` — another writer won the race —
+    retries up to ``_MANIFEST_WRITE_ATTEMPTS`` times; any other error
+    propagates.
+
+    Returns the manifest as written and whether a PUT actually happened
+    (``False`` when ``mutate`` produced bytes identical to what's already
+    stored, so the write was skipped).
+    """
+    for attempt in range(_MANIFEST_WRITE_ATTEMPTS):
+        manifest, etag = load()
+        mutate(manifest)
+        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode()
+        if (
+            etag is not None
+            and etag.strip('"') == hashlib.md5(manifest_bytes, usedforsecurity=False).hexdigest()
+        ):
+            return manifest, False
+        try:
+            if etag is None:
+                client.put_object(
+                    Bucket=bucket,
+                    Key=key,
+                    Body=manifest_bytes,
+                    ContentType="application/json",
+                    CacheControl="public, max-age=60",
+                )
+            else:
+                client.put_object(
+                    Bucket=bucket,
+                    Key=key,
+                    Body=manifest_bytes,
+                    ContentType="application/json",
+                    CacheControl="public, max-age=60",
+                    IfMatch=etag,
+                )
+        except ClientError as error:
+            if _precondition_failed(error) and attempt < _MANIFEST_WRITE_ATTEMPTS - 1:
+                continue
+            raise
+        return manifest, True
+    raise RuntimeError("manifest write retry loop exhausted")
+
+
 def _publish_manifest(
     client: S3Client,
     bucket: str,
@@ -313,42 +376,23 @@ def _publish_manifest(
     root: str = PUBLISHED_PREFIX,
 ) -> tuple[list[str], list[str], list[str]]:
     manifest_key = f"{root}/{language}/manifest.json"
-    for attempt in range(_MANIFEST_WRITE_ATTEMPTS):
-        manifest, etag = _load_manifest(client, bucket, language, root)
+
+    def mutate(manifest: dict[str, Any]) -> None:
         if prompt_urls:
             manifest["prompts"] = {**manifest.get("prompts", {}), **prompt_urls}
         _upsert_story(manifest, story, public_base)
-        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode()
-        story_ids = [entry["id"] for entry in manifest["stories"]]
-        if (
-            etag is not None
-            and etag.strip('"') == hashlib.md5(manifest_bytes, usedforsecurity=False).hexdigest()
-        ):
-            return [], [manifest_key], story_ids
-        try:
-            if etag is None:
-                client.put_object(
-                    Bucket=bucket,
-                    Key=manifest_key,
-                    Body=manifest_bytes,
-                    ContentType="application/json",
-                    CacheControl="public, max-age=60",
-                )
-            else:
-                client.put_object(
-                    Bucket=bucket,
-                    Key=manifest_key,
-                    Body=manifest_bytes,
-                    ContentType="application/json",
-                    CacheControl="public, max-age=60",
-                    IfMatch=etag,
-                )
-        except ClientError as error:
-            if _precondition_failed(error) and attempt < _MANIFEST_WRITE_ATTEMPTS - 1:
-                continue
-            raise
+
+    manifest, wrote = _write_manifest(
+        client,
+        bucket,
+        manifest_key,
+        load=lambda: _load_manifest(client, bucket, language, root),
+        mutate=mutate,
+    )
+    story_ids = [entry["id"] for entry in manifest["stories"]]
+    if wrote:
         return [manifest_key], [], story_ids
-    raise RuntimeError("manifest publish retry loop exhausted")
+    return [], [manifest_key], story_ids
 
 
 def stage_story(
@@ -510,23 +554,27 @@ def unpublish_story(
     client = client or _build_client(settings)
     bucket = settings.r2_bucket
     language: str | None = None
-    manifest: dict[str, Any] | None = None
     manifest_prefixes = _manifest_prefixes_under(client, bucket, root)
     for candidate in manifest_prefixes:
         loaded, _ = _load_manifest(client, bucket, candidate, root)
         if any(entry.get("id") == story_id for entry in loaded.get("stories", [])):
             language = candidate
-            manifest = loaded
             break
-    if language is not None and manifest is not None:
-        manifest["stories"] = [
-            entry for entry in manifest.get("stories", []) if entry.get("id") != story_id
-        ]
-        client.put_object(
-            Bucket=bucket,
-            Key=f"{root}/{language}/manifest.json",
-            Body=json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode(),
-            ContentType="application/json",
+    if language is not None:
+        lang = language
+        manifest_key = f"{root}/{lang}/manifest.json"
+
+        def mutate(manifest: dict[str, Any]) -> None:
+            manifest["stories"] = [
+                entry for entry in manifest.get("stories", []) if entry.get("id") != story_id
+            ]
+
+        _write_manifest(
+            client,
+            bucket,
+            manifest_key,
+            load=lambda: _load_manifest(client, bucket, lang, root),
+            mutate=mutate,
         )
     keys: list[ObjectIdentifierTypeDef] = []
     for page in client.get_paginator("list_objects_v2").paginate(
