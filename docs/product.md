@@ -300,7 +300,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | **Calm pictures** | Images contain no text and nothing frightening |
 | **Nothing real** | No real people, real places presented as real, or religious instruction |
 
-**Enforcement:** the safety node verdicts each story per rule at temperature 0; any fail routes to revise; two fails reject. Until Phase 3, a parent additionally approves every asset.
+**Enforcement:** the safety node verdicts each story per rule at temperature 0; any fail routes to revise; two fails reject. **Calm pictures** is judged on the rendered images instead, once they exist: a vision model from a different family than the image model checks every page, choice card and cover for no text, nothing frightening, and calm; a failing image is redrawn at most twice, then the story is rejected ([ADR-011](adr/ADR-011-image-safety-vision-judge.md)). Until Phase 3, a parent additionally approves every asset.
 
 **Rationale:** layered gates mean a model mistake needs a human mistake on top of it to reach a child.
 
