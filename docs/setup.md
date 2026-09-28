@@ -48,7 +48,11 @@ Workshop run records and staged pack artifacts live under a `pending/` prefix �
 wrangler r2 bucket create cantastorie-pending -J eu
 ```
 
-Set **`R2_PENDING_BUCKET=cantastorie-pending`** wherever the workshop runs (Render dashboard, local `.env`). With it unset the workshop falls back to `R2_BUCKET` — acceptable against a local/dev bucket, **never against the live public one**. The audit script (AI-390) fails on any `pending/` object found in the public bucket.
+Like the public bucket, it is EU-jurisdiction, so every `wrangler r2` command against it needs `-J eu` too.
+
+Set **`R2_PENDING_BUCKET=cantastorie-pending`** wherever R2 is configured: the Render dashboard, the `R2_PENDING_BUCKET` GitHub Actions secret (the R2 Bucket Audit job loads the same settings), and a local `.env` that sets `R2_ENDPOINT_URL`. There is **no fallback** to `R2_BUCKET`. With `R2_ENDPOINT_URL` set, the app refuses to start if `R2_PENDING_BUCKET` is unset or equal to `R2_BUCKET`. Without an endpoint (local dev, moto tests) the check is skipped, and a single-bucket local setup must name that bucket in both variables explicitly.
+
+The audit (`python -m src.pipeline.cli audit`, run by CI on every push to `main`) sweeps the public bucket's `pending/` prefix and fails on any object it finds there.
 
 ### Access logs OFF
 
@@ -88,8 +92,9 @@ published/prompts/it/…
 ## 3. The Render web service
 
 1. Render → **New** → **Blueprint** → pick this repository. Render reads `render.yaml` and creates the `cantastorie` service on the **Starter** plan (always-on — the cold-start decision, see the risk log).
-2. Set one environment variable on the service:
+2. Set the environment variables on the service:
    - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
+   - The R2 publish target, all declared `sync: false` in `render.yaml`: `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, and **`R2_PENDING_BUCKET`** (the private bucket above). The app will not boot with an endpoint set and the pending bucket missing or equal to `R2_BUCKET`.
 3. Leave `autoDeploy` on: pushes to `main` redeploy. The Dockerfile compiles Tailwind and serves the shell; `/health` is the health check.
 4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 

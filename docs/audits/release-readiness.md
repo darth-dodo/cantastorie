@@ -69,6 +69,8 @@ The keys are enumerable rather than guessable. `derive_story_id` (`src/pipeline/
 
 **Fix**: reject `pending_bucket == r2_bucket` in the config validator whenever `r2_endpoint_url` is set; add a real `Prefix="pending/"` sweep of the public bucket to `audit_published_bucket`, with a test that plants such an object; add `R2_PENDING_BUCKET` to `render.yaml`.
 
+Fixed in code (AI-469).
+
 ---
 
 ### B2 — Parents approve without ever seeing the story
@@ -439,9 +441,9 @@ Stated plainly, because a release decision needs the positives as much as the de
 
 Ordered by risk reduction per unit of effort.
 
-- [ ] `R2_PENDING_BUCKET` set to a separate private bucket, present in `render.yaml`, and enforced by a validator that refuses `pending_bucket == r2_bucket` (B1)
-- [ ] Audit extended to sweep `Prefix="pending/"` on the public bucket, with a test; run once against the live bucket (B1)
-- [ ] `docs/setup.md:51` corrected, or made true by the above (B1)
+- [ ] `R2_PENDING_BUCKET` set to a separate private bucket, present in `render.yaml`, and enforced by a validator that refuses `pending_bucket == r2_bucket` (B1) — `render.yaml` and validator done (AI-469); setting the bucket in Render is an operator step
+- [ ] Audit extended to sweep `Prefix="pending/"` on the public bucket, with a test; run once against the live bucket (B1) — sweep and test done (AI-469); the live run is an operator step
+- [x] `docs/setup.md:51` corrected, or made true by the above (B1)
 - [ ] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
 - [ ] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)

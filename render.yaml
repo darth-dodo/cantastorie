@@ -78,6 +78,19 @@ services:
       - key: CLERK_JWKS_URL
         sync: false
         previewValue: ""
+      # R2 publish target (docs/setup.md). With R2_ENDPOINT_URL set, the app
+      # refuses to boot unless R2_PENDING_BUCKET names a private bucket
+      # separate from R2_BUCKET (B1): pending/ holds unreviewed stories and
+      # run records keyed by the family token, and the public bucket serves
+      # every key it holds.
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_BASE
+        sync: false
+      - key: R2_PENDING_BUCKET
+        sync: false
       - key: R2_ACCESS_KEY_ID
         sync: false
         previewValue: preview-disabled
