@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Protocol, get_args
 
+from botocore.exceptions import ClientError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -47,6 +48,7 @@ from src.pipeline.publish import (
 )
 from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
 from src.workshop.records import (
+    ConcurrentModificationError,
     InvalidTransition,
     PackRequest,
     RunRecord,
@@ -402,6 +404,7 @@ async def approve_pack(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
+    settings: Annotated[Settings, Depends(get_settings)],
     manager: Manager,
     publisher: Annotated[FamilyPublisher, Depends(get_family_publisher)],
 ) -> Response:
@@ -419,12 +422,49 @@ async def approve_pack(
             status_code=400,
             detail=f"Run is in {record.state} state, must be staged to approve",
         )
+    # No approve without review (B2): every staged story must still exist and
+    # have been opened on the review page, which renders all of its pages.
+    if not record.fully_reviewed:
+        raise HTTPException(status_code=409, detail="Review every story before approving")
+    present = await run_in_threadpool(
+        lambda: all(_staged_story_exists(settings, s) for s in record.story_ids)
+    )
+    if not present:
+        raise HTTPException(status_code=409, detail="A staged story is missing")
     for story_id in record.story_ids:
         publisher(story_id, ctx.family_token)
     manager.store.save(record.advance("approved"))
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent/stories", status_code=303)
+
+
+def _staged_story_exists(settings: Settings, story_id: str) -> bool:
+    try:
+        _build_client(settings).head_object(
+            Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}"
+        )
+    except ClientError:
+        return False
+    return True
+
+
+def _record_review(manager: RunManager, record: RunRecord, story_id: str) -> RunRecord:
+    """The parent has been served this staged story's review page — every page,
+    picture and sound on one screen — so it counts as reviewed (B2). Blocking."""
+    if record.state != "staged" or story_id in record.reviewed_story_ids:
+        return record
+    try:
+        reviewed = record.mark_reviewed(story_id)
+        manager.store.save(reviewed)
+    except ConcurrentModificationError:
+        # A concurrent write (another tab's review) moved the record on: redo it once.
+        fresh = manager.store.load(record.family_token, record.id)
+        if fresh is None or fresh.state != "staged":
+            return fresh or record
+        reviewed = fresh.mark_reviewed(story_id)
+        manager.store.save(reviewed)
+    return reviewed
 
 
 @router.get("/staged/{story_id}", response_class=HTMLResponse)
@@ -464,7 +504,8 @@ async def parent_staged_story(
             )
         except Exception:
             return None
-        return record, Story.model_validate_json(obj["Body"].read())
+        story = Story.model_validate_json(obj["Body"].read())
+        return _record_review(manager, record, story_id), story
 
     found = await run_in_threadpool(read_owned_story)
     if found is None:
