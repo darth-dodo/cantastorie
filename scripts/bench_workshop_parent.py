@@ -165,6 +165,7 @@ def main() -> None:
     ids = _seed()
     settings = clerk_settings(clerk_issuer=ISSUER)
     settings.r2_bucket = "bench"
+    settings.r2_pending_bucket = "bench"
     key = generate_rsa_keypair()
     auth_module._fetch_jwks = make_mock_fetch(key)
     # Patch boto3.client itself, not the app's _build_client: each code path

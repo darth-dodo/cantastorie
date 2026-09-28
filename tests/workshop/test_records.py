@@ -26,6 +26,7 @@ from src.workshop.records import (
 )
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
 
@@ -36,6 +37,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -46,6 +48,7 @@ def _settings() -> Settings:
         r2_access_key_id="test",
         r2_secret_access_key="test",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
         r2_public_base="http://localhost",
     )
 
@@ -54,22 +57,13 @@ def test_records_live_in_the_private_pending_bucket_when_configured(s3: S3Client
     """The published bucket is public by design (setup.md); pending content
     must never share it in production. R2_PENDING_BUCKET points the store at
     a private bucket; the public one stays untouched."""
-    s3.create_bucket(Bucket="cantastorie-pending")
-    settings = Settings(
-        _env_file=None,
-        r2_endpoint_url="http://localhost",
-        r2_access_key_id="test",
-        r2_secret_access_key="test",
-        r2_bucket=BUCKET,
-        r2_public_base="http://localhost",
-        r2_pending_bucket="cantastorie-pending",
-    )
+    settings = _settings()
     store = RunStore(settings, client=s3)
     record = new_run("family-abc", REQUEST)
 
     store.save(record)
 
-    pending = s3.list_objects_v2(Bucket="cantastorie-pending")
+    pending = s3.list_objects_v2(Bucket=PENDING_BUCKET)
     assert [obj["Key"] for obj in pending["Contents"]] == [
         f"pending/family-abc/runs/{record.id}.json"
     ]
@@ -151,7 +145,7 @@ def test_store_round_trips_a_record_under_the_pending_prefix(s3: S3Client) -> No
     loaded = store.load("family-abc", record.id)
 
     assert loaded == record
-    keys = [obj["Key"] for obj in s3.list_objects_v2(Bucket=BUCKET)["Contents"]]
+    keys = [obj["Key"] for obj in s3.list_objects_v2(Bucket=PENDING_BUCKET)["Contents"]]
     assert keys == [f"pending/family-abc/runs/{record.id}.json"]
 
 
@@ -193,7 +187,7 @@ def test_saving_an_advanced_record_overwrites_in_place(s3: S3Client) -> None:
     loaded = store.load("family-abc", record.id)
     assert loaded is not None
     assert loaded.state == "running"
-    contents = s3.list_objects_v2(Bucket=BUCKET)["Contents"]
+    contents = s3.list_objects_v2(Bucket=PENDING_BUCKET)["Contents"]
     assert len(contents) == 1  # same key, new bytes — not a second object
 
 
@@ -219,7 +213,7 @@ def test_store_list_skips_malformed_run_records(
     record = new_run("family-abc", REQUEST)
     store.save(record)
     malformed_key = "pending/family-abc/runs/malformed.json"
-    s3.put_object(Bucket=BUCKET, Key=malformed_key, Body=b"not valid json")
+    s3.put_object(Bucket=PENDING_BUCKET, Key=malformed_key, Body=b"not valid json")
     caplog.set_level("WARNING")
 
     records = store.list_runs()
@@ -242,7 +236,7 @@ def test_operator_listing_reads_every_family_but_never_pages_staged_artifacts(
     for run in runs:
         store.save(run)
     for i in range(5):
-        s3.put_object(Bucket=BUCKET, Key=f"pending/staged/story-x/p{i}.webp", Body=b"x")
+        s3.put_object(Bucket=PENDING_BUCKET, Key=f"pending/staged/story-x/p{i}.webp", Body=b"x")
 
     listed_prefixes: list[str] = []
     paginator = s3.get_paginator

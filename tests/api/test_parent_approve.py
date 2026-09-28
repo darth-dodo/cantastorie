@@ -36,6 +36,7 @@ from tests.api.clerk_jwt import (
 )
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 FAMILY = "a" * 32
 OTHER_FAMILY = "b" * 32
@@ -46,6 +47,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -63,7 +65,11 @@ class Harness:
         auth_mod._jwks_state.keys = None
         auth_mod._jwks_state.fetched_at = 0.0
         self.settings = clerk_settings(clerk_issuer="https://test.clerk.test").model_copy(
-            update={"r2_bucket": BUCKET, "content_dir": tmp_path / "content"}
+            update={
+                "r2_bucket": BUCKET,
+                "r2_pending_bucket": PENDING_BUCKET,
+                "content_dir": tmp_path / "content",
+            }
         )
         self.store = RunStore(self.settings, client=s3)
         self.manager = RunManager(self.store, self.settings, generate_pack=lambda request, s: [])

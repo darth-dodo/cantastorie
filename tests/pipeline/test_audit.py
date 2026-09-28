@@ -28,6 +28,7 @@ from src.pipeline.steps.illustrate import IllustrationSet
 from tests.pipeline.test_assemble_branching import assembled_branching_fixture
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 PUBLIC_BASE = "https://cdn.example.test/published"
 
 SENTENCE = "The water sings shh shh."
@@ -39,6 +40,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -47,6 +49,7 @@ def _settings(tmp_path: Path) -> Settings:
         _env_file=None,
         staging_dir=tmp_path / "staging",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
         r2_public_base=PUBLIC_BASE,
     )
 
@@ -102,7 +105,7 @@ def _assembled(
 def _stage_prompts(client: S3Client, language: str = "it") -> None:
     for name in ("shelf_greeting", "story_start", "end_prompt"):
         client.put_object(
-            Bucket=BUCKET,
+            Bucket=PENDING_BUCKET,
             Key=f"{STAGED_PREFIX}/prompts/{language}/{name}.0123456789abcdef.mp3",
             Body=f"mp3:{name}".encode(),
             ContentType="audio/mpeg",

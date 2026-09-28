@@ -25,6 +25,7 @@ from src.pipeline.steps.assemble import AssembledStory, assemble_story
 from src.pipeline.steps.illustrate import IllustrationSet
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 PUBLIC_BASE = "https://cdn.example.test/published"
 
 SENTENCE = "The water sings shh shh."
@@ -36,6 +37,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -47,6 +49,7 @@ def _settings(tmp_path: Path) -> Settings:
         r2_access_key_id="test-access-key",
         r2_secret_access_key="test-secret-key",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
         r2_public_base=PUBLIC_BASE,
     )
 
@@ -101,15 +104,15 @@ def _assembled(
 def _stage_prompts(client: S3Client, language: str = "it") -> None:
     for name in ("shelf_greeting", "story_start", "end_prompt", "audio_retry", "offline"):
         client.put_object(
-            Bucket=BUCKET,
+            Bucket=PENDING_BUCKET,
             Key=f"{STAGED_PREFIX}/prompts/{language}/{name}.0123456789abcdef.mp3",
             Body=f"mp3:{name}".encode(),
             ContentType="audio/mpeg",
         )
 
 
-def _keys(client: S3Client, prefix: str = "") -> list[str]:
-    response = client.list_objects_v2(Bucket=BUCKET, Prefix=prefix)
+def _keys(client: S3Client, prefix: str = "", bucket: str = BUCKET) -> list[str]:
+    response = client.list_objects_v2(Bucket=bucket, Prefix=prefix)
     return [item["Key"] for item in response.get("Contents", [])]
 
 
@@ -126,7 +129,7 @@ def test_stage_uploads_story_json_and_every_asset_to_r2(tmp_path: Path, s3: S3Cl
     prefix = stage_story(assembled, settings, client=s3)
 
     assert prefix == f"{STAGED_PREFIX}/{assembled.story.id}"
-    staged_keys = _keys(s3, prefix=f"{STAGED_PREFIX}/{assembled.story.id}/")
+    staged_keys = _keys(s3, prefix=f"{STAGED_PREFIX}/{assembled.story.id}/", bucket=PENDING_BUCKET)
     staged_names = {k.rsplit("/", 1)[-1] for k in staged_keys}
     assert "story.json" in staged_names
     assert staged_names == {"story.json", *assembled.assets.keys()}
@@ -138,11 +141,11 @@ def test_restaging_a_story_removes_stale_objects(tmp_path: Path, s3: S3Client) -
     assembled = _assembled(tmp_path)
     prefix = stage_story(assembled, settings, client=s3)
     stale_key = f"{prefix}/obsolete.0123456789abcdef.mp3"
-    s3.put_object(Bucket=BUCKET, Key=stale_key, Body=b"obsolete", ContentType="audio/mpeg")
+    s3.put_object(Bucket=PENDING_BUCKET, Key=stale_key, Body=b"obsolete", ContentType="audio/mpeg")
 
     stage_story(assembled, settings, client=s3)
 
-    assert stale_key not in _keys(s3, prefix=f"{prefix}/")
+    assert stale_key not in _keys(s3, prefix=f"{prefix}/", bucket=PENDING_BUCKET)
 
 
 def test_staging_writes_only_to_pending_not_published(tmp_path: Path, s3: S3Client) -> None:
@@ -242,11 +245,11 @@ def test_publish_rejects_a_staged_story_with_a_different_id(tmp_path: Path, s3: 
     settings = _settings(tmp_path)
     assembled = _assembled(tmp_path, story_id="actual-story")
     stage_story(assembled, settings, client=s3)
-    staged_story = s3.get_object(Bucket=BUCKET, Key=f"{STAGED_PREFIX}/actual-story/story.json")[
-        "Body"
-    ].read()
+    staged_story = s3.get_object(
+        Bucket=PENDING_BUCKET, Key=f"{STAGED_PREFIX}/actual-story/story.json"
+    )["Body"].read()
     s3.put_object(
-        Bucket=BUCKET,
+        Bucket=PENDING_BUCKET,
         Key=f"{STAGED_PREFIX}/requested-story/story.json",
         Body=staged_story,
         ContentType="application/json",

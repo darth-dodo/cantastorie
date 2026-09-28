@@ -11,6 +11,7 @@ from scripts.repair_manifests import repair_manifests
 from src.config import Settings
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 PUBLIC_BASE = "https://cdn.example.test/published"
 STORY_ID = "sleepy-sea"
 
@@ -20,6 +21,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -30,6 +32,7 @@ def _settings() -> Settings:
         r2_access_key_id="access-key",
         r2_secret_access_key="secret-key",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
         r2_public_base=PUBLIC_BASE,
     )
 
