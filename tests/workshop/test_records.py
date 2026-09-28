@@ -6,6 +6,7 @@ under pending/{family-token}/runs/ because Render's disk is ephemeral — moto
 serves all S3 traffic here, zero network.
 """
 
+import json
 from collections.abc import Iterator
 
 import boto3
@@ -284,3 +285,49 @@ def test_pack_request_error_message_is_friendly_for_a_too_long_premise() -> None
         pytest.fail("expected a ValidationError")
     assert "loc" not in message
     assert "300" in message
+
+
+# ── Parent review (B2, AI-475): every staged story is seen before approve ─────
+
+
+def _staged(story_ids: list[str]) -> records.RunRecord:
+    return new_run("a" * 32, REQUEST).advance("running").advance("staged", story_ids=story_ids)
+
+
+def test_a_staged_run_starts_unreviewed_and_marks_stories_one_at_a_time() -> None:
+    record = _staged(["s1", "s2"])
+    assert record.reviewed_story_ids == []
+    assert not record.fully_reviewed
+    record = record.mark_reviewed("s1")
+    assert record.unreviewed_story_ids == ["s2"]
+    assert not record.fully_reviewed
+    record = record.mark_reviewed("s2").mark_reviewed("s2")
+    assert record.reviewed_story_ids == ["s1", "s2"]
+    assert record.fully_reviewed
+
+
+def test_a_run_with_no_stories_is_never_fully_reviewed() -> None:
+    assert not _staged([]).fully_reviewed
+
+
+def test_restaging_a_run_clears_its_review() -> None:
+    reviewed = _staged(["s1"]).mark_reviewed("s1")
+    assert reviewed.advance("approved").reviewed_story_ids == ["s1"]
+    rerun = reviewed.model_copy(update={"state": "running"})
+    assert rerun.advance("staged", story_ids=["s9"]).reviewed_story_ids == []
+
+
+def test_a_record_without_a_review_field_loads_unreviewed(s3: S3Client) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = _staged(["s1"])
+    legacy = json.loads(record.model_dump_json())
+    legacy.pop("reviewed_story_ids", None)
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=f"pending/{'a' * 32}/runs/{record.id}.json",
+        Body=json.dumps(legacy).encode(),
+    )
+    loaded = store.load("a" * 32, record.id)
+    assert loaded is not None
+    assert loaded.reviewed_story_ids == []
+    assert not loaded.fully_reviewed
