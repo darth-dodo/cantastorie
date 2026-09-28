@@ -52,6 +52,13 @@ def test_previews_read_same_origin_fixtures_not_the_cors_locked_bucket() -> None
     assert _preview_env()["ASSET_BASE"] == "/static/content"
 
 
+def test_render_never_auto_deploys_so_ci_gates_production() -> None:
+    # H3 (AI-479): a push to main must pass CI before it ships. The CI
+    # `deploy` job fires the Render deploy hook; Render itself must not.
+    (service,) = _blueprint()["services"]
+    assert service["autoDeploy"] is False
+
+
 @pytest.fixture
 def preview_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # A production-looking env underneath, so the test proves the preview

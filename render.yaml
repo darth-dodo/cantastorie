@@ -37,7 +37,7 @@ services:
     branch: main
 
     # Auto-deploy on push to main branch
-    autoDeploy: true
+    autoDeploy: false
 
     # Health Check Configuration
     healthCheckPath: /health
