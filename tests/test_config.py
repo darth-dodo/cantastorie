@@ -59,6 +59,7 @@ def test_r2_credentials_never_appear_in_repr_or_str() -> None:
         r2_secret_access_key=SecretStr("r2-signing-secret"),
         r2_bucket="published",
         r2_public_base="https://pub.example/published",
+        r2_pending_bucket="pending",
     )
     for rendered in (repr(settings), str(settings)):
         assert "r2-access-secret" not in rendered
@@ -95,6 +96,60 @@ def test_partial_r2_settings_are_refused_outright() -> None:
             r2_endpoint_url="https://r2.example.test",
             r2_bucket="published",
         )
+
+
+def _live_r2(**overrides: str) -> Settings:
+    """Complete live R2 config (endpoint set), with per-test overrides."""
+    fields: dict[str, str] = {
+        "r2_endpoint_url": "https://r2.example.test",
+        "r2_access_key_id": "access",
+        "r2_secret_access_key": "secret",
+        "r2_bucket": "cantastorie",
+        "r2_public_base": "https://pub.example/published",
+        **overrides,
+    }
+    return Settings(_env_file=None, **fields)  # type: ignore[arg-type]
+
+
+def test_live_r2_refuses_a_pending_bucket_equal_to_the_public_one() -> None:
+    """Given a live R2 endpoint and R2_PENDING_BUCKET naming the public bucket,
+    When Settings load,
+    Then validation fails — pending content (unreviewed stories, run records
+    keyed by the family token) must never sit in the public bucket (B1).
+    """
+    with pytest.raises(ValidationError, match="R2_PENDING_BUCKET must name a private bucket"):
+        _live_r2(r2_pending_bucket="cantastorie")
+
+
+def test_live_r2_refuses_an_unset_pending_bucket() -> None:
+    """Given a live R2 endpoint and no R2_PENDING_BUCKET,
+    When Settings load,
+    Then validation fails instead of silently writing pending/ into the public
+    bucket — the fallback that was the B1 bug.
+    """
+    with pytest.raises(ValidationError, match="R2_PENDING_BUCKET must name a private bucket"):
+        _live_r2()
+
+
+def test_live_r2_accepts_a_separate_private_pending_bucket() -> None:
+    """Given a live R2 endpoint and a distinct R2_PENDING_BUCKET,
+    When Settings load,
+    Then pending writers target the private bucket.
+    """
+    settings = _live_r2(r2_pending_bucket="cantastorie-pending")
+    assert settings.pending_bucket == "cantastorie-pending"
+
+
+def test_pending_bucket_never_falls_back_to_the_public_bucket() -> None:
+    """Given no R2 endpoint (local dev, moto tests) and only R2_BUCKET set,
+    When the pending bucket is read,
+    Then it stays empty — pending writers never inherit the public bucket; a
+    single-bucket local setup must name it in R2_PENDING_BUCKET explicitly.
+    """
+    settings = Settings(_env_file=None, r2_bucket="cantastorie")
+    assert settings.pending_bucket == ""
+    local = Settings(_env_file=None, r2_bucket="dev", r2_pending_bucket="dev")
+    assert local.pending_bucket == "dev"
 
 
 def test_safety_judge_defaults_to_a_different_model_family_than_the_writer() -> None:

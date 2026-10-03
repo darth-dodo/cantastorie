@@ -24,6 +24,7 @@ from src.workshop.manager import OPERATOR_TOKEN, RunCapExceeded, RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
 
@@ -33,11 +34,12 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
 def _settings() -> Settings:
-    return Settings(_env_file=None, r2_bucket=BUCKET)
+    return Settings(_env_file=None, r2_bucket=BUCKET, r2_pending_bucket=PENDING_BUCKET)
 
 
 def _staged_pack(request: PackRequest, settings: Settings) -> list[str]:
@@ -266,7 +268,12 @@ def test_reap_stale_is_throttled_within_the_min_interval(s3: S3Client) -> None:
 
 def test_reap_stale_sweeps_again_after_the_min_interval_elapses(s3: S3Client) -> None:
     """Once the throttle window passes, the next reap sweeps again."""
-    settings = Settings(_env_file=None, r2_bucket=BUCKET, reap_min_interval_seconds=0)
+    settings = Settings(
+        _env_file=None,
+        r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
+        reap_min_interval_seconds=0,
+    )
     store, calls = _counting_store(RunStore(settings, client=s3))
     store.save(new_run("family-abc", REQUEST).advance("running"))
     manager = RunManager(store, settings, generate_pack=_staged_pack)

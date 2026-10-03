@@ -59,6 +59,7 @@ _PASSING_REPORT = {
 }
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 
 @pytest.fixture
@@ -66,6 +67,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -76,6 +78,7 @@ def _settings(tmp_path: Path) -> Settings:
         content_dir=tmp_path / "content",
         staging_dir=tmp_path / "staging",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
     )
 
 
@@ -124,7 +127,7 @@ def _generate_branching(tmp_path: Path) -> tuple[Settings, str]:
 
 
 def _staged_json(s3: S3Client, prefix: str) -> bytes:
-    return s3.get_object(Bucket=BUCKET, Key=f"{prefix}/{STORY_FILE}")["Body"].read()
+    return s3.get_object(Bucket=PENDING_BUCKET, Key=f"{prefix}/{STORY_FILE}")["Body"].read()
 
 
 def test_generate_stages_a_branching_story(tmp_path: Path, s3: S3Client) -> None:
@@ -155,12 +158,12 @@ def test_every_referenced_branching_asset_is_staged(tmp_path: Path, s3: S3Client
     story = Story.model_validate_json(_staged_json(s3, staged))
     for page in story.pages:
         assert page.audio is not None
-        s3.head_object(Bucket=BUCKET, Key=f"{staged}/{page.audio.file}")
+        s3.head_object(Bucket=PENDING_BUCKET, Key=f"{staged}/{page.audio.file}")
         assert page.image is not None
-        s3.head_object(Bucket=BUCKET, Key=f"{staged}/{page.image}")
+        s3.head_object(Bucket=PENDING_BUCKET, Key=f"{staged}/{page.image}")
         if page.choice is not None:
             for option in page.choice.options:
                 assert option.audio is not None
-                s3.head_object(Bucket=BUCKET, Key=f"{staged}/{option.audio.file}")
+                s3.head_object(Bucket=PENDING_BUCKET, Key=f"{staged}/{option.audio.file}")
                 assert option.card_image is not None
-                s3.head_object(Bucket=BUCKET, Key=f"{staged}/{option.card_image}")
+                s3.head_object(Bucket=PENDING_BUCKET, Key=f"{staged}/{option.card_image}")

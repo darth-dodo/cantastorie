@@ -28,6 +28,7 @@ from src.pipeline.steps.illustrate import IllustrationSet
 from tests.pipeline.test_assemble_branching import assembled_branching_fixture
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 PUBLIC_BASE = "https://cdn.example.test/published"
 
 SENTENCE = "The water sings shh shh."
@@ -39,6 +40,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -47,6 +49,7 @@ def _settings(tmp_path: Path) -> Settings:
         _env_file=None,
         staging_dir=tmp_path / "staging",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
         r2_public_base=PUBLIC_BASE,
     )
 
@@ -102,7 +105,7 @@ def _assembled(
 def _stage_prompts(client: S3Client, language: str = "it") -> None:
     for name in ("shelf_greeting", "story_start", "end_prompt"):
         client.put_object(
-            Bucket=BUCKET,
+            Bucket=PENDING_BUCKET,
             Key=f"{STAGED_PREFIX}/prompts/{language}/{name}.0123456789abcdef.mp3",
             Body=f"mp3:{name}".encode(),
             ContentType="audio/mpeg",
@@ -243,6 +246,42 @@ def test_audit_fails_when_a_story_directory_exists_but_is_not_listed_in_any_mani
 
     result = audit_published_bucket(settings, client=s3)
     assert any("orphan-story" in v for v in result.violations)
+
+
+def test_audit_fails_when_any_pending_object_sits_in_the_public_bucket(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Given a public bucket holding an object under pending/ (a staged story
+    or a run record that should live in the private pending bucket),
+    When the audit runs,
+    Then it reports a violation naming the key — the public bucket serves
+    every key under its URL, so any pending/ object is exposed (B1).
+    """
+    s3.put_object(Bucket=BUCKET, Key="pending/x", Body=b"leak")
+    s3.put_object(Bucket=BUCKET, Key="pending/abc/runs/r1.json", Body=b"{}")
+
+    result = audit_published_bucket(_settings(tmp_path), client=s3)
+
+    assert any("pending/x" in v for v in result.violations)
+    assert any("pending/abc/runs/r1.json" in v for v in result.violations)
+
+
+def test_audit_sweep_is_anchored_to_the_pending_prefix(tmp_path: Path, s3: S3Client) -> None:
+    """Given a published story whose key merely contains the word "pending",
+    When the audit runs,
+    Then the pending/ sweep does not flag it — only keys under the top-level
+    pending/ prefix are violations.
+    """
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path, story_id="pending-x")
+    stage_story(assembled, settings, client=s3)
+    _stage_prompts(s3)
+    publish_story(assembled.story.id, settings, client=s3)
+    assert s3.head_object(Bucket=BUCKET, Key="published/stories/pending-x/story.json")
+
+    result = audit_published_bucket(settings, client=s3)
+
+    assert result.violations == []
 
 
 def test_audit_reports_manifests_checked_count(tmp_path: Path, s3: S3Client) -> None:

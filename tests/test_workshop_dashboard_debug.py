@@ -7,7 +7,7 @@ import pytest
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
-from tests.workshop.test_routes import BUCKET, _Harness
+from tests.workshop.test_routes import BUCKET, PENDING_BUCKET, _Harness
 
 
 @pytest.fixture
@@ -15,6 +15,7 @@ def s3() -> S3Client:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 

@@ -251,6 +251,8 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_BASE: ${{ secrets.R2_PUBLIC_BASE }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          # Settings refuse a live endpoint without a separate pending bucket (B1).
+          R2_PENDING_BUCKET: ${{ secrets.R2_PENDING_BUCKET }}
         run: uv run python -m src.pipeline.cli audit
 
   # ===========================================================================

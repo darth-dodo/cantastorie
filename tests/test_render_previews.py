@@ -43,6 +43,9 @@ def test_preview_overrides_cover_every_write_credential() -> None:
     assert env["CLERK_JWKS_URL"] == ""
     for key in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "OPENROUTER_API_KEY"):
         assert env[key] == "preview-disabled"
+    # A blank endpoint means no R2 client can reach the live bucket, and the
+    # R2 validator (which needs a separate pending bucket, B1) is skipped.
+    assert env["R2_ENDPOINT_URL"] == ""
 
 
 def test_previews_read_same_origin_fixtures_not_the_cors_locked_bucket() -> None:
@@ -55,12 +58,25 @@ def preview_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # overrides win rather than passing on an empty developer environment.
     monkeypatch.setenv("CLERK_PUBLISHABLE_KEY", "pk_live_x")
     monkeypatch.setenv("CLERK_JWKS_URL", "https://clerk.example/.well-known/jwks.json")
+    # Production R2, minus the pending bucket: a preview must still boot even
+    # if Render does not copy R2_PENDING_BUCKET from the base service.
+    monkeypatch.setenv("R2_ENDPOINT_URL", "https://acct.eu.r2.cloudflarestorage.com")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "live-access")
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "live-secret")
+    monkeypatch.setenv("R2_BUCKET", "cantastorie")
+    monkeypatch.setenv("R2_PUBLIC_BASE", "https://pub.example.r2.dev/published")
+    monkeypatch.delenv("R2_PENDING_BUCKET", raising=False)
     for key, value in _preview_env().items():
         monkeypatch.setenv(key, value)
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
     return TestClient(app)
+
+
+def test_a_preview_boots_with_r2_disabled(preview_client: TestClient) -> None:
+    settings = preview_client.app.dependency_overrides[get_settings]()  # type: ignore[attr-defined]
+    assert settings.r2_endpoint_url == ""
 
 
 @pytest.mark.parametrize("path", ["/", "/play", "/health", "/static/content/en/manifest.json"])

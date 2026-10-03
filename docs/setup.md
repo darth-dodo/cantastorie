@@ -48,7 +48,25 @@ Workshop run records and staged pack artifacts live under a `pending/` prefix �
 wrangler r2 bucket create cantastorie-pending -J eu
 ```
 
-Set **`R2_PENDING_BUCKET=cantastorie-pending`** wherever the workshop runs (Render dashboard, local `.env`). With it unset the workshop falls back to `R2_BUCKET` — acceptable against a local/dev bucket, **never against the live public one**. The audit script (AI-390) fails on any `pending/` object found in the public bucket.
+Like the public bucket, it is EU-jurisdiction, so every `wrangler r2` command against it needs `-J eu` too.
+
+Set **`R2_PENDING_BUCKET=cantastorie-pending`** wherever R2 is configured: the Render dashboard, the `R2_PENDING_BUCKET` GitHub Actions secret (the R2 Bucket Audit job loads the same settings), and a local `.env` that sets `R2_ENDPOINT_URL`. There is **no fallback** to `R2_BUCKET`. With `R2_ENDPOINT_URL` set, the app refuses to start if `R2_PENDING_BUCKET` is unset or equal to `R2_BUCKET`. Without an endpoint (local dev, moto tests) the check is skipped, and a single-bucket local setup must name that bucket in both variables explicitly.
+
+The audit (`python -m src.pipeline.cli audit`, run by CI on every push to `main`) sweeps the public bucket's `pending/` prefix and fails on any object it finds there.
+
+**Token scope.** Render and CI use one R2 API token for both buckets. Publishing copies objects from `cantastorie-pending` into `cantastorie`, and all pending reads and writes go to `cantastorie-pending`. So that token needs **Object Read & Write on both `cantastorie` and `cantastorie-pending`**. A token scoped only to the public bucket does not fail loudly: the parent review page shows "no staged story" (a 404), because the staged-story read in `src/api/routes/parent.py` swallows the exception and returns nothing.
+
+#### Migrating to the private pending bucket
+
+Do these in order, before merging the change that enforces the separate bucket (AI-469):
+
+1. Create the bucket: `wrangler r2 bucket create cantastorie-pending -J eu`.
+2. Scope the R2 API token used by Render and CI to Object Read & Write on both `cantastorie` and `cantastorie-pending`.
+3. Inventory `pending/` in the **public** bucket. To list it, run `uv run python -m src.pipeline.cli audit` locally from the enforcing branch, with the live R2 vars and `R2_PENDING_BUCKET=cantastorie-pending` in `.env`. Every `pending/` key is reported. Copy in-flight run records and staged packs to `cantastorie-pending`, then delete them from the public bucket. Use `wrangler r2 object get` / `put` / `delete … -J eu` for single keys. Treat every family token found under `pending/{token}/` as leaked, and rotate or re-provision it.
+4. Set `R2_PENDING_BUCKET=cantastorie-pending` in the Render dashboard.
+5. Add the GitHub Actions secret `R2_PENDING_BUCKET=cantastorie-pending`.
+6. Merge.
+7. Confirm the deploy is live and the `main` R2 Bucket Audit job is green.
 
 ### Access logs OFF
 
@@ -88,8 +106,9 @@ published/prompts/it/…
 ## 3. The Render web service
 
 1. Render → **New** → **Blueprint** → pick this repository. Render reads `render.yaml` and creates the `cantastorie` service on the **Starter** plan (always-on — the cold-start decision, see the risk log).
-2. Set one environment variable on the service:
+2. Set the environment variables on the service:
    - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
+   - The R2 publish target, all declared `sync: false` in `render.yaml`: `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, and **`R2_PENDING_BUCKET`** (the private bucket above). The app will not boot with an endpoint set and the pending bucket missing or equal to `R2_BUCKET`.
 3. Leave `autoDeploy` on: pushes to `main` redeploy. The Dockerfile compiles Tailwind and serves the shell; `/health` is the health check.
 4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 
@@ -105,6 +124,7 @@ Without `ASSET_BASE`, the player falls back to the app's own `/static/content` m
 |----------|--------------|-----|
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL` | empty | With Clerk unset, `/parent` and `/workshop` answer **404**, which closes every write path |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `OPENROUTER_API_KEY` | `preview-disabled` | A second lock: nothing can publish or generate even if a route slips past |
+| `R2_ENDPOINT_URL` | empty | No R2 client can reach the live bucket, and the R2 config check (which requires a separate pending bucket) is skipped, so a preview boots either way |
 | `ASSET_BASE` | `/static/content` | Same-origin dev fixtures. The R2 CORS policy (`deploy/r2-cors.json`) lists exact origins, so a preview host could not fetch published stories |
 
 `tests/test_render_previews.py` builds settings from these `previewValue`s and asserts the result: landing, player and `/health` answer 200; the parent area and workshop answer 404.

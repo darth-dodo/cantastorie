@@ -38,6 +38,7 @@ from tests.api.clerk_jwt import (
 )
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 OPERATOR_CLAIMS = {"sub": "user_op", "role": "operator"}
 
@@ -50,6 +51,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -57,7 +59,13 @@ def _settings(tmp_path: Path) -> Settings:
     # issuer set explicitly: gated pages run fapi_host, and pk_test_xxx is not
     # valid base64 for the pk fallback.
     s = clerk_settings(clerk_issuer="https://test.clerk.test")
-    return s.model_copy(update={"r2_bucket": BUCKET, "content_dir": tmp_path / "content"})
+    return s.model_copy(
+        update={
+            "r2_bucket": BUCKET,
+            "r2_pending_bucket": PENDING_BUCKET,
+            "content_dir": tmp_path / "content",
+        }
+    )
 
 
 def _stage_fake_story(
@@ -76,18 +84,22 @@ def _stage_fake_story(
     )
     prefix = f"{STAGED_PREFIX}/{story_id}"
     s3.put_object(
-        Bucket=BUCKET,
+        Bucket=PENDING_BUCKET,
         Key=f"{prefix}/story.json",
         Body=story.model_dump_json().encode(),
         ContentType="application/json",
     )
-    s3.put_object(Bucket=BUCKET, Key=f"{prefix}/p1.mp3", Body=b"mp3:p1", ContentType="audio/mpeg")
-    s3.put_object(Bucket=BUCKET, Key=f"{prefix}/p1.webp", Body=b"webp:p1", ContentType="image/webp")
+    s3.put_object(
+        Bucket=PENDING_BUCKET, Key=f"{prefix}/p1.mp3", Body=b"mp3:p1", ContentType="audio/mpeg"
+    )
+    s3.put_object(
+        Bucket=PENDING_BUCKET, Key=f"{prefix}/p1.webp", Body=b"webp:p1", ContentType="image/webp"
+    )
     return story_id
 
 
 def _staged_keys(s3: S3Client, story_id: str) -> list[str]:
-    response = s3.list_objects_v2(Bucket=BUCKET, Prefix=f"{STAGED_PREFIX}/{story_id}/")
+    response = s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=f"{STAGED_PREFIX}/{story_id}/")
     return [item["Key"] for item in response.get("Contents", [])]
 
 
@@ -110,7 +122,12 @@ class _Harness:
         self.settings = (
             _settings(tmp_path)
             if configured
-            else Settings(_env_file=None, r2_bucket=BUCKET, content_dir=tmp_path / "content")
+            else Settings(
+                _env_file=None,
+                r2_bucket=BUCKET,
+                r2_pending_bucket=PENDING_BUCKET,
+                content_dir=tmp_path / "content",
+            )
         )
         self.store = RunStore(self.settings, client=s3)
         self.s3 = s3

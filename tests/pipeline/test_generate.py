@@ -49,6 +49,7 @@ _PASSING_REPORT = {
 }
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 
 @pytest.fixture
@@ -56,6 +57,7 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
@@ -66,6 +68,7 @@ def _settings(tmp_path: Path) -> Settings:
         content_dir=tmp_path / "content",
         staging_dir=tmp_path / "staging",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
     )
 
 
@@ -113,7 +116,7 @@ def _generate(tmp_path: Path, s3: S3Client) -> tuple[Settings, str]:
 
 
 def _staged_json(s3: S3Client, prefix: str) -> bytes:
-    return s3.get_object(Bucket=BUCKET, Key=f"{prefix}/{STORY_FILE}")["Body"].read()
+    return s3.get_object(Bucket=PENDING_BUCKET, Key=f"{prefix}/{STORY_FILE}")["Body"].read()
 
 
 def test_generate_stages_a_story_that_matches_the_player_fixture_shape(
@@ -149,15 +152,15 @@ def test_every_staged_page_has_its_hashed_audio_and_image_in_r2(
     story = Story.model_validate_json(_staged_json(s3, staged))
     for page in story.pages:
         assert page.audio is not None
-        s3.head_object(Bucket=BUCKET, Key=f"{staged}/{page.audio.file}")
+        s3.head_object(Bucket=PENDING_BUCKET, Key=f"{staged}/{page.audio.file}")
         assert page.image is not None
-        s3.head_object(Bucket=BUCKET, Key=f"{staged}/{page.image}")
+        s3.head_object(Bucket=PENDING_BUCKET, Key=f"{staged}/{page.image}")
 
 
 def test_generate_stages_the_italian_spoken_prompts(tmp_path: Path, s3: S3Client) -> None:
     _settings, _staged = _generate(tmp_path, s3)
 
-    response = s3.list_objects_v2(Bucket=BUCKET, Prefix=f"{STAGED_PREFIX}/prompts/it/")
+    response = s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=f"{STAGED_PREFIX}/prompts/it/")
     prompt_keys = [k.rsplit("/", 1)[-1] for k in [o["Key"] for o in response.get("Contents", [])]]
     stems = {name.split(".")[0] for name in prompt_keys}
     assert stems == set(IT_UTTERANCES)

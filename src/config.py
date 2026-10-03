@@ -109,9 +109,11 @@ class Settings(BaseSettings):
     r2_public_base: str = ""
 
     # The published bucket is public by design, so pending content gets its
-    # own private bucket — the workshop writes run records there before they
-    # are reviewed and published. Defaults to r2_bucket for local/dev use;
-    # the audit (AI-390) flags pending/ objects that were never published.
+    # own private bucket — the workshop writes run records and staged stories
+    # there before they are reviewed and published. There is no fallback to
+    # r2_bucket (B1): with a live endpoint the validator below requires a
+    # distinct bucket, and a local single-bucket setup names it explicitly.
+    # The audit also fails on any pending/ object found in the public bucket.
     r2_pending_bucket: str = ""
 
     # LangSmith observability — tracing for the FastAPI app and the pipeline.
@@ -136,7 +138,7 @@ class Settings(BaseSettings):
 
     @property
     def pending_bucket(self) -> str:
-        return self.r2_pending_bucket or self.r2_bucket
+        return self.r2_pending_bucket
 
     @model_validator(mode="after")
     def r2_config_is_complete_if_endpoint_is_set(self) -> Self:
@@ -151,6 +153,11 @@ class Settings(BaseSettings):
         if not all(r2_fields):
             raise ValueError(
                 "R2 config is partial — set all of r2_endpoint_url, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_base, or none"
+            )
+        if not self.r2_pending_bucket or self.r2_pending_bucket == self.r2_bucket:
+            raise ValueError(
+                "R2_PENDING_BUCKET must name a private bucket separate from R2_BUCKET — "
+                "the public bucket serves every key, so pending/ content cannot live there"
             )
         return self
 
