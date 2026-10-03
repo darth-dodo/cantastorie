@@ -18,6 +18,12 @@ rerun, or the second of the two, costs zero TTS calls. Uploads skip objects
 that already hold the same bytes, and an unchanged manifest isn't rewritten,
 so a repeat run writes nothing. ``dry_run`` makes no TTS call and writes
 nothing; it reports which lines a real run would pay for.
+
+A language whose live manifest already lists all five prompts is **skipped
+(complete)** unless ``force`` is set. Italian's prompts arrive with every
+story publish (publish_story copies ``pending/staged/prompts/it/``), so
+re-narrating them here would overwrite reviewed audio only for the next
+story publish to flip it back.
 """
 
 from __future__ import annotations
@@ -89,10 +95,21 @@ class PromptPublishResult(BaseModel):
     uploaded: list[str]
     skipped: list[str]
     manifest_changed: bool  # on a dry run, whether a real run would change it
+    # Why the run did nothing: "complete" (the live manifest already lists all
+    # five prompts). None when the run went ahead.
+    skip_reason: str | None = None
 
     @property
     def tts_calls(self) -> int:
+        if self.skip_reason is not None:
+            return 0
         return sum(not line.cached for line in self.lines)
+
+
+def has_every_prompt(manifest: Mapping[str, Any]) -> bool:
+    """Whether a manifest's prompts map already lists all five spoken prompts."""
+    prompts = manifest.get("prompts") or {}
+    return all(prompts.get(key) for key in MANIFEST_PROMPT_KEYS.values())
 
 
 def prompt_cache(settings: Settings) -> ArtifactCache:
@@ -141,8 +158,13 @@ def publish_prompts(
     client: S3Client | None = None,
     narration_client: NarrationClient | None = None,
     dry_run: bool = False,
+    force: bool = False,
 ) -> PromptPublishResult:
-    """Narrate, upload, and list one language's spoken prompts on the shared shelf."""
+    """Narrate, upload, and list one language's spoken prompts on the shared shelf.
+
+    A language whose live manifest already lists all five prompts is skipped
+    (``skip_reason="complete"``, no TTS, no write) unless ``force`` is set.
+    """
     if not settings.r2_public_base:
         raise ValueError(
             "R2_PUBLIC_BASE must be set before publishing prompts — manifest URLs would be relative"
@@ -156,6 +178,23 @@ def publish_prompts(
     def url(file_name: str) -> str:
         return f"{public_base}/prompts/{language}/{file_name}"
 
+    live, _ = load()
+    if not force and has_every_prompt(live):
+        live_prompts = live["prompts"]
+        listed: dict[UtteranceName, str | None] = {
+            name: live_prompts.get(MANIFEST_PROMPT_KEYS[name]) for name in UTTERANCE_TEXTS[language]
+        }
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=manifest_key,
+            lines=_plan_lines(language, settings, listed),
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="complete",
+        )
+
     if dry_run:
         cache = prompt_cache(settings)
         url_for: dict[UtteranceName, str | None] = {}
@@ -163,11 +202,8 @@ def publish_prompts(
             audio = cached_utterance_audio(text, language, settings, cache)
             url_for[name] = None if audio is None else url(utterance_filename(name, audio))
         lines = _plan_lines(language, settings, url_for)
-        current, _ = load()
         known = {line.manifest_key: line.url for line in lines if line.url is not None}
-        changed = len(known) < len(lines) or _merged_prompts(current, known) != current.get(
-            "prompts", {}
-        )
+        changed = len(known) < len(lines) or _merged_prompts(live, known) != live.get("prompts", {})
         return PromptPublishResult(
             language=language,
             dry_run=True,

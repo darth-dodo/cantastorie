@@ -127,11 +127,11 @@ def test_publishing_prompts_uploads_hashed_wavs_and_fills_the_manifest_map(
     assert not (tmp_path / "staging").exists()  # no stray local copies
 
 
-def test_rerunning_the_prompt_publish_is_free_and_writes_nothing(
+def test_a_forced_rerun_of_the_prompt_publish_is_free_and_writes_nothing(
     tmp_path: Path, s3: S3Client
 ) -> None:
-    """Given a language whose prompts are already published,
-    When the operator runs the publish again,
+    """Given a language whose prompts are already published from this checkout,
+    When the operator forces the publish again,
     Then the cache answers every line (zero TTS calls), no WAV is re-uploaded,
     and the manifest is left untouched.
     """
@@ -142,7 +142,9 @@ def test_rerunning_the_prompt_publish_is_free_and_writes_nothing(
     etag_before = s3.head_object(Bucket=BUCKET, Key=MANIFEST_KEY)["ETag"]
     calls.clear()
 
-    again = publish_prompts("es", settings, client=s3, narration_client=_tts(settings, calls))
+    again = publish_prompts(
+        "es", settings, client=s3, narration_client=_tts(settings, calls), force=True
+    )
 
     assert calls == []
     assert again.uploaded == []
@@ -230,6 +232,63 @@ def test_a_dry_run_after_a_publish_reports_nothing_to_do(tmp_path: Path, s3: S3C
     assert not plan.manifest_changed
     manifest = _manifest(s3)
     assert {line.manifest_key: line.url for line in plan.lines} == manifest["prompts"]
+
+
+def _seed_complete_italian(s3: S3Client) -> dict[str, str]:
+    """A live Italian manifest that already lists all five prompts (from a story publish)."""
+    prompts = {
+        key: f"{PUBLIC_BASE}/prompts/it/{key}.reviewed.wav" for key in MANIFEST_PROMPT_KEYS.values()
+    }
+    s3.put_object(
+        Bucket=BUCKET,
+        Key="published/it/manifest.json",
+        Body=json.dumps({"language": "it", "prompts": prompts, "stories": []}).encode(),
+    )
+    return prompts
+
+
+def test_a_language_with_every_prompt_is_skipped_as_complete(tmp_path: Path, s3: S3Client) -> None:
+    """Given a live Italian manifest that already lists all five prompts,
+    When the operator publishes (as `--language all` does, real or dry run),
+    Then Italian is skipped as complete: no TTS call, no upload, the
+    reviewed audio stays listed.
+    """
+    reviewed = _seed_complete_italian(s3)
+    settings = _settings(tmp_path)
+    etag_before = s3.head_object(Bucket=BUCKET, Key="published/it/manifest.json")["ETag"]
+
+    for dry_run in (True, False):
+        calls: list[str] = []
+        result = publish_prompts(
+            "it", settings, client=s3, narration_client=_tts(settings, calls), dry_run=dry_run
+        )
+
+        assert calls == []
+        assert result.skip_reason == "complete"
+        assert result.tts_calls == 0
+        assert result.uploaded == []
+        assert not result.manifest_changed
+    assert _prompt_keys(s3, "it") == []
+    assert s3.head_object(Bucket=BUCKET, Key="published/it/manifest.json")["ETag"] == etag_before
+    live = json.loads(s3.get_object(Bucket=BUCKET, Key="published/it/manifest.json")["Body"].read())
+    assert live["prompts"] == reviewed
+
+
+def test_force_re_narrates_a_complete_language(tmp_path: Path, s3: S3Client) -> None:
+    """--force overrides the complete skip: Italian is narrated and repointed."""
+    reviewed = _seed_complete_italian(s3)
+    settings = _settings(tmp_path)
+    calls: list[str] = []
+
+    result = publish_prompts(
+        "it", settings, client=s3, narration_client=_tts(settings, calls), force=True
+    )
+
+    assert sorted(calls) == sorted(IT_UTTERANCES.values())
+    assert result.skip_reason is None
+    assert len(_prompt_keys(s3, "it")) == len(IT_UTTERANCES)
+    live = json.loads(s3.get_object(Bucket=BUCKET, Key="published/it/manifest.json")["Body"].read())
+    assert set(live["prompts"].values()).isdisjoint(reviewed.values())
 
 
 def test_publishing_requires_the_public_base(tmp_path: Path, s3: S3Client) -> None:

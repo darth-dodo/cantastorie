@@ -286,7 +286,9 @@ def test_audit_reports_violations_and_exits_one(
 
 
 def _fake_prompt_run(seen: list[tuple[str, bool]]) -> object:
-    def fake(language: str, settings: object, *, dry_run: bool = False) -> PromptPublishResult:
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
         seen.append((language, dry_run))
         line = PromptLine(name="offline", manifest_key="offline", text="t", cached=False, url=None)
         return PromptPublishResult(
@@ -360,3 +362,39 @@ def test_publish_prompts_rejects_a_language_outside_the_roster() -> None:
     result = runner.invoke(app, ["publish-prompts", "--language", "fr", "--dry-run"])
     assert result.exit_code == 1
     assert "fr" in result.output
+
+
+def test_publish_prompts_reports_a_complete_language_as_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A language whose live manifest already lists every prompt is reported
+    "skipped (complete)", on a dry run too, and costs no TTS."""
+    forced: list[bool] = []
+
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        forced.append(force)
+        line = PromptLine(name="offline", manifest_key="offline", text="t", cached=False, url=None)
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[line],
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="complete",
+        )
+
+    monkeypatch.setattr(cli, "publish_prompts", fake)
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "it", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "it: skipped (complete)" in result.output
+    assert "Would make 0 TTS call(s)" in result.output
+    assert forced == [False]
+
+    runner.invoke(app, ["publish-prompts", "--language", "it", "--yes", "--force"])
+    assert forced == [False, True]

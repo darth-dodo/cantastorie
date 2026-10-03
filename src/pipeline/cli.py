@@ -77,6 +77,12 @@ def publish(story_id: str = typer.Option(..., help="Story working-folder id")) -
 
 def _report_prompt_run(result: PromptPublishResult, *, local: bool) -> None:
     prefix = "[dry run] " if result.dry_run else ""
+    if result.skip_reason == "complete":
+        typer.echo(
+            f"{prefix}{result.language}: skipped (complete) — {result.target} already lists "
+            "all five prompts; rerun with --force to re-narrate"
+        )
+        return
     typer.echo(f"{prefix}{result.language}: {result.target}")
     for line in result.lines:
         state = "cached" if line.cached else "needs TTS"
@@ -101,6 +107,11 @@ def publish_prompts_command(
     yes: bool = typer.Option(False, "--yes", help="Confirm writing the shared public bucket"),
     local: bool = typer.Option(
         False, "--local", help="Write the dev fixtures under src/static/content/ instead of R2"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="R2 only: re-narrate a language whose live manifest already lists every prompt",
     ),
 ) -> None:
     """Narrate and publish the spoken prompts for one language, or all of them."""
@@ -127,7 +138,7 @@ def publish_prompts_command(
         if local:
             result = write_dev_prompts(lang, settings, dry_run=dry_run)
         else:
-            result = publish_prompts(lang, settings, dry_run=dry_run)
+            result = publish_prompts(lang, settings, dry_run=dry_run, force=force)
         _report_prompt_run(result, local=local)
         tts_calls += result.tts_calls
     verb = "Would make" if dry_run else "Made"
