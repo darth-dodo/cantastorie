@@ -292,6 +292,34 @@ def test_a_rerun_hits_the_cache_for_images_and_verdicts(tmp_path: Path) -> None:
     assert again == first
 
 
+def test_a_rerun_of_a_rejected_story_rejects_again_with_zero_calls(tmp_path: Path) -> None:
+    """Given a story rejected because page 3 stayed frightening past the bound,
+    When illustrate_safely reruns with the same inputs,
+    Then it rejects again with the same reason, from cached redraws and
+    verdicts alone: zero image calls and zero judge calls.
+    """
+    settings = _settings(tmp_path)
+    cache = ArtifactCache(tmp_path / "story")
+    with pytest.raises(ImageSafetyRejectedError) as first:
+        illustrate_safely(
+            _story(),
+            settings,
+            cache,
+            transport=_Images(scary_calls=None).transport(),
+            judge_model=VisionJudge(),
+        )
+
+    images, judge = _Images(scary_calls=None), VisionJudge()
+    with pytest.raises(ImageSafetyRejectedError) as again:
+        illustrate_safely(
+            _story(), settings, cache, transport=images.transport(), judge_model=judge
+        )
+
+    assert images.prompts == []
+    assert judge.calls == 0
+    assert str(again.value) == str(first.value)
+
+
 def test_the_judge_sends_the_image_as_a_base64_data_url_through_openrouter(
     tmp_path: Path,
 ) -> None:
