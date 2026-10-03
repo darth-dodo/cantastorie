@@ -33,13 +33,13 @@ flowchart LR
 
     subgraph Pipeline["Pipeline (same repo)"]
         CLI["typer CLI:<br/>generate · publish · audit"]
-        GEN["generate.py<br/>write → narrate → illustrate →<br/>assemble → stage"]
+        GEN["generate.py<br/>write → narrate → illustrate →<br/>image safety → assemble → stage"]
         Cache[("content/&lt;story&gt;/<br/>artifact cache")]
         CLI --> GEN
         GEN <--> Cache
     end
 
-    OR["OpenRouter<br/>write · safety · images ·<br/>narration (Gemini TTS)"]
+    OR["OpenRouter<br/>write · safety · images ·<br/>image safety · narration (Gemini TTS)"]
     CK["Clerk<br/>JWKS · public_metadata"]
     R2["Cloudflare R2<br/>published/ · pending/"]
 
@@ -89,14 +89,14 @@ flowchart TD
 
 | Module | Owns | Key exports |
 |--------|------|-------------|
-| `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, **family-overlay merge** (when a `family_token` is in IndexedDB, fetch `families/{token}/{lang}/manifest.json` and append its stories — dedupe by id, shared wins; a token-less boot makes zero overlay requests; an overlay fetch failure falls back to the shared shelf and never throws), wires `wake.js` for audio unlock and the shelf greeting (skipped on `.cover`/`.settings-gear` targets, and spoken only if its buffer lands while the child is still on the shelf), the render loop, the dev page-timer stand-in | `init(root, {fetchFn, engine, readFamilyToken})` → shell handle |
+| `main.js` | Boot order: theme (light/dusk by hour, `?theme=` override), manifest fetch with built-in fallback shelf, **family-overlay merge** (when a `family_token` is in IndexedDB, fetch `families/{token}/{lang}/manifest.json` and append its stories — dedupe by id, shared wins; a token-less boot makes zero overlay requests; an overlay fetch failure falls back to the shared shelf and never throws), wires `wake.js` for audio unlock and the shelf greeting (skipped on `.cover`/`.settings-gear` targets, and spoken only if its buffer lands while the child is still on the shelf), the render loop, the dev page-timer stand-in. Every manifest fetch carries `AbortSignal.timeout(MANIFEST_FETCH_TIMEOUT_MS)` (8 s), and the overlay is fetched in parallel with the shared manifest: a hung shared manifest falls into the offline clouds, a hung overlay into the shared shelf alone. A cover tap sets `.cover.loading` until its `story.json` settles. A published cover whose load fails or times out never plays the mock: the child stays on the shelf, the offline clouds show and speak, the failed promise is evicted, and a tap on the clouds retries that story, the clouds shimmering (`.offline.loading`) while the retry is pending. Only a cover with no `story` URL runs on the page timer. A sequence token drops a superseded open (a double tap, a second cover, a language switch mid-load) | `init(root, {fetchFn, engine, readFamilyToken, manifestTimeoutMs, storyTimeoutMs})` → shell handle, `MANIFEST_FETCH_TIMEOUT_MS` |
 | `store.js` | All player state and every legal transition; pure, no DOM, no audio; `choose(i)` records the tapped option in a `choices` array | `createStore`, `initialState` |
 | `playback.js` | The playback loop: story-start prompt, narrating the current page, auto page turn on audio end, pause/resume at exact position; `extendPath()` appends a tapped arm to the played path and recomputes the next choice page; a stall watchdog (visible + playing only) pauses at the frozen offset and shows the sleeping bird if narration position stops advancing for `STALL_TIMEOUT_MS` | `createPlayback` |
-| `audio-engine.js` | The single `AudioContext`; decoded-buffer cache; narration vs prompt channels; crossfades and ducking via gain ramps; `unlock()` resumes from any state that isn't `running`/`closed` (covers Safari's `interrupted`), and sets `navigator.audioSession.type = "playback"` where supported | `createAudioEngine`, `CROSSFADE_SECONDS` |
+| `audio-engine.js` | The single `AudioContext`; decoded-buffer cache; narration vs prompt channels; crossfades and ducking via gain ramps; `unlock()` resumes from any state that isn't `running`/`closed` (covers Safari's `interrupted`), and sets `navigator.audioSession.type = "playback"` where supported; `load()` aborts a fetch whose headers haven't arrived within `AUDIO_LOAD_TIMEOUT_MS` (8 s, injectable as `audioLoadTimeoutMs`; the body download is not timed, so a large WAV sharing bandwidth with prefetch is never cut off), and the rejection evicts the cache entry so the bird appears and the retry tap refetches | `createAudioEngine`, `CROSSFADE_SECONDS`, `AUDIO_LOAD_TIMEOUT_MS` |
 | `wake.js` | `createWaker({ engine, root, doc, onFirstUnlock })`: capture-phase unlock listeners on every activation-triggering event (no `once`), plus unlock on a visible `visibilitychange`; fires `onFirstUnlock` exactly once, after the first successful unlock | `createWaker` |
 | `fsm.js` | Tiny generic FSM: frozen machine, warn-and-ignore invalid transitions | `createMachine`, `interpret` |
 | `prefetch.js` | On cover tap, bank every page's audio (decoded buffers) and image (HTTP cache), both branch arms included, plus each choice option's card image and spoken label; failures counted, never fatal | `createPrefetcher` |
-| `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs (choice-card images and label audio included); `pagesFrom(pageId)` walks one arm for branch following; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `shelf`, `story` |
+| `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs (choice-card images and label audio included); the fetch is bounded by `AbortSignal.timeout(STORY_FETCH_TIMEOUT_MS)` (10 s); `pagesFrom(pageId)` walks one arm for branch following; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `STORY_FETCH_TIMEOUT_MS`, `shelf`, `story` |
 | `screens.js` | Detached-element builders for shelf, player, end screen, the choice/resume/settings overlays, and the failure states (audio-retry bird, offline clouds); the choice overlay shows each option's card image (a wash fallback when absent) behind its spoken label; `playerView()` derives captions/beads/images from a loaded story | `buildShelf`, `buildPlayer`, `updatePlayer`, … |
 | `storage.js` | Progress persistence under one key (only `page` and the recorded `choices` are trusted from a saved payload; `load()` always normalizes `screen` back to `shelf` and drops the rest, so a reload never resumes mid-story on the mock view — AI-468); localStorage now, IndexedDB when real stories land; failures are silent by design | `load`, `save` |
 | `palette-resolve.js` | Theme (light/dusk by hour, `?theme=` override) and palette resolution; pure logic shared with the `palette.js` head script and the test suites | `VALID_PALETTES`, `resolvePalette`, `resolveTheme` |
@@ -180,23 +180,26 @@ sequenceDiagram
     Note over engine: never stopAll() into the end screen —<br/>nothing snaps at bedtime
 ```
 
-While no published `story.json` backs a cover, a page timer (3.8 s, `?speed=` override) stands in for narration end — same `store.advance()` path, so the state machine is exercised identically in dev.
+While a cover has no `story` URL at all (a published story that fails to load shows the offline clouds instead), a page timer (3.8 s, `?speed=` override) stands in for narration end — same `store.advance()` path, so the state machine is exercised identically in dev.
 
 ---
 
 ## The Pipeline (`src/pipeline/`)
 
-Plain Python, typed end to end. The full run is live: `generate` walks write → safety (→ revise, bounded) → narrate → illustrate → assemble and stages the result; `publish` promotes a staged story to the public bucket and updates the manifest. `generate.py` is the one authoring function — the CLI and the workshop's `RunManager` are two front doors to it. Glosses and word timings are the two steps that do not exist yet (slice 6).
+Plain Python, typed end to end. The full run is live: `generate` walks write → safety (→ revise, bounded) → narrate → illustrate → image safety (→ redraw, bounded) → assemble and stages the result; `publish` promotes a staged story to the public bucket and updates the manifest. `generate.py` is the one authoring function — the CLI and the workshop's `RunManager` are two front doors to it. Glosses and word timings are the two steps that do not exist yet (slice 6).
 
 ```mermaid
 flowchart LR
     G["generate<br/>(CLI or workshop)"] --> W["write"]
-    W --> SG{"safety gate<br/>9 rules, judge ≠ writer family"}
+    W --> SG{"safety gate<br/>8 text rules, judge ≠ writer family"}
     SG -- pass --> N["narrate<br/>Gemini TTS (no timings)"]
     SG -- fail --> RV["revise (bounded)"]
     RV --> SG
-    N --> I["illustrate<br/>sheet → pages + cover"]
-    I --> A["assemble<br/>content-rule validation"]
+    N --> I["illustrate<br/>sheet → pages + cards + cover"]
+    I --> IS{"image safety<br/>3 criteria per shown image,<br/>judge ≠ image family"}
+    IS -- "fail (≤ 2 redraws)" --> I
+    IS -- "still failing" --> RJ["reject story"]
+    IS -- pass --> A["assemble<br/>content-rule validation"]
     A --> ST["stage → pending/"]
     ST -- "operator approves<br/>(workshop)" --> PB["publish → published/"]
 
@@ -204,21 +207,23 @@ flowchart LR
     W -.-> Cache
     N -.-> Cache
     I -.-> Cache
+    IS -.-> Cache
 ```
 
 ### Module responsibilities
 
 | Module | Owns | Notable constraints enforced in code |
 |--------|------|--------------------------------------|
-| `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `ChoiceOption`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `Story.shape` is `linear`/`branching`; `ChoicePoint` is exactly two options, each `ChoiceOption` carrying an optional `card_image` and spoken `audio`; `SafetyReport` must contain each of the nine rules exactly once |
+| `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `ChoiceOption`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `Story.shape` is `linear`/`branching`; `ChoicePoint` is exactly two options, each `ChoiceOption` carrying an optional `card_image` and spoken `audio`; `SafetyReport` must contain each of the eight text rules exactly once; `ImageSafetyReport` each of `no_text` / `nothing_frightening` / `calm` exactly once |
 | `cache.py` | Content-addressed artifact store; the filesystem **is** the checkpoint | `cache_key()` = sha256 of canonical-JSON inputs; writes are tmp-then-rename atomic; `run_step()` makes unchanged inputs a pure lookup — zero API calls |
-| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration requests `pcm` (Gemini rejects `mp3`) and wraps it into a WAV container, with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
+| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; `build_model` wraps every chat model in Pydantic AI's `OpenRouterProvider`, so the judges' temperature 0 is really sent (a bare `OpenAIProvider` strips it from `openai/...` ids; `tests/pipeline/test_judge_temperature.py` asserts it on the wire); narration requests `pcm` (Gemini rejects `mp3`) and wraps it into a WAV container, with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
 | `generate.py` | The whole authoring run, write through stage, as one function — the seam shared by the CLI and the workshop's `RunManager` | Provider seams (models, narration client, image transport) are injectable, so the full run is exercised with zero network |
 | `cli.py` | `generate` / `publish` / `publish-prompts` / `audit` entry points — all live | All run the real machinery; `audit` verifies every reachable published asset (`audit_published_bucket`) and also runs in CI (AI-378); `publish-prompts` refuses to write the shared bucket without `--yes` |
 | `prompts.py` | The operator's spoken-prompt step (H6, AI-481): `publish_prompts` narrates a language's five lines, uploads them to `published/prompts/{lang}/`, and merges them into the live manifest; `write_dev_prompts` writes the same audio as the same-origin dev fixtures | Audio comes from the narrate step's cache (`content/_prompts/`), so reruns are free; the manifest write goes through `_write_manifest` (IfMatch + retry), never a bare PUT; `dry_run` makes no TTS call and no write |
 | `steps/narrate.py` | Page, choice-label and spoken-prompt narration; the prompt lines for every `Language` are `UTTERANCE_TEXTS` in `steps/utterance_texts.py` | Each language synthesizes its own lines; a test fails CI if any `Language` lacks any prompt, and another if `main.js` `LANGS` drifts from `Language` |
 | `steps/illustrate.py` | Character sheet first, then every page and the cover generated **against that sheet** — never page-to-page chaining (drift compounds) | `STYLE_PROMPT` is a module constant participating verbatim in every cache key: edit it and every image knowingly regenerates. Uses httpx against OpenRouter chat completions directly because pydantic-ai 2.5.0 can't parse image *outputs*; the ban is on direct vendor SDKs, and OpenRouter remains the only gateway |
-| `src/config.py` | Settings for both halves (shared with the API) | A model validator **refuses config where the safety judge and writer share a model family** — the shared-blind-spot failure mode |
+| `steps/image_safety.py` | **Calm pictures** on the rendered images ([ADR-011](adr/ADR-011-image-safety-vision-judge.md)): `illustrate_safely` judges every page, choice card and cover (not the character sheet, which never ships) with a vision model over OpenRouter, redraws a failing image, and rejects the story past the bound | Pydantic AI with a typed `ImageSafetyReport`, temperature 0, the PNG sent as a base64 data URL; verdicts cached on the image's SHA-256; a redraw bumps a per-slot `regeneration` cache input so only that image is re-bought; `IMAGE_SAFETY_MAX_REGENERATIONS = 2`, then `ImageSafetyRejectedError` (its message lands on the failed run record) |
+| `src/config.py` | Settings for both halves (shared with the API) | Model validators **refuse config where the safety judge and writer share a model family**, and where the image safety judge (`image_safety_model`) and `image_model` do — the shared-blind-spot failure mode |
 
 ### Why the cache shape matters
 
@@ -260,7 +265,7 @@ Two properties keep the lifecycle honest:
 - **The reaper (`reap_stale`, AI-417)** retires `queued`/`running` records whose heartbeat is too old to belong to a live process — a deploy or crash left them stranded — marking them `failed` with a distinct "the workshop restarted" note so the screen can tell an interruption apart from a pipeline error. Terminal and review-waiting states are never swept.
 - **Retry re-buys nothing.** `failed → queued` is a legal edge because the step functions run against the content-addressed `ArtifactCache`: completed steps are pure lookups, so a resumed or retried run only pays for what never finished.
 
-Progress shown in the UI is read from the run record plus the working folder's checkpoint dirs — there is no parallel status store. Publish calls the pipeline's `publish_story`, which remains the only writer to `published/`; nothing under `pending/` is ever listed in a manifest. `publish_story(..., family_token=…)` selects the lane: an operator approve publishes to the **shared shelf** (`published/stories/…` + `published/{lang}/manifest.json`); a parent approve (`POST /parent/packs/{id}/approve`) publishes to that family's **private overlay** (`published/families/{token}/…`). The family-token prefix is validated (`^[0-9a-f]{32}$`) before it becomes a key; the lanes never cross and private is never promoted to global.
+Progress shown in the UI is read from the run record plus the working folder's checkpoint dirs — there is no parallel status store. Publish calls the pipeline's `publish_story`, which remains the only writer to `published/`; nothing under `pending/` is ever listed in a manifest. `publish_story(..., family_token=…)` selects the lane: an operator approve publishes to the **shared shelf** (`published/stories/…` + `published/{lang}/manifest.json`); a parent approve (`POST /parent/packs/{id}/approve`) publishes to that family's **private overlay** (`published/families/{token}/…`). A parent approve is gated on review (B2): opening a story's review page (`GET /parent/staged/{story_id}`, which renders every page) adds it to the run record's `reviewed_story_ids`, and approve answers 409 unless every staged story is reviewed and still in the pending bucket. Re-staging clears the list; records without it count as unreviewed. The family-token prefix is validated (`^[0-9a-f]{32}$`) before it becomes a key; the lanes never cross and private is never promoted to global.
 
 ---
 
@@ -272,7 +277,7 @@ An app factory (`create_app`) that initializes observability, adds LangSmith's `
 |--------|------|--------------|
 | `player.py` | `/` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
 | `published.py` | `/published` | Optional same-origin R2 proxy for local/dev parity against a real bucket (production playback is bucket-direct). Unauthenticated, so it serves only the key shapes `publish_story` writes (`{lang}/manifest.json`, `stories/{id}/…`, `prompts/{lang}/…`, optionally under `families/{token}/`); anything else, including encoded dot segments, is a 404 before R2 is asked. Streams the body and passes through R2's `Cache-Control`/`ETag` |
-| `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, the my-packs list with progress polling, and **approving a staged pack to the family's private overlay** (`POST /parent/packs/{id}/approve` → `publish_story(..., family_token=…)`) — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
+| `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the pack request form, the my-packs list with progress polling, reviewing each staged story (`/parent/staged/{id}`), and **approving a reviewed pack to the family's private overlay** (`POST /parent/packs/{id}/approve` → `publish_story(..., family_token=…)`; 409 until every story is reviewed) — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
 | `workshop.py` | `/workshop` | Clerk-gated operator screens, operator role (Jinja2 + HTMX): start a run, watch step progress, review the staged story, publish. `src/workshop/manager.py` orchestrates runs in-process and reaps stale ones; `records.py` persists run records to the R2 pending bucket, surviving Render's ephemeral disk |
 
 Unset Clerk config means the `/workshop` and `/parent` routers answer 404 — each area simply does not exist until configured.
@@ -305,7 +310,7 @@ LangSmith, off by default and inert when off. `init_observability` (called from 
 | `tests/test_app.py`, `test_config.py`, `test_observability.py` | pytest | Routes, static mount, dev manifest fixture, settings (including the judge≠writer refusal), observability wiring |
 | `tests/api/*` | pytest | Clerk JWT verification (`test_auth.py`), the Clerk metadata client against mocked transports (`test_clerk_client.py`), provision mint/link/idempotency (`test_parent_provision.py`), and the `/parent` pages, tenancy scoping, and Clerk-containment guard (`test_parent_pages.py`) |
 | `tests/workshop/*` | pytest | Run-record lifecycle and transitions (`test_records.py`), manager execution/resume/reaper and per-family run caps (`test_manager.py`), workshop routes and Clerk auth (`test_routes.py`), `WorkshopScope` resolution (`test_scope.py`) |
-| `tests/pipeline/*` | pytest | Model contract (nine-rule completeness, choice arity), cache atomicity and hit/miss, provider transports against mocked httpx, authoring/narrate/illustrate/assemble steps, content rules, generate end to end, publish and audit |
+| `tests/pipeline/*` | pytest | Model contract (eight-rule and three-criterion completeness, choice arity), cache atomicity and hit/miss, provider transports against mocked httpx, authoring/narrate/illustrate/image-safety/assemble steps, content rules, generate end to end, publish and audit |
 | `tests/e2e/*.spec.js` | Playwright | The two-tap start, the full playback loop, failure states, and shelf-layout regressions in a real browser |
 
 The provider and Clerk tests mock at the httpx-transport seam, so logic is tested without a key in the environment — the same property the runtime has.

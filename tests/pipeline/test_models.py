@@ -76,8 +76,8 @@ def test_a_story_in_an_unlocked_language_is_rejected() -> None:
         )
 
 
-def test_a_safety_report_must_cover_all_nine_rules_exactly_once() -> None:
-    """Given the nine safety rules of product.md "Safety",
+def test_a_safety_report_must_cover_all_eight_text_rules_exactly_once() -> None:
+    """Given the eight text safety rules of product.md "Safety",
     When a report carries a verdict for every rule, Then it validates and passes;
     When any rule's verdict is missing, Then validation fails.
     """

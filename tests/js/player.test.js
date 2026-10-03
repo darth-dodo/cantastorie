@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAudioEngine } from "../../src/static/js/audio-engine.js";
-import { init } from "../../src/static/js/main.js";
+import { MANIFEST_FETCH_TIMEOUT_MS, init } from "../../src/static/js/main.js";
 
 // Vitest runs with cwd at the project root; import.meta.url is an http://
 // URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
@@ -633,5 +633,249 @@ describe("wake wiring (AI-461): main.js greets on the first real activation", ()
     await startSource.onended();
     await vi.waitFor(() => expect(engine.state).toBe("playing"));
     expect(running.store.state.screen).toBe("player");
+  });
+});
+
+describe("a network that never answers (B8, AI-473)", () => {
+  // Accepts the request, never responds, but honors an abort signal the way
+  // a real fetch does: captive portal, hotel Wi-Fi, a half-dead radio.
+  const hang = (_url, { signal } = {}) =>
+    new Promise((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(signal.reason));
+    });
+
+  it("the manifest fetch carries an abort signal bounded by MANIFEST_FETCH_TIMEOUT_MS", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const signals = [];
+    const spyFetch = async (url, opts) => {
+      if (String(url).endsWith("manifest.json")) signals.push(opts?.signal ?? null);
+      return manifestFetch(url);
+    };
+    running = await init(document, { fetchFn: spyFetch, engine: fakeEngine() });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(MANIFEST_FETCH_TIMEOUT_MS).toBe(8000);
+  });
+
+  it("a hung manifest times out into the clouds; a tap once it answers brings the shelf", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let manifestUp = false;
+    const fetchFn = (url, opts) => {
+      if (String(url).endsWith("manifest.json") && !manifestUp) return hang(url, opts);
+      return routedFetch(url);
+    };
+
+    const pending = init(document, { fetchFn, engine: fakeEngine(), manifestTimeoutMs: 30 });
+
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    expect(document.querySelector(".cover")).toBeNull();
+
+    manifestUp = true;
+    document.querySelector(".offline").click();
+    running = await pending;
+    expect(running.manifestLoaded).toBe(true);
+    expect(document.querySelectorAll(".shelf .cover").length).toBeGreaterThan(0);
+  });
+
+  it("a hung family overlay times out and the shared shelf still renders", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const fetchFn = (url, opts) => {
+      if (String(url).includes("/families/")) return hang(url, opts);
+      return routedFetch(url);
+    };
+    running = await init(document, {
+      fetchFn,
+      engine: fakeEngine(),
+      manifestTimeoutMs: 30,
+      readFamilyToken: async () => "0123456789abcdef0123456789abcdef",
+    });
+    expect(running.manifestLoaded).toBe(true);
+    expect(document.querySelectorAll(".shelf .cover")).toHaveLength(manifest.stories.length);
+  });
+
+  it("a hung published story shimmers, then the clouds speak on the shelf; a tap retries that story", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let storyUp = false;
+    let storyJsonFetches = 0;
+    const fetchFn = (url, opts) => {
+      if (String(url).endsWith("story.json")) {
+        storyJsonFetches += 1;
+        if (!storyUp) return hang(url, opts);
+      }
+      return routedFetch(url);
+    };
+    const engine = fakeEngine();
+    const promptUrls = [];
+    const playPrompt = engine.playPrompt.bind(engine);
+    engine.playPrompt = async (url, opts) => {
+      promptUrls.push(url);
+      return playPrompt(url, opts);
+    };
+    running = await init(document, { fetchFn, engine, storyTimeoutMs: 50 });
+    const savedBefore = localStorage.getItem("cantastorie-shell");
+
+    // The tap shows the cover is working on it, not an inert button.
+    document.querySelector(".cover").click();
+    expect(document.querySelector(".cover").classList.contains("loading")).toBe(true);
+
+    // The timeout never plays the silent mock story: the clouds take the
+    // stage, speak their line, and the child is still on the shelf.
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    expect(document.querySelector(".player")).toBeNull();
+    expect(running.store.state.screen).toBe("shelf");
+    expect(running.playback.hasStory()).toBe(false);
+    await vi.waitFor(() => expect(promptUrls).toContain("/static/content/en/prompts/offline.wav"));
+
+    // The failed attempt saved no progress for that story.
+    expect(localStorage.getItem("cantastorie-shell")).toBe(savedBefore);
+
+    // Still hung: a tap retries and, on the next timeout, fresh clouds come back.
+    const firstClouds = document.querySelector(".offline");
+    firstClouds.click();
+    await vi.waitFor(() => expect(storyJsonFetches).toBe(2));
+    await vi.waitFor(() => {
+      const clouds = document.querySelector(".offline");
+      expect(clouds).not.toBeNull();
+      expect(clouds).not.toBe(firstClouds);
+    });
+
+    // The network returns: the next tap on the clouds opens that very story.
+    storyUp = true;
+    document.querySelector(".offline").click();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(storyJsonFetches).toBe(3);
+    await vi.waitFor(() => expect(document.querySelector(".player")).not.toBeNull());
+    expect(document.querySelector(".bead")).not.toBeNull();
+  });
+
+  it("the clouds shimmer while a cover retry is pending, and stop when it settles", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let mode = "hang"; // then "gated", then released
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url, opts) => {
+      if (String(url).endsWith("story.json")) {
+        if (mode === "hang") return hang(url, opts);
+        await gate;
+      }
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine(), storyTimeoutMs: 50 });
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    const clouds = document.querySelector(".offline");
+    expect(clouds.classList.contains("loading")).toBe(false);
+
+    // The retry tap is answered at once: the clouds shimmer while it loads.
+    mode = "gated";
+    clouds.click();
+    expect(clouds.classList.contains("loading")).toBe(true);
+
+    release();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(clouds.classList.contains("loading")).toBe(false);
+  });
+
+  it("a double tap on a gated load opens the story once, and replays the saved path once", async () => {
+    const branchingStory = JSON.parse(
+      readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
+    );
+    // A save left mid-arm-b, so each open would fold the pick over loaded.pages.
+    localStorage.setItem("cantastorie-shell", JSON.stringify({ screen: "shelf", page: 7, choices: [1] }));
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url) => {
+      const path = String(url);
+      if (path.includes("dev-branching")) {
+        await gate;
+        return { ok: true, json: async () => branchingStory };
+      }
+      return routedFetch(url);
+    };
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const openStory = vi.spyOn(running.playback, "openStory");
+
+    const cover = [...document.querySelectorAll(".shelf .cover")].at(-1);
+    cover.click();
+    cover.click();
+    release();
+
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(openStory).toHaveBeenCalledTimes(1);
+    // Six shared pages plus the four-page arm b, folded over exactly once.
+    expect(openStory.mock.calls[0][0].pages).toHaveLength(10);
+  });
+
+  it("a tap on a second cover while the first loads opens only the second", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const branchingStory = JSON.parse(
+      readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
+    );
+    const fetchFn = async (url) => {
+      const path = String(url);
+      if (path.includes("la-barchetta") && path.endsWith("story.json")) await gate; // the first cover is slow
+      if (path.includes("dev-branching")) return { ok: true, json: async () => branchingStory };
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const openStory = vi.spyOn(running.playback, "openStory");
+    const covers = [...document.querySelectorAll(".shelf .cover")];
+    covers[0].click(); // la barchetta, gated
+    covers.at(-1).click(); // dev-branching, answers at once
+    await vi.waitFor(() => expect(openStory).toHaveBeenCalledTimes(1));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(openStory).toHaveBeenCalledTimes(1);
+    expect(openStory.mock.calls[0][0].id).toBe("dev-branching");
+  });
+
+  it("a language switch during a cover load drops the stale open", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url) => {
+      if (String(url).endsWith("story.json")) await gate;
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const oldPlayback = running.playback;
+    const openStory = vi.spyOn(oldPlayback, "openStory");
+    document.querySelector(".cover").click();
+    await running.switchLanguage("es");
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(openStory).not.toHaveBeenCalled();
+    expect(running.store.state.screen).toBe("shelf");
+  });
+
+  it("a successful load clears the cover shimmer", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url) => {
+      if (String(url).endsWith("story.json")) await gate;
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine() });
+    const cover = document.querySelector(".cover");
+    cover.click();
+    expect(cover.classList.contains("loading")).toBe(true);
+    release();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(cover.classList.contains("loading")).toBe(false);
   });
 });

@@ -140,7 +140,7 @@ Writing `it` replaces the committed chime stand-ins with spoken lines. `scripts/
 2. Set the environment variables on the service:
    - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
    - The R2 publish target, all declared `sync: false` in `render.yaml`: `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, and **`R2_PENDING_BUCKET`** (the private bucket above). The app will not boot with an endpoint set and the pending bucket missing or equal to `R2_BUCKET`.
-3. Leave `autoDeploy` on: pushes to `main` redeploy. The Dockerfile compiles Tailwind and serves the shell; `/health` is the health check.
+3. Wire up CI-gated deploys (below). `render.yaml` sets `autoDeploy: false`, so a push to `main` no longer redeploys by itself. The Dockerfile compiles Tailwind, installs the exact dependency set from `uv.lock`, and serves the shell; `/health` is the health check.
 4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
@@ -167,6 +167,29 @@ Render's deploys are zero-downtime: the new instance starts, passes `/health`, a
 - **No corruption.** Whichever instance saves second with a stale etag gets `ConcurrentModificationError`, not a silent overwrite — the record itself stays consistent.
 - **Double generation cost.** The etag guard only protects the *write*. Both instances' `execute()` calls run the pipeline's step functions before either one saves, so the same narration/image/LLM calls can be paid for twice for one run during the overlap window. This is a real-money cost, not just wasted CPU, and there is no fix in this change — just this note. The product's volume (household-scale, ADR-005) and the overlap window's short duration keep the blast radius small; revisit with a run-level lock (e.g. a conditional "claim" write) if double-billing ever actually shows up in provider usage.
 - **Shutdown cancellation detaches rather than stops.** `lifespan`'s shutdown calls `resume_task.cancel()`, which raises `CancelledError` into the task at its next `await` — but when that `await` is `asyncio.to_thread(...)`, the underlying OS thread keeps running to completion in the background; Python cannot forcibly kill a thread. A cancelled boot resume's generation call can keep making provider calls and writing artifacts after the owning instance has otherwise shut down, orphaned and unobserved. This is a known limitation of `asyncio.to_thread` cancellation generally, not specific to this feature, and is accepted rather than worked around here.
+
+### Deploys are gated on CI (AI-479)
+
+Production ships only after CI passes. The `deploy` job in `.github/workflows/ci.yml` runs on a push to `main`, waits for the `CI Success` gate (lint, types, Python and JS tests, E2E, the security scan, the Docker build and the R2 audit), and then POSTs to a Render **deploy hook**. It never runs on pull requests. Without the hook secret it skips with a notice instead of failing, so forks stay green. `tests/test_deploy_pipeline.py` holds these rules in place.
+
+One-time operator setup:
+
+1. Render → the `cantastorie` service → **Settings** → **Deploy Hook** → copy the URL. Treat it as a credential: anyone holding it can trigger a deploy.
+2. GitHub → the repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**, named **`RENDER_DEPLOY_HOOK_URL`**, with the hook URL as its value.
+3. Render → the service → **Settings** → **Build & Deploy** → confirm **Auto-Deploy** is **Off**. The dashboard setting can override `render.yaml`. If it is left on, Render still deploys every push before CI finishes, and the gate does nothing.
+4. Merge something small to `main` and check that the `Deploy to Render` job runs last and that a new deploy appears in Render's **Events** tab.
+
+Each deploy ships exactly the commit CI tested: the job appends `&ref=$GITHUB_SHA` to the hook URL. A newer commit on `main` that is still in CI never rides along on an older run's deploy.
+
+### Rolling back
+
+Pick whichever is fastest:
+
+- **Render dashboard (fastest).** Service → **Events** (or **Deploys**) → find the last good deploy → **Rollback**. This redeploys that build's image without rebuilding. Remember that `main` still holds the bad commit: the next green merge redeploys it unless you also revert it.
+- **Revert on `main` (durable).** `git revert <bad-sha>` → PR → merge. CI runs on the revert and the `deploy` job ships it. Use this to make the rollback permanent after a dashboard rollback.
+- **Manual redeploy.** Render → **Manual Deploy** → **Deploy a specific commit** to pick a prior commit; or fire the hook yourself with `curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}&ref=<good-sha>"` (drop `&ref=…` to redeploy `main`'s current head, for example after fixing a dashboard env var).
+
+Story content is not part of a deploy. Published stories live in R2 and roll back through the publish pipeline, not through Render.
 
 ### Preview environments (AI-464)
 

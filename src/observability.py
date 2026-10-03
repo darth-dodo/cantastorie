@@ -21,6 +21,8 @@ from openai import AsyncOpenAI
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import httpx
+
     from src.config import Settings
 
 P = ParamSpec("P")
@@ -56,11 +58,14 @@ def init_error_monitoring(settings: Settings) -> None:
     )
 
 
-def build_traced_openai_client(settings: Settings) -> AsyncOpenAI:
+def build_traced_openai_client(
+    settings: Settings, *, http_client: httpx.AsyncClient | None = None
+) -> AsyncOpenAI:
     return wrap_openai(
         AsyncOpenAI(
             base_url=settings.openrouter_base_url,
             api_key=settings.openrouter_api_key.get_secret_value(),
+            http_client=http_client,
         )
     )
 

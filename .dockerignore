@@ -1,0 +1,50 @@
+# Keep the build context to what the Dockerfile COPYs: package.json,
+# package-lock.json, pyproject.toml, uv.lock, README.md and src/.
+# Never exclude those, or anything under src/ the app serves (its PNGs included).
+
+# Secrets: never send these to the daemon
+.env
+.env.*
+!.env.example
+
+# Environments and dependencies (rebuilt inside the image)
+.venv/
+node_modules/
+
+# VCS, agent and editor state
+.git/
+.github/
+.claude/
+.opencode/
+.idea/
+.vscode/
+.DS_Store
+
+# Python caches
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+coverage/
+
+# Test output
+test-results/
+playwright-report/
+blob-report/
+
+# Not needed at runtime
+docs/
+tests/
+scripts/
+deploy/
+dist/
+build/
+*.log
+
+# Stray screenshots anywhere; the app's own images under src/ stay
+**/*.png
+!src/**/*.png

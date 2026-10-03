@@ -91,6 +91,8 @@ The practical effect is that every family-lane story reaching a child is vetted 
 
 **Fix**: add a family-scoped staged-story view (the operator's `workshop/story.html` can be reused, scoped by `ctx.family_token` through the run record) and gate the approve button on it. Until that exists, remove the "nothing reaches a child unseen" copy from the parent lane.
 
+**Fixed in code** 2026-09-28 (Linear AI-475). The Being-made row has no approve fallback; opening a story's review page records it on the run, and `POST /parent/packs/{id}/approve` answers 409 unless every staged story was reviewed and still exists.
+
 ---
 
 ### B3 — A live `/parent` link sits on the child's shelf
@@ -130,6 +132,8 @@ Text can pass all nine rules while the rendered illustration is frightening or t
 A rule that always passes is worse than no rule, because it reads as coverage.
 
 **Fix**: enable provider safety filters on the image call and add a vision-model pass over each rendered image against `calm_pictures` before assemble. Either give the rule something real to judge, or remove it from the nine.
+
+Fixed in code (AI-476): `calm_pictures` left the text gate; a cross-family vision judge now checks every rendered page, card and cover, with bounded redraws then rejection (ADR-011). OpenRouter exposes no safety setting for the configured image model, so none could be enabled.
 
 ---
 
@@ -210,6 +214,8 @@ The failure-state e2e tests use `route.abort()`, which rejects instantly; no tes
 
 **Fix**: wrap both fetches in `AbortSignal.timeout(...)` — the codebase already uses this pattern for the story-start prompt — falling into the existing offline screen and page-timer fallbacks.
 
+Fixed in code (AI-473). After review, a published cover whose story fails to load shows the clouds instead of the page timer, and narration loads time out too.
+
 ---
 
 ### B9 — Narration dies permanently when the device sleeps
@@ -277,6 +283,8 @@ Render deploys on push to `main` without waiting for CI, so a merge failing lint
 `uv.lock` is copied and then ignored — `uv pip install --system .` resolves fresh from `pyproject.toml`, whose constraints are lower bounds. CI tests the locked set; production installs something else. `pydantic-ai>=0.4.0` is pre-1.0 and the pipeline depends on its structured-output behaviour.
 
 **Fix**: `autoDeploy: false` with deployment gated on CI success; install from the lockfile.
+
+Fixed in code (AI-479). Still to do by an operator: set the `RENDER_DEPLOY_HOOK_URL` secret, confirm Auto-Deploy is off in the Render dashboard, and rehearse one rollback ([setup.md](../setup.md#deploys-are-gated-on-ci-ai-479)).
 
 ### H4 — No global spend ceiling
 
@@ -448,13 +456,14 @@ Ordered by risk reduction per unit of effort.
 - [ ] `R2_PENDING_BUCKET` set to a separate private bucket, present in `render.yaml`, and enforced by a validator that refuses `pending_bucket == r2_bucket` (B1) — `render.yaml` and validator done (AI-469); setting the bucket in Render is an operator step
 - [ ] Audit extended to sweep `Prefix="pending/"` on the public bucket, with a test; run once against the live bucket (B1) — sweep and test done (AI-469); the live run is an operator step
 - [x] `docs/setup.md:51` corrected, or made true by the above (B1)
-- [ ] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
+- [x] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
-- [ ] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)
-- [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
+- [x] No provider image-safety setting exists (OpenRouter exposes none); `calm_pictures` moved to a post-illustration vision judge (B4)
+- [x] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
+  - **Fixed in code (AI-483).** The parent's own `/parent/packs/{id}/progress` poll now calls `reap_stale()` too, mirroring the operator dashboard's poll (`src/api/routes/workshop.py`'s `run_progress()`) — a family self-heals behind a stranded run without needing an operator to notice. The B5 half of this line (the boot-time FastAPI `lifespan`) ships separately under AI-477.
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
-- [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
+- [x] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
 - [x] Spoken prompt lines and a publish command for every language in the selector; CI guards the roster (H6, code side). Fixed in code (AI-481); prod prompts pending operator run
 - [ ] Native review of the machine-drafted prompt lines, then `publish-prompts --language all --yes` against production and the `--local` fixtures committed (H6, operator step)

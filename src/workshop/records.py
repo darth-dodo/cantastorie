@@ -94,6 +94,9 @@ class RunRecord(BaseModel):
     request: PackRequest
     state: RunState = "queued"
     story_ids: list[str] = Field(default_factory=list)
+    # The staged stories a parent has opened on the review page, which renders
+    # every page (B2). Records saved before review tracking have none: unreviewed.
+    reviewed_story_ids: list[str] = Field(default_factory=list)
     error: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -114,9 +117,25 @@ class RunRecord(BaseModel):
                 # A retry starts clean; a failure carries its reason.
                 "error": error if state == "failed" else None,
                 "story_ids": self.story_ids if story_ids is None else story_ids,
+                # Freshly staged stories have not been seen yet.
+                "reviewed_story_ids": [] if state == "staged" else self.reviewed_story_ids,
                 "updated_at": datetime.now(UTC),
             }
         )
+
+    @property
+    def unreviewed_story_ids(self) -> list[str]:
+        return [s for s in self.story_ids if s not in self.reviewed_story_ids]
+
+    @property
+    def fully_reviewed(self) -> bool:
+        """Every staged story was opened for review — and there is at least one."""
+        return bool(self.story_ids) and not self.unreviewed_story_ids
+
+    def mark_reviewed(self, story_id: str) -> RunRecord:
+        if story_id in self.reviewed_story_ids:
+            return self
+        return self.model_copy(update={"reviewed_story_ids": [*self.reviewed_story_ids, story_id]})
 
 
 def new_run(family_token: str, request: PackRequest) -> RunRecord:

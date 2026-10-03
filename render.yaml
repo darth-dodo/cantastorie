@@ -36,8 +36,9 @@ services:
     region: frankfurt
     branch: main
 
-    # Auto-deploy on push to main branch
-    autoDeploy: true
+    # No auto-deploy: CI's deploy job fires the Render deploy hook after
+    # ci-success passes on main (H3, AI-479; docs/setup.md).
+    autoDeploy: false
 
     # Health Check Configuration
     healthCheckPath: /health

@@ -2,8 +2,11 @@
 
 One linear pass (docs/architecture.md "The Authoring Pipeline": a batch job, not
 an agent) that turns a theme and a language into a story staged for the operator
-to review: author_story → narrate → illustrate → assemble → stage, against the
-story's own working folder content/{story-id}/ via the content-addressed cache.
+to review: author_story → narrate → illustrate → image safety → assemble →
+stage, against the story's own working folder content/{story-id}/ via the
+content-addressed cache. Illustration runs through illustrate_safely: every rendered image a child sees
+is judged by a cross-family vision model, redrawn on a fail up to a bound, and
+the run fails with ImageSafetyRejectedError past it.
 Every step is a pure cache lookup on a re-run, so a repeated generate re-buys
 nothing.
 
@@ -24,7 +27,7 @@ from src.observability import typed_traceable
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.publish import _build_client, stage_story
 from src.pipeline.steps.assemble import assemble_story
-from src.pipeline.steps.illustrate import illustrate_story
+from src.pipeline.steps.image_safety import illustrate_safely
 from src.pipeline.steps.narrate import (
     narrate_choice_labels,
     narrate_pages,
@@ -54,9 +57,10 @@ def generate_story(
     revise_model: Model | None = None,
     narration_client: NarrationClient | None = None,
     image_transport: httpx.BaseTransport | None = None,
+    image_safety_model: Model | None = None,
     premise: str | None = None,
 ) -> str:
-    """Author, narrate, illustrate, assemble, and stage one story.
+    """Author, narrate, illustrate (image-safety judged), assemble, and stage one story.
 
     Returns the R2 key prefix for the staged story. Publishing is a separate,
     operator-gated step.
@@ -78,7 +82,9 @@ def generate_story(
     narrated = narrate_pages(story.pages, language, settings, cache, narration_client)
     narrated = narrate_choice_labels(narrated, language, settings, cache, client=narration_client)
     story = story.model_copy(update={"pages": narrated})
-    illustrations = illustrate_story(story, settings, cache, transport=image_transport)
+    illustrations = illustrate_safely(
+        story, settings, cache, transport=image_transport, judge_model=image_safety_model
+    )
     assembled = assemble_story(story, illustrations)
 
     s3 = _build_client(settings)

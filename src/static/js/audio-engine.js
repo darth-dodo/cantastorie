@@ -11,6 +11,12 @@ import { createMachine, interpret } from "./fsm.js";
 
 export const CROSSFADE_SECONDS = 0.9; // slow crossfades only
 
+// Time to headers, not to the whole body: a large WAV shares bandwidth with
+// the whole-story prefetch, so a slow-but-moving download must not be cut
+// off. A fetch that never answers at all is aborted, rejects, and is evicted
+// from the cache, so the bird appears and the retry tap refetches.
+export const AUDIO_LOAD_TIMEOUT_MS = 8000;
+
 const narrationMachine = createMachine({
   initial: "idle",
   states: {
@@ -25,6 +31,7 @@ export function createAudioEngine({
   createContext = () => new (globalThis.AudioContext ?? globalThis.webkitAudioContext)(),
   fetchFn = (...args) => globalThis.fetch(...args),
   crossfadeSeconds = CROSSFADE_SECONDS,
+  audioLoadTimeoutMs = AUDIO_LOAD_TIMEOUT_MS,
 } = {}) {
   let ctx = null;
   const buffers = new Map();
@@ -145,9 +152,15 @@ export function createAudioEngine({
     async load(url) {
       ensureContext();
       if (!buffers.has(url)) {
+        const controller = new AbortController();
+        const timer = setTimeout(
+          () => controller.abort(new Error(`audio fetch timed out: ${url}`)),
+          audioLoadTimeoutMs,
+        );
         buffers.set(
           url,
-          fetchFn(url)
+          fetchFn(url, { signal: controller.signal })
+            .finally(() => clearTimeout(timer)) // headers arrived (or the fetch failed)
             .then((res) => {
               if (!res.ok) throw new Error(`audio fetch failed: ${url} (${res.status})`);
               return res.arrayBuffer();

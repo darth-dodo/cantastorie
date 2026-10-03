@@ -6,6 +6,7 @@ import {
   STORY_START_LOAD_TIMEOUT_MS,
 } from "../../src/static/js/playback.js";
 import { createStore } from "../../src/static/js/store.js";
+import { createAudioEngine } from "../../src/static/js/audio-engine.js";
 
 // Playback-loop specs (AI-364), named for the behaviors in docs/product.md
 // -> "A Story Night, Start to Finish": the story start prompt after the
@@ -998,5 +999,54 @@ describe("Stall watchdog (B9) — a frozen voice hands the stage to the sleeping
     expect(pause).not.toHaveBeenCalled();
     expect(store.state.audioError).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("A narration fetch that never answers (B8 review, AI-473)", () => {
+  // The real engine over a minimal fake context, so the time-to-headers
+  // timeout in engine.load() is what ends the wait, not a test double.
+  function minimalContext() {
+    return {
+      currentTime: 0,
+      state: "running",
+      destination: {},
+      resume: async () => {},
+      decodeAudioData: async () => ({ duration: 10 }),
+      createGain: () => ({
+        gain: { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {} },
+        connect() {},
+      }),
+      createBufferSource: () => ({ buffer: null, onended: null, connect() {}, start() {}, stop() {} }),
+    };
+  }
+
+  it("a hung page-1 fetch wakes the bird, and the retry tap refetches and narrates", async () => {
+    let up = false;
+    const narrationFetches = [];
+    const fetchFn = (url, { signal } = {}) => {
+      narrationFetches.push(url);
+      if (up) return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal.reason ?? new Error("aborted")));
+      });
+    };
+    const realEngine = createAudioEngine({
+      createContext: minimalContext,
+      fetchFn,
+      audioLoadTimeoutMs: 30,
+    });
+    playback = createPlayback({ store, engine: realEngine, prefetcher: null, prompts: {} });
+    await playback.openStory(fixtureStory());
+
+    // Without a timeout the load never settles: no voice, no bird, silence.
+    await vi.waitFor(() => expect(store.state.audioError).toBe(true));
+    expect(realEngine.state).not.toBe("playing");
+
+    up = true;
+    store.retryAudio(); // the bird was tapped
+    await vi.waitFor(() => expect(realEngine.state).toBe("playing"));
+    expect(store.state.audioError).toBe(false);
+    expect(narrationFetches.filter((url) => url === "/s/p1.wav")).toHaveLength(2);
+    playback.clearStory();
   });
 });
