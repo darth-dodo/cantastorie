@@ -23,10 +23,12 @@ from src.api.routes.published import router as published_router
 from src.api.routes.workshop import get_run_manager
 from src.api.routes.workshop import router as workshop_router
 from src.config import get_settings
-from src.observability import init_error_monitoring, init_observability
+from src.observability import configure_logging, init_error_monitoring, init_observability
 from src.workshop.manager import RunManager
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+logger = logging.getLogger(__name__)
 
 
 async def _reap_and_resume(manager: RunManager) -> None:
@@ -48,10 +50,11 @@ async def _reap_and_resume(manager: RunManager) -> None:
     shutdown cancellation still propagates to the lifespan's suppress block.
     """
     try:
-        await asyncio.to_thread(manager.reap_stale)
+        reaped = await asyncio.to_thread(manager.reap_stale)
+        logger.info("boot_reap", extra={"event": "boot_reap", "reaped": len(reaped)})
         await manager.resume_on_boot()
     except Exception as error:
-        logging.getLogger(__name__).exception("boot resume failed")
+        logger.exception("boot_resume_failed", extra={"event": "boot_resume_failed"})
         sentry_sdk.capture_exception(error)
 
 
@@ -85,6 +88,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # Logging first, so anything the rest of startup logs is already formatted
+    # and on stdout (B6, AI-485). Idempotent: tests build many apps.
+    configure_logging(settings)
     # Sentry and LangSmith are wired up here, before the FastAPI app (and so
     # before `lifespan` can ever run) is even constructed — a background-task
     # failure during boot resume is always reported to an already-initialized

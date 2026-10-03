@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from src.observability import typed_traceable
+from src.observability import timed_step, typed_traceable
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.publish import _build_client, stage_story
 from src.pipeline.steps.assemble import assemble_story
@@ -79,23 +79,29 @@ def generate_story(
         revise_model=revise_model,
         premise=premise,
     )
-    narrated = narrate_pages(story.pages, language, settings, cache, narration_client)
-    narrated = narrate_choice_labels(narrated, language, settings, cache, client=narration_client)
+    with timed_step("narrate", story_id=story_id, pages=len(story.pages)):
+        narrated = narrate_pages(story.pages, language, settings, cache, narration_client)
+        narrated = narrate_choice_labels(
+            narrated, language, settings, cache, client=narration_client
+        )
     story = story.model_copy(update={"pages": narrated})
     illustrations = illustrate_safely(
         story, settings, cache, transport=image_transport, judge_model=image_safety_model
     )
-    assembled = assemble_story(story, illustrations)
+    with timed_step("assemble", story_id=story_id):
+        assembled = assemble_story(story, illustrations)
 
     s3 = _build_client(settings)
     if language == "it":
-        synthesize_utterances(
-            settings,
-            cache,
-            out_dir=settings.staging_dir,
-            language=language,
-            client=narration_client,
-            s3_client=s3,
-        )
+        with timed_step("narrate_prompts", story_id=story_id):
+            synthesize_utterances(
+                settings,
+                cache,
+                out_dir=settings.staging_dir,
+                language=language,
+                client=narration_client,
+                s3_client=s3,
+            )
 
-    return stage_story(assembled, settings, client=s3)
+    with timed_step("stage", story_id=story_id):
+        return stage_story(assembled, settings, client=s3)

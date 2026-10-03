@@ -2,9 +2,9 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import AliasChoices, Field, SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # OpenRouter's own routers (e.g. openrouter/auto) pick a model per request, so
@@ -170,6 +170,16 @@ class Settings(BaseSettings):
     sentry_release: str = Field(
         default="", validation_alias=AliasChoices("sentry_release", "RENDER_GIT_COMMIT")
     )
+
+    # Application log level for src.* loggers (B6, AI-485): one key=value line
+    # per event to stdout, read in Render's Logs tab. Third-party loggers stay
+    # at WARNING regardless; uvicorn keeps its own access/error handlers.
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper_log_level(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
 
     @property
     def pending_bucket(self) -> str:

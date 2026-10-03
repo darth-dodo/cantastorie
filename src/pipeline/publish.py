@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +36,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
+from src.observability import family_hash
 from src.pipeline.models import Language, Story, Theme
 
 if TYPE_CHECKING:
@@ -45,6 +47,8 @@ if TYPE_CHECKING:
 
     from src.config import Settings
     from src.pipeline.steps.assemble import AssembledStory
+
+logger = logging.getLogger(__name__)
 
 PUBLISHED_PREFIX = "published"
 FAMILIES_SEGMENT = "families"
@@ -71,6 +75,13 @@ def _publish_root(family_token: str | None) -> str:
     if not _FAMILY_TOKEN_RE.fullmatch(family_token):
         raise ValueError(f"invalid family token for overlay publish: {family_token!r}")
     return f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/{family_token}"
+
+
+def _lane_fields(family_token: str | None) -> dict[str, str]:
+    """Log fields naming a publish lane — the token itself only ever as its hash."""
+    if family_token is None:
+        return {"lane": "shared"}
+    return {"lane": "family", "family": family_hash(family_token)}
 
 
 CONTENT_TYPES = {
@@ -528,6 +539,17 @@ def publish_story(
     uploaded.extend(manifest_uploaded)
     skipped.extend(manifest_skipped)
 
+    logger.info(
+        "story_published",
+        extra={
+            "event": "story_published",
+            **_lane_fields(family_token),
+            "story_id": story_id,
+            "language": language,
+            "uploaded": len(uploaded),
+            "skipped": len(skipped),
+        },
+    )
     return PublishResult(
         story_id=story_id,
         uploaded=uploaded,
@@ -584,6 +606,16 @@ def unpublish_story(
         keys.extend({"Key": item["Key"]} for item in page.get("Contents", []))
     for start in range(0, len(keys), 1000):
         client.delete_objects(Bucket=bucket, Delete={"Objects": keys[start : start + 1000]})
+    logger.info(
+        "story_unpublished",
+        extra={
+            "event": "story_unpublished",
+            **_lane_fields(family_token),
+            "story_id": story_id,
+            "language": language,
+            "deleted": len(keys),
+        },
+    )
 
 
 def _manifest_prefixes_under(client: S3Client, bucket: str, root: str) -> list[str]:

@@ -12,7 +12,7 @@ from typing import Literal, cast, get_args
 import typer
 
 from src.config import get_settings
-from src.observability import init_error_monitoring, init_observability
+from src.observability import configure_logging, init_error_monitoring, init_observability
 from src.pipeline.generate import generate_story
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.prompts import PromptPublishResult, publish_prompts, write_dev_prompts
@@ -53,6 +53,7 @@ def generate(
         raise typer.Exit(1)
 
     settings = get_settings()
+    configure_logging(settings)
     init_observability(settings)
     init_error_monitoring(settings)
     staged = generate_story(
