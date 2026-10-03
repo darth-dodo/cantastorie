@@ -148,7 +148,7 @@ One-time operator setup:
 3. Render → the service → **Settings** → **Build & Deploy** → confirm **Auto-Deploy** is **Off**. The dashboard setting can override `render.yaml`. If it is left on, Render still deploys every push before CI finishes, and the gate does nothing.
 4. Merge something small to `main` and check that the `Deploy to Render` job runs last and that a new deploy appears in Render's **Events** tab.
 
-The hook deploys the branch's latest commit. If two merges land close together, the later CI run ships the later commit either way.
+Each deploy ships exactly the commit CI tested: the job appends `&ref=$GITHUB_SHA` to the hook URL. A newer commit on `main` that is still in CI never rides along on an older run's deploy.
 
 ### Rolling back
 
@@ -156,7 +156,7 @@ Pick whichever is fastest:
 
 - **Render dashboard (fastest).** Service → **Events** (or **Deploys**) → find the last good deploy → **Rollback**. This redeploys that build's image without rebuilding. Remember that `main` still holds the bad commit: the next green merge redeploys it unless you also revert it.
 - **Revert on `main` (durable).** `git revert <bad-sha>` → PR → merge. CI runs on the revert and the `deploy` job ships it. Use this to make the rollback permanent after a dashboard rollback.
-- **Manual redeploy.** Render → **Manual Deploy** → **Deploy a specific commit** to pick a prior commit; or `curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"` to redeploy `main`'s current head, for example after fixing a dashboard env var.
+- **Manual redeploy.** Render → **Manual Deploy** → **Deploy a specific commit** to pick a prior commit; or fire the hook yourself with `curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}&ref=<good-sha>"` (drop `&ref=…` to redeploy `main`'s current head, for example after fixing a dashboard env var).
 
 Story content is not part of a deploy. Published stories live in R2 and roll back through the publish pipeline, not through Render.
 

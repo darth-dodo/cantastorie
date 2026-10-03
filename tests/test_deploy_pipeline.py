@@ -51,6 +51,13 @@ def test_deploy_fires_the_render_hook_from_a_secret() -> None:
     assert "secrets." not in run
 
 
+def test_deploy_ships_exactly_the_commit_ci_tested() -> None:
+    # Without ref, the hook deploys the branch head, which may be a newer
+    # commit whose own CI has not finished.
+    run = "\n".join(step.get("run", "") for step in _deploy_job()["steps"])
+    assert "ref=${GITHUB_SHA}" in run
+
+
 def test_deploy_skips_cleanly_without_the_secret() -> None:
     run = "\n".join(step.get("run", "") for step in _deploy_job()["steps"])
     assert '-z "$RENDER_DEPLOY_HOOK_URL"' in run

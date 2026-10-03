@@ -303,5 +303,7 @@ jobs:
             echo "::notice title=Deploy skipped::RENDER_DEPLOY_HOOK_URL is not set; nothing was deployed (see docs/setup.md)."
             exit 0
           fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          # ref pins the deploy to the commit this run tested, not the
+          # branch head (which may be a newer commit still in CI).
+          curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}" > /dev/null
           echo "Render deploy triggered for ${GITHUB_SHA}."
