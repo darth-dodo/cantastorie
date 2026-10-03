@@ -97,7 +97,7 @@ def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None
     for run in runs:
         if run.state in ("queued", "running"):
             return RunCapExceeded(
-                "a story pack is already being made for this family",
+                "a story is already being made for this family",
                 active=run,
             )
     today = datetime.now(UTC).date()
@@ -109,20 +109,20 @@ def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None
         if created.date() == today:
             started_today += 1
     if started_today >= daily_cap:
-        return RunCapExceeded("that's all the story packs for today — tomorrow brings more")
+        return RunCapExceeded("that's all the stories for today — tomorrow brings more")
     return None
 
 
-def _generate_pack(request: StoryRequest, settings: Settings) -> list[str]:
-    """Default generation seam: one generate_story pass for the one story."""
-    prefix = generate_story(
+def _generate_staged_story(request: StoryRequest, settings: Settings) -> str:
+    """Default generation seam: one generate_story pass for the run's one
+    story. Returns its staged R2 prefix (pending/staged/{story-id})."""
+    return generate_story(
         request.theme,
         request.language,
         settings,
         shape=request.shape,
         premise=request.premise,
     )
-    return [prefix]
 
 
 class RunManager:
@@ -133,11 +133,11 @@ class RunManager:
         store: RunStore,
         settings: Settings,
         *,
-        generate_pack: Callable[[StoryRequest, Settings], list[str]] | None = None,
+        generate: Callable[[StoryRequest, Settings], str] | None = None,
     ) -> None:
         self._store = store
         self._settings = settings
-        self._generate_pack = generate_pack or _generate_pack
+        self._generate = generate or _generate_staged_story
         self._lock = asyncio.Lock()
         # Throttle state for reap_stale: the progress poll calls it every ~2s,
         # but a sweep only matters relative to run_stale_after_seconds. None means
@@ -162,7 +162,6 @@ class RunManager:
                 "theme": request.theme,
                 "language": request.language,
                 "shape": request.shape,
-                "count": request.count,
                 "has_premise": request.premise is not None,
             },
         )
@@ -194,11 +193,8 @@ class RunManager:
             started = time.perf_counter()
             try:
                 with run_context(record.id):
-                    staged = await asyncio.to_thread(
-                        self._generate_pack, record.request, self._settings
-                    )
-                story_id = next((p.rsplit("/", 1)[-1] for p in staged), None)
-                record = record.advance("staged", story_id=story_id)
+                    prefix = await asyncio.to_thread(self._generate, record.request, self._settings)
+                record = record.advance("staged", story_id=prefix.rsplit("/", 1)[-1])
                 logger.info(
                     "run_staged",
                     extra={

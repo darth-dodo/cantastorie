@@ -73,7 +73,9 @@ class Harness:
             }
         )
         self.store = RunStore(self.settings, client=s3)
-        self.manager = RunManager(self.store, self.settings, generate_pack=lambda request, s: [])
+        self.manager = RunManager(
+            self.store, self.settings, generate=lambda request, s: "pending/staged/stub"
+        )
         # Capture (story_id, family_token) pairs instead of touching R2.
         self.published: list[tuple[str, str | None]] = []
         app = create_app()

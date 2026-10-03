@@ -62,13 +62,13 @@ def _blocking_manager(
     """A manager whose generation seam blocks on `hold` — lets a test observe
     that startup returns while the resumed run is still in flight."""
 
-    def generate_pack(request: StoryRequest, st: Settings) -> list[str]:
+    def generate(request: StoryRequest, st: Settings) -> str:
         calls.append(request)
         hold.wait(timeout=5)
         story_id = f"{request.theme}-{request.language}-resumed"
-        return [f"pending/staged/{story_id}"]
+        return f"pending/staged/{story_id}"
 
-    return RunManager(store, settings, generate_pack=generate_pack)
+    return RunManager(store, settings, generate=generate)
 
 
 def _wired_app(settings: Settings, manager: RunManager):
@@ -123,7 +123,7 @@ def test_a_stale_record_is_reaped_at_boot(s3: S3Client) -> None:
     store.save(zombie)
 
     hold = threading.Event()
-    hold.set()  # nothing should ever call generate_pack for a reaped run
+    hold.set()  # nothing should ever call generate for a reaped run
     calls: list[StoryRequest] = []
     manager = _blocking_manager(store, settings, hold, calls)
     app = _wired_app(settings, manager)
@@ -145,7 +145,7 @@ def test_shutdown_cancels_the_boot_resume_task(s3: S3Client) -> None:
     running = new_run("family-abc", REQUEST).advance("running")
     store.save(running)
 
-    hold = threading.Event()  # never set from the test; generate_pack blocks
+    hold = threading.Event()  # never set from the test; generate blocks
     calls: list[StoryRequest] = []
     manager = _blocking_manager(store, settings, hold, calls)
     app = _wired_app(settings, manager)
@@ -155,7 +155,7 @@ def test_shutdown_cancels_the_boot_resume_task(s3: S3Client) -> None:
         _wait_until(lambda: len(calls) == 1)  # resume is in flight
         task = app.state.resume_task
         assert not task.done()
-        # Exiting the `with` block here triggers shutdown while generate_pack
+        # Exiting the `with` block here triggers shutdown while generate
         # is still blocked on `hold` — the task must be cancelled, not waited
         # out to completion.
 
@@ -169,7 +169,7 @@ def test_shutdown_cancels_the_boot_resume_task(s3: S3Client) -> None:
 def test_boot_exception_is_logged_and_reported_without_breaking_health(
     s3: S3Client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """`_generate_pack`'s own try/except (inside RunManager.execute) is not
+    """`_generate_staged_story`'s own try/except (inside RunManager.execute) is not
     the only way this background task can fail — `reap_stale`'s save,
     `resume_on_boot`'s `list_runs`, and `execute`'s store saves all sit
     outside it. Nothing awaits this task, so an unhandled exception there
@@ -186,7 +186,7 @@ def test_boot_exception_is_logged_and_reported_without_breaking_health(
     captured: list[BaseException] = []
     monkeypatch.setattr(main_module.sentry_sdk, "capture_exception", captured.append)
 
-    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
     app = _wired_app(settings, manager)
 
     with caplog.at_level(logging.ERROR, logger="src.api.main"), TestClient(app) as client:

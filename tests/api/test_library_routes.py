@@ -134,7 +134,9 @@ class Harness:
             }
         )
         self.store = RunStore(self.settings, client=s3)
-        self.manager = RunManager(self.store, self.settings, generate_pack=lambda request, s: [])
+        self.manager = RunManager(
+            self.store, self.settings, generate=lambda request, s: "pending/staged/stub"
+        )
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager

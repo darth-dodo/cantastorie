@@ -130,7 +130,8 @@ class Settings(BaseSettings):
 
     # Per-family run caps for the /parent surface (AI-411). One active run per
     # family is always enforced; this bounds how many runs a family may start
-    # per UTC day. Operator submissions from /workshop are exempt.
+    # per UTC day — each run makes one story (AI-480). Operator submissions
+    # from /workshop are exempt.
     parent_daily_run_cap: int = 3
 
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two

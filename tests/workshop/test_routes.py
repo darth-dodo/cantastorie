@@ -133,12 +133,12 @@ class _Harness:
         self.s3 = s3
         self.published: list[str] = []
 
-        def fake_generate(request: StoryRequest, settings: Settings) -> list[str]:
+        def fake_generate(request: StoryRequest, settings: Settings) -> str:
             story_id = f"{request.theme}-{request.language}-fake0001"
             _stage_fake_story(settings, s3, story_id)
-            return [f"pending/staged/{story_id}"]
+            return f"pending/staged/{story_id}"
 
-        self.manager = RunManager(self.store, self.settings, generate_pack=fake_generate)
+        self.manager = RunManager(self.store, self.settings, generate=fake_generate)
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager
