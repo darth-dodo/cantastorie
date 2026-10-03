@@ -9,30 +9,43 @@ token never appears raw — only its salted short hash does.
 import asyncio
 import io
 import logging
+import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
+from fastapi.testclient import TestClient
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.models.test import TestModel
+from sentry_sdk.transport import Transport
+from typer.testing import CliRunner
 
 import src.api.main as main_module
 from src import observability
-from src.config import Settings
+from src.api.main import create_app
+from src.api.routes import published
+from src.config import Settings, get_settings
 from src.observability import (
     LOG_HANDLER_NAME,
     KeyValueFormatter,
+    RunIdFilter,
     configure_logging,
     family_hash,
     init_error_monitoring,
+    run_context,
 )
+from src.pipeline import cli
+from src.pipeline.content_rules import ContentViolation
 from src.pipeline.generate import generate_story
 from src.pipeline.models import IMAGE_SAFETY_CRITERIA
-from src.pipeline.publish import publish_story, unpublish_story
+from src.pipeline.publish import AuditResult, publish_story, unpublish_story
+from src.pipeline.steps.assemble import ContentRulesViolation
 from src.pipeline.steps.image_safety import IMAGE_SAFETY_MAX_REGENERATIONS
 from src.workshop.manager import RunCapExceeded, RunManager
 from src.workshop.records import PackRequest, RunStore
@@ -64,20 +77,27 @@ def s3() -> Iterator[S3Client]:
 
 
 @pytest.fixture
-def info_logs(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
+def info_logs(caplog: pytest.LogCaptureFixture) -> Iterator[pytest.LogCaptureFixture]:
+    # The stdout handler stamps run_id from the run context; give caplog's
+    # handler the same filter so records here look as they do on stdout.
     caplog.set_level(logging.INFO, logger="src")
-    return caplog
+    run_filter = RunIdFilter()
+    caplog.handler.addFilter(run_filter)
+    yield caplog
+    caplog.handler.removeFilter(run_filter)
 
 
 @pytest.fixture
 def restore_logging() -> Iterator[None]:
     root = logging.getLogger()
     src = logging.getLogger("src")
-    saved = (list(root.handlers), root.level, src.level)
+    access = logging.getLogger("uvicorn.access")
+    saved = (list(root.handlers), root.level, src.level, list(access.filters))
     yield
     root.handlers[:] = saved[0]
     root.setLevel(saved[1])
     src.setLevel(saved[2])
+    access.filters[:] = saved[3]
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -190,21 +210,160 @@ def test_configured_handler_writes_to_stdout(capsys: pytest.CaptureFixture[str])
     assert "run_id=r1" in out
 
 
+@pytest.mark.usefixtures("restore_logging")
+def test_every_cli_command_configures_logging(monkeypatch: pytest.MonkeyPatch) -> None:
+    root = logging.getLogger()
+    root.handlers[:] = [h for h in root.handlers if h.get_name() != LOG_HANDLER_NAME]
+    monkeypatch.setattr(
+        cli, "audit_published_bucket", lambda s: AuditResult(violations=[], manifests_checked=0)
+    )
+
+    result = CliRunner().invoke(cli.app, ["audit"])
+
+    assert result.exit_code == 0
+    assert [h for h in root.handlers if h.get_name() == LOG_HANDLER_NAME]
+
+
+def test_quote_escapes_control_characters() -> None:
+    record = logging.LogRecord("src.x", logging.INFO, __file__, 1, "e", None, None)
+    record.event = "e"
+    record.detail = "a\rb\tc\nd"
+
+    line = KeyValueFormatter().format(record)
+
+    assert "\r" not in line
+    assert "\t" not in line
+    assert "\n" not in line
+    assert 'detail="a\\rb\\tc\\nd"' in line
+
+
+@pytest.mark.usefixtures("restore_logging")
+def test_the_stdout_handler_stamps_run_id_from_the_run_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging(Settings(_env_file=None))
+    with run_context("ctx-run"):
+        logging.getLogger("src.test").info("inner", extra={"event": "inner"})
+
+    assert "run_id=ctx-run" in capsys.readouterr().out
+
+
+# --- tracebacks never carry exception messages ----------------------------------
+
+
+def test_formatted_tracebacks_name_exception_types_but_drop_their_messages() -> None:
+    class Draft(BaseModel):
+        pages: list[str]
+
+    try:
+        try:
+            Draft.model_validate({"pages": SENTINEL})
+        except ValidationError as invalid:
+            raise UnexpectedModelBehavior(f"bad output {SENTINEL}") from invalid
+    except UnexpectedModelBehavior:
+        record = logging.LogRecord(
+            "src.x", logging.ERROR, __file__, 1, "run_failed", None, sys.exc_info()
+        )
+    record.event = "run_failed"
+
+    line = KeyValueFormatter().format(record)
+
+    assert SENTINEL not in line
+    assert "UnexpectedModelBehavior" in line
+    assert "ValidationError" in line
+    assert "Traceback (most recent call last)" in line
+
+
+# --- uvicorn access log and the published proxy carry no raw token --------------
+
+
+@pytest.mark.usefixtures("restore_logging")
+def test_access_log_lines_have_family_tokens_replaced_by_their_hash(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    configure_logging(Settings(_env_file=None))
+    configure_logging(Settings(_env_file=None))
+    access = logging.getLogger("uvicorn.access")
+    assert len([f for f in access.filters if isinstance(f, observability.AccessLogRedactor)]) == 1
+    caplog.set_level(logging.INFO, logger="uvicorn.access")
+
+    for path in (
+        f"/published/families/{FAMILY}/it/manifest.json",
+        f"/workshop/library?family_token={FAMILY}&x=1",
+    ):
+        access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4:5", "GET", path, "1.1", 200)
+
+    messages = [r.getMessage() for r in caplog.records if r.name == "uvicorn.access"]
+    assert len(messages) == 2
+    for message in messages:
+        assert FAMILY not in message
+        assert family_hash(FAMILY) in message
+
+
+def test_the_published_proxy_warning_carries_no_raw_token(
+    monkeypatch: pytest.MonkeyPatch, info_logs: pytest.LogCaptureFixture
+) -> None:
+    error = ClientError({"Error": {"Code": "AccessDenied", "Message": "nope"}}, "GetObject")
+
+    class _Denied:
+        def get_object(self, **_: object) -> None:
+            raise error
+
+    monkeypatch.setattr(published, "_build_client", lambda _settings: _Denied())
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, r2_bucket=BUCKET)
+
+    response = TestClient(app).get(f"/published/families/{FAMILY}/it/manifest.json")
+
+    assert response.status_code == 404
+    [warning] = _events(info_logs, "published_proxy_error")
+    assert warning.family == family_hash(FAMILY)  # type: ignore[attr-defined]
+    assert warning.path == "families/<family>/it/manifest.json"  # type: ignore[attr-defined]
+    _scan_for(FAMILY, info_logs)
+
+
 # --- Sentry does not double-report ------------------------------------------------
 
 
-def test_sentry_logging_integration_records_breadcrumbs_but_no_events(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(observability.sentry_sdk, "init", lambda **kwargs: calls.append(kwargs))
+class _EnvelopeSink(Transport):
+    def __init__(self, options: Any = None) -> None:
+        super().__init__(options)
+        self.events: list[dict[str, Any]] = []
 
+    def capture_envelope(self, envelope: Any) -> None:
+        for item in envelope.items:
+            if item.type == "event":
+                self.events.append(item.payload.json)
+
+
+@pytest.fixture
+def sentry_sink(monkeypatch: pytest.MonkeyPatch) -> Iterator[_EnvelopeSink]:
+    sink = _EnvelopeSink()
+    real_init = observability.sentry_sdk.init
+    monkeypatch.setattr(
+        observability.sentry_sdk, "init", lambda **kwargs: real_init(transport=sink, **kwargs)
+    )
+    yield sink
+    real_init()  # back to a disabled client
+
+
+def test_logged_errors_become_breadcrumbs_not_sentry_events(sentry_sink: _EnvelopeSink) -> None:
     init_error_monitoring(Settings(_env_file=None, sentry_dsn="https://key@o1.ingest.sentry.io/1"))
+    log = logging.getLogger("src.test")
 
-    [kwargs] = calls
-    [integration] = [i for i in kwargs["integrations"] if type(i).__name__ == "LoggingIntegration"]
-    assert integration._handler is None  # event_level=None: logger.exception is no event
-    assert integration._breadcrumb_handler is not None
+    log.info("crumb", extra={"event": "crumb"})
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as error:
+        log.exception("run_failed", extra={"event": "run_failed"})
+        logging.getLogger("botocore").error("third-party error")
+        observability.sentry_sdk.capture_exception(error)
+    observability.sentry_sdk.flush()
+
+    [event] = sentry_sink.events
+    assert event["exception"]["values"][-1]["type"] == "RuntimeError"
+    crumbs = [c.get("message") for c in event.get("breadcrumbs", {}).get("values", [])]
+    assert "crumb" in crumbs
 
 
 # --- run lifecycle ---------------------------------------------------------------
@@ -389,8 +548,11 @@ def test_image_redraws_and_rejection_log_slot_attempt_and_criteria_only(
     [rejected] = _events(info_logs, "image_safety_rejected")
     assert rejected.criteria == "no_text"  # type: ignore[attr-defined]
     assert rejected.failed_slots >= 1  # type: ignore[attr-defined]
+    assert rejected.run_id == record.id  # type: ignore[attr-defined]
+    assert all(r.run_id == record.id for r in redraws)  # type: ignore[attr-defined]
     [failed] = _events(info_logs, "run_failed")
     assert failed.run_id == record.id  # type: ignore[attr-defined]
+    assert failed.story_id == rejected.story_id  # type: ignore[attr-defined]
     assert failed.error_type == "ImageSafetyRejectedError"  # type: ignore[attr-defined]
     assert failed.outcome == "safety_rejected"  # type: ignore[attr-defined]
     assert failed.criteria == "no_text"  # type: ignore[attr-defined]
@@ -410,9 +572,36 @@ def test_text_gate_rejection_logs_criteria_without_the_judge_reason(
     assert done.state == "failed"
     [rejected] = _events(info_logs, "story_safety_rejected")
     assert rejected.criteria == "safety/no_brands"  # type: ignore[attr-defined]
+    assert rejected.run_id == record.id  # type: ignore[attr-defined]
     [failed] = _events(info_logs, "run_failed")
+    assert failed.run_id == record.id  # type: ignore[attr-defined]
+    assert failed.story_id == rejected.story_id  # type: ignore[attr-defined]
     assert failed.error_type == "StoryRejectedError"  # type: ignore[attr-defined]
     assert failed.criteria == "safety/no_brands"  # type: ignore[attr-defined]
+    assert failed.failure_count == 1  # type: ignore[attr-defined]
+    assert failed.exc_info is None
+    _scan_for(SENTINEL, info_logs)
+
+
+def test_a_content_rules_violation_logs_rule_names_without_a_traceback(
+    s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
+) -> None:
+    settings = _settings(tmp_path)
+
+    def violate(request: PackRequest, st: Settings) -> list[str]:
+        raise ContentRulesViolation(
+            [ContentViolation(rule="page_words", page_id="p1", detail=f"too long: {SENTINEL}")]
+        )
+
+    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=violate)
+    record = asyncio.run(manager.submit(FAMILY, REQUEST))
+    asyncio.run(manager.execute(record))
+
+    [failed] = _events(info_logs, "run_failed")
+    assert failed.run_id == record.id  # type: ignore[attr-defined]
+    assert failed.error_type == "ContentRulesViolation"  # type: ignore[attr-defined]
+    assert failed.outcome == "safety_rejected"  # type: ignore[attr-defined]
+    assert failed.criteria == "content_rules/page_words"  # type: ignore[attr-defined]
     assert failed.failure_count == 1  # type: ignore[attr-defined]
     assert failed.exc_info is None
     _scan_for(SENTINEL, info_logs)

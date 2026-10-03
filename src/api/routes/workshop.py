@@ -275,7 +275,8 @@ async def delete_published_story(
     request: Request,
     settings: WorkshopSettings,
     story_id: str,
-    family_token: str | None = None,
+    # A form field, never a query param: a URL lands in the access log (B6).
+    family_token: Annotated[str | None, Form()] = None,
 ) -> Response:
     scope = await _scope(request, settings)
     if scope is None:

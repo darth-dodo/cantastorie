@@ -24,6 +24,12 @@ _LANGUAGES = get_args(Language)
 _THEMES = get_args(Theme)
 
 
+@app.callback()
+def _setup() -> None:
+    """Every command logs the same key=value lines the app does (B6)."""
+    configure_logging(get_settings())
+
+
 def _not_yet(issue: str) -> None:
     typer.echo(f"Scaffold: this command arrives with {issue}.")
     raise typer.Exit(2)
@@ -53,7 +59,6 @@ def generate(
         raise typer.Exit(1)
 
     settings = get_settings()
-    configure_logging(settings)
     init_observability(settings)
     init_error_monitoring(settings)
     staged = generate_story(

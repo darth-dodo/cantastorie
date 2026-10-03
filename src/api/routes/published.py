@@ -24,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
 from src.config import Settings, get_settings
+from src.observability import family_hash
 from src.pipeline.publish import CONTENT_TYPES, PUBLISHED_PREFIX, _build_client
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,18 @@ PUBLISHED_PATH = re.compile(
     rf"|prompts/{_LANG}/{_FILE}\.(?:mp3|wav))"
 )
 CHUNK_SIZE = 64 * 1024
+
+_FAMILY_SEGMENT = re.compile(r"^families/([0-9a-f]{32})/")
+
+
+def _log_fields(path: str, code: str) -> dict[str, str]:
+    """The path with any family token segment stripped; the family as its hash."""
+    fields = {"event": "published_proxy_error", "r2_code": code, "path": path}
+    match = _FAMILY_SEGMENT.match(path)
+    if match:
+        fields["path"] = "families/<family>/" + path[match.end() :]
+        fields["family"] = family_hash(match.group(1))
+    return fields
 
 
 def _stream(body: Any) -> Iterator[bytes]:
@@ -63,7 +76,7 @@ def published_asset(
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         if code not in {"NoSuchKey", "404"}:
-            logger.warning("published proxy: R2 %s for %s", code or "error", path)
+            logger.warning("published_proxy_error", extra=_log_fields(path, code or "error"))
         raise HTTPException(status_code=404) from exc
 
     upstream = {

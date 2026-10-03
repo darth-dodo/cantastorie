@@ -25,6 +25,7 @@ import sentry_sdk
 
 from src.observability import family_hash, run_context
 from src.pipeline.generate import generate_story
+from src.pipeline.steps.assemble import ContentRulesViolation
 from src.pipeline.steps.image_safety import ImageSafetyRejectedError
 from src.pipeline.steps.revise import StoryRejectedError
 
@@ -47,9 +48,30 @@ OPERATOR_TOKEN = "operator"
 
 logger = logging.getLogger(__name__)
 
-# Safety gates rejecting a story are expected outcomes whose messages quote the
-# judge; they are logged by criterion name, never with a traceback.
-SAFETY_REJECTIONS = (StoryRejectedError, ImageSafetyRejectedError)
+
+def _safety_rejection_fields(error: Exception) -> dict[str, object] | None:
+    """Log fields for a gate rejecting a story, or None for any other error.
+
+    The text gate, the image gate and the content limits reject stories as an
+    expected outcome, and their messages quote the judge or the story. They are
+    logged by criterion name and count, never with a traceback.
+    """
+    story_id: str | None
+    if isinstance(error, (StoryRejectedError, ImageSafetyRejectedError)):
+        criteria, count, story_id = error.criteria, len(error.failures), error.story.id
+    elif isinstance(error, ContentRulesViolation):
+        criteria = sorted({f"content_rules/{v.rule}" for v in error.violations})
+        count, story_id = len(error.violations), None
+    else:
+        return None
+    fields: dict[str, object] = {
+        "outcome": "safety_rejected",
+        "criteria": ",".join(criteria),
+        "failure_count": count,
+    }
+    if story_id is not None:
+        fields["story_id"] = story_id
+    return fields
 
 
 class RunCapExceeded(Exception):
@@ -205,19 +227,12 @@ class RunManager:
                     "duration_ms": int((time.perf_counter() - started) * 1000),
                     "error_type": type(error).__name__,
                 }
-                if isinstance(error, SAFETY_REJECTIONS):
+                rejection = _safety_rejection_fields(error)
+                if rejection is not None:
                     # An expected domain outcome, not a crash: no exc_info, since
                     # the traceback's last line would carry the judge's free text.
                     # Criterion names and counts only (B6 privacy ruling).
-                    logger.warning(
-                        "run_failed",
-                        extra={
-                            **failure,
-                            "outcome": "safety_rejected",
-                            "criteria": ",".join(error.criteria),
-                            "failure_count": len(error.failures),
-                        },
-                    )
+                    logger.warning("run_failed", extra={**failure, **rejection})
                 else:
                     logger.exception("run_failed", extra=failure)
                 sentry_sdk.capture_exception(error)
