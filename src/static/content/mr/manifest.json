@@ -1,5 +1,11 @@
 {
   "language": "mr",
-  "prompts": {},
+  "prompts": {
+    "greeting": "/static/content/mr/prompts/greeting.wav",
+    "story_start": "/static/content/mr/prompts/story-start.wav",
+    "end": "/static/content/mr/prompts/end.wav",
+    "audio_retry": "/static/content/mr/prompts/audio-retry.wav",
+    "offline": "/static/content/mr/prompts/offline.wav"
+  },
   "stories": []
 }

@@ -326,7 +326,7 @@ This contradicts the product's non-reader premise directly: every failure state 
 
 **Fix**: ship the prompt set for every language in the selector, or gate the selector to languages that have one.
 
-Fixed in code (AI-481); prod prompts pending operator run. Every language has its prompt lines (non-Italian sets machine-drafted, pending native review), `narrate.py` no longer serves Italian for other languages, CI fails on a language without prompts or a selector code outside the roster, and `cantastorie publish-prompts` publishes them (runbook in [`docs/setup.md`](../setup.md#spoken-prompts-for-every-language-h6-ai-481)). Production still has prompts for `it` only until the operator runs it, and the same-origin offline line needs the `--local` fixtures committed.
+Fixed in code (AI-481); prod prompts published 2026-10-03 for all 8 languages (35 TTS calls). Every language has its prompt lines (non-Italian sets machine-drafted, pending native review), `narrate.py` no longer serves Italian for other languages, CI fails on a language without prompts or a selector code outside the roster, and `cantastorie publish-prompts` publishes them (runbook in [`docs/setup.md`](../setup.md#spoken-prompts-for-every-language-h6-ai-481)). Production still has prompts for `it` only until the operator runs it, and the same-origin offline line needs the `--local` fixtures committed.
 
 ### H7 — The unauthenticated content proxy has no path validation and no tests
 
@@ -465,8 +465,9 @@ Ordered by risk reduction per unit of effort.
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [x] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
-- [x] Spoken prompt lines and a publish command for every language in the selector; CI guards the roster (H6, code side). Fixed in code (AI-481); prod prompts pending operator run
-- [ ] Native review of the machine-drafted prompt lines, then `publish-prompts --language all --yes` against production and the `--local` fixtures committed (H6, operator step)
+- [x] Spoken prompt lines and a publish command for every language in the selector; CI guards the roster (H6, code side). Fixed in code (AI-481); prod prompts published 2026-10-03 for all 8 languages (35 TTS calls)
+- [x] `publish-prompts --language all --yes` run against production and the `--local` fixtures committed, guarded by `tests/test_offline_prompts.py` (H6, operator step; 2026-10-03)
+- [ ] Native review of the machine-drafted el/de/bg/ru/mr prompt lines; any edit re-publishes on the next run (H6)
 - [x] Path allowlist and tests on `/published/{path}` (H7)
 - [x] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
