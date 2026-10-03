@@ -96,7 +96,8 @@ class PromptPublishResult(BaseModel):
     skipped: list[str]
     manifest_changed: bool  # on a dry run, whether a real run would change it
     # Why the run did nothing: "complete" (the live manifest already lists all
-    # five prompts). None when the run went ahead.
+    # five prompts) or "no manifest" (refused: the language has no live
+    # manifest to merge into). None when the run went ahead.
     skip_reason: str | None = None
 
     @property
@@ -164,6 +165,9 @@ def publish_prompts(
 
     A language whose live manifest already lists all five prompts is skipped
     (``skip_reason="complete"``, no TTS, no write) unless ``force`` is set.
+    A language with no live manifest is refused (``skip_reason="no
+    manifest"``) unless ``force`` is set: creating one would publish a shelf
+    with no stories. ``write_dev_prompts`` never creates one either.
     """
     if not settings.r2_public_base:
         raise ValueError(
@@ -178,7 +182,18 @@ def publish_prompts(
     def url(file_name: str) -> str:
         return f"{public_base}/prompts/{language}/{file_name}"
 
-    live, _ = load()
+    live, etag = load()
+    if not force and etag is None:
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=manifest_key,
+            lines=_plan_lines(language, settings, {}),
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="no manifest",
+        )
     if not force and has_every_prompt(live):
         live_prompts = live["prompts"]
         listed: dict[UtteranceName, str | None] = {

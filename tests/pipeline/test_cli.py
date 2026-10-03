@@ -398,3 +398,29 @@ def test_publish_prompts_reports_a_complete_language_as_skipped(
 
     runner.invoke(app, ["publish-prompts", "--language", "it", "--yes", "--force"])
     assert forced == [False, True]
+
+
+def test_publish_prompts_exits_one_when_a_language_has_no_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[],
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="no manifest",
+        )
+
+    monkeypatch.setattr(cli, "publish_prompts", fake)
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "es", "--yes"])
+
+    assert result.exit_code == 1
+    assert "es: refused" in result.output
+    assert "--force" in result.output

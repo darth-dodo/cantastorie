@@ -83,6 +83,12 @@ def _report_prompt_run(result: PromptPublishResult, *, local: bool) -> None:
             "all five prompts; rerun with --force to re-narrate"
         )
         return
+    if result.skip_reason == "no manifest":
+        typer.echo(
+            f"{prefix}{result.language}: refused — no live manifest at {result.target}; "
+            "creating one would publish an empty shelf. Rerun with --force to create it"
+        )
+        return
     typer.echo(f"{prefix}{result.language}: {result.target}")
     for line in result.lines:
         state = "cached" if line.cached else "needs TTS"
@@ -111,7 +117,10 @@ def publish_prompts_command(
     force: bool = typer.Option(
         False,
         "--force",
-        help="R2 only: re-narrate a language whose live manifest already lists every prompt",
+        help=(
+            "R2 only: re-narrate a language whose live manifest already lists every "
+            "prompt, or create a missing manifest"
+        ),
     ),
 ) -> None:
     """Narrate and publish the spoken prompts for one language, or all of them."""
@@ -133,6 +142,7 @@ def publish_prompts_command(
         raise typer.Exit(1)
 
     tts_calls = 0
+    refused: list[str] = []
     for code in languages:
         lang = cast("Language", code)
         if local:
@@ -141,8 +151,13 @@ def publish_prompts_command(
             result = publish_prompts(lang, settings, dry_run=dry_run, force=force)
         _report_prompt_run(result, local=local)
         tts_calls += result.tts_calls
+        if result.skip_reason == "no manifest":
+            refused.append(code)
     verb = "Would make" if dry_run else "Made"
     typer.echo(f"{verb} {tts_calls} TTS call(s) across {len(languages)} language(s).")
+    if refused:
+        typer.echo(f"Refused {', '.join(refused)}: no live manifest (see above).")
+        raise typer.Exit(1)
 
 
 @app.command()

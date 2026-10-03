@@ -291,6 +291,38 @@ def test_force_re_narrates_a_complete_language(tmp_path: Path, s3: S3Client) -> 
     assert set(live["prompts"].values()).isdisjoint(reviewed.values())
 
 
+def test_a_language_with_no_live_manifest_is_refused(tmp_path: Path, s3: S3Client) -> None:
+    """Given no live Spanish manifest,
+    When the operator publishes the Spanish prompts (real or dry run),
+    Then the run is refused: no TTS call, no upload, and no manifest is
+    created (it would publish an empty shelf), mirroring --local.
+    """
+    settings = _settings(tmp_path)
+
+    for dry_run in (True, False):
+        calls: list[str] = []
+        result = publish_prompts(
+            "es", settings, client=s3, narration_client=_tts(settings, calls), dry_run=dry_run
+        )
+
+        assert calls == []
+        assert result.skip_reason == "no manifest"
+        assert result.tts_calls == 0
+    assert _prompt_keys(s3) == []
+    assert "Contents" not in s3.list_objects_v2(Bucket=BUCKET, Prefix=MANIFEST_KEY)
+
+
+def test_force_creates_a_missing_manifest(tmp_path: Path, s3: S3Client) -> None:
+    settings = _settings(tmp_path)
+
+    result = publish_prompts(
+        "es", settings, client=s3, narration_client=_tts(settings, []), force=True
+    )
+
+    assert result.skip_reason is None
+    assert set(_manifest(s3)["prompts"]) == set(MANIFEST_PROMPT_KEYS.values())
+
+
 def test_publishing_requires_the_public_base(tmp_path: Path, s3: S3Client) -> None:
     settings = _settings(tmp_path).model_copy(update={"r2_public_base": ""})
     with pytest.raises(ValueError, match="R2_PUBLIC_BASE"):
