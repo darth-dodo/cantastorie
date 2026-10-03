@@ -152,6 +152,8 @@ Compounding this, `CONTENT_DIR` points at `/tmp` with no Render disk, so the con
 
 **Fix**: wire `reap_stale()` and a non-blocking `resume_on_boot()` into a FastAPI `lifespan`. `resume_on_boot` awaits each run sequentially as written, so it must be scheduled as a task rather than awaited during startup, or the health check will fail and Render will roll the deploy back in a loop.
 
+**Fixed in code (AI-477).** A `lifespan` in `src/api/main.py`, gated on R2 being configured, schedules `reap_stale()` then `resume_on_boot()` as a background `asyncio.Task` on startup (`resume_on_boot`'s own `list_runs()` scan is now off the event loop too) and cancels it cleanly on shutdown; `/health` stays responsive throughout. Exceptions inside that task (a store save, `list_runs`, anything not already covered by `execute`'s own try/except) are now logged and reported to Sentry rather than vanishing silently. The `CONTENT_DIR` cache-loss cost and the rolling-deploy double-resume cost are documented, accepted trade-offs, not code fixes — see `docs/setup.md`. The M9 half of the line below (reaping on the parent's own poll) ships separately as AI-483.
+
 ---
 
 ### B6 — The application has no logging

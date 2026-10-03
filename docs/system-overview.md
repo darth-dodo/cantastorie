@@ -237,6 +237,8 @@ The operator face (AI-388, [ADR-005](adr/)): start pack runs, watch progress, re
 
 **Durability lives in R2, not the container.** Every state change persists to the `RunStore` — `pending/{family-token}/runs/{run-id}.json` — *before* anything else happens; in particular the `running` state hits R2 before the first step executes, so a crash mid-generation always leaves a record `resume_on_boot()` can find. Render's disk is ephemeral; the bucket is the source of truth. Records are values (`advance()` returns a copy), transitions are validated against the lifecycle, and a stale record cannot overwrite a newer one (`ConcurrentModificationError`).
 
+`resume_on_boot()` is actually invoked (B5, AI-477): a FastAPI `lifespan` in `src/api/main.py`, gated on R2 being configured, schedules `reap_stale()` then `resume_on_boot()` as a background `asyncio.Task` on startup — never awaited, so `/health` (and Render's deploy gate) stays responsive while a resumed run is still generating — and cancels it cleanly on shutdown. Exceptions inside that task are logged and reported to Sentry rather than vanishing silently. During a Render rolling deploy, the outgoing and incoming instance can briefly both resume the same record — see `docs/setup.md` for the accepted cost. (A parent-reachable self-heal path, so a family isn't stuck waiting on an operator, ships separately under AI-483.)
+
 ```mermaid
 stateDiagram-v2
     [*] --> queued: pack request
