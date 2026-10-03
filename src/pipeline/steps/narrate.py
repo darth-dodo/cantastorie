@@ -52,6 +52,108 @@ IT_UTTERANCES: Mapping[UtteranceName, str] = {
     "offline": "Le nuvole hanno preso le storie. Riprova tra poco!",
 }
 
+# The spoken prompts for every language in the roster (H6, AI-481): a plain
+# mapping keyed by Language. Each non-Italian set matches the Italian lines in
+# meaning, tone and length — warm and simple for a young child at bedtime —
+# rather than translating them word for word. A test fails CI if any Language
+# lacks any UtteranceName.
+UTTERANCE_TEXTS: Mapping[Language, Mapping[UtteranceName, str]] = {
+    "it": IT_UTTERANCES,
+    # Machine-drafted, pending native review. Same lines as the English and
+    # Spanish columns of docs/product.md **Spoken Prompts**.
+    "en": {
+        "shelf_greeting": "Hello! Which story shall we hear today?",
+        "story_start": "Here we go!",
+        "end_prompt": "The end! Again, or another story?",
+        "audio_retry": "Oh! The story is napping. Tap the bird to wake it.",
+        "offline": "The clouds took our stories. Try again soon!",
+    },
+    # Machine-drafted, pending native review.
+    "es": {
+        "shelf_greeting": "¡Hola! ¿Qué cuento escuchamos hoy?",
+        "story_start": "¡Allá vamos!",
+        "end_prompt": "¡Fin! ¿Otra vez, u otro cuento?",
+        "audio_retry": "¡Oh! El cuento está durmiendo. Toca el pajarito para despertarlo.",
+        "offline": "Las nubes se llevaron los cuentos. ¡Inténtalo pronto!",
+    },
+    # Machine-drafted, pending native review.
+    "el": {
+        "shelf_greeting": "Γεια σου! Ποια ιστορία θα ακούσουμε σήμερα;",
+        "story_start": "Ξεκινάμε!",
+        "end_prompt": "Τέλος! Πάλι, ή μια άλλη ιστορία;",
+        "audio_retry": "Ω! Η ιστορία παίρνει έναν υπνάκο. Άγγιξε το πουλάκι να την ξυπνήσεις.",
+        "offline": "Τα σύννεφα πήραν τις ιστορίες. Δοκίμασε ξανά σε λίγο!",
+    },
+    # Machine-drafted, pending native review.
+    "de": {
+        "shelf_greeting": "Hallo! Welche Geschichte hören wir heute?",
+        "story_start": "Los geht's!",
+        "end_prompt": "Ende! Nochmal, oder eine andere Geschichte?",
+        "audio_retry": "Oh! Die Geschichte macht ein Nickerchen. Tipp auf das Vögelchen, um sie zu wecken.",
+        "offline": "Die Wolken haben die Geschichten mitgenommen. Versuch es gleich nochmal!",
+    },
+    # Machine-drafted, pending native review.
+    "bg": {
+        "shelf_greeting": "Здравей! Коя приказка ще слушаме днес?",
+        "story_start": "Тръгваме!",
+        "end_prompt": "Край! Отново, или друга приказка?",
+        "audio_retry": "О! Приказката си подремва. Докосни птичето, за да я събудиш.",
+        "offline": "Облаците взеха приказките. Опитай пак след малко!",
+    },
+    # Machine-drafted, pending native review.
+    "ru": {
+        "shelf_greeting": "Привет! Какую сказку послушаем сегодня?",
+        "story_start": "Поехали!",
+        "end_prompt": "Конец! Ещё раз или другую сказку?",
+        "audio_retry": "Ой! Сказка задремала. Коснись птички, чтобы её разбудить.",
+        "offline": "Облака унесли сказки. Попробуй ещё раз чуть позже!",
+    },
+    # Machine-drafted, pending native review.
+    "mr": {
+        "shelf_greeting": "नमस्कार! आज आपण कोणती गोष्ट ऐकूया?",
+        "story_start": "चला, सुरू करूया!",
+        "end_prompt": "गोष्ट संपली! पुन्हा ऐकूया, की दुसरी गोष्ट?",
+        "audio_retry": "अरे! गोष्ट डुलकी घेतेय. तिला उठवायला छोट्या पक्ष्याला हात लाव.",
+        "offline": "ढगांनी गोष्टी नेल्या. थोड्या वेळाने पुन्हा प्रयत्न कर!",
+    },
+}
+
+
+def _narration_inputs(
+    text: str,
+    language: Language,
+    settings: Settings,
+    extra_inputs: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """The cache-key inputs for one narration: text + voice + model/settings."""
+    inputs: dict[str, object] = {
+        "text": text,
+        "voice": settings.narration_voices.get(language, "alloy"),
+        "model_id": settings.narration_model,
+        "output_format": settings.narration_response_format,
+    }
+    if extra_inputs:
+        inputs.update(extra_inputs)
+    return inputs
+
+
+def cached_utterance_audio(
+    text: str, language: Language, settings: Settings, cache: ArtifactCache
+) -> bytes | None:
+    """The cached audio for one spoken prompt, or None on a cache miss.
+
+    A pure lookup — never a TTS call — so a dry run can say which prompts a
+    real run would pay for.
+    """
+    key = cache_key(_narration_inputs(text, language, settings))
+    return cache.load(UTTERANCE_STEP, key, AUDIO_SUFFIX)
+
+
+def utterance_filename(name: UtteranceName, audio: bytes) -> str:
+    """The immutable published name of a prompt: {name}.{contenthash}.wav."""
+    content_hash = hashlib.sha256(audio).hexdigest()[:CONTENT_HASH_LENGTH]
+    return f"{name}.{content_hash}{AUDIO_SUFFIX}"
+
 
 def _synthesize_cached(
     text: str,
@@ -68,15 +170,7 @@ def _synthesize_cached(
     `extra_inputs` widens the cache key so distinct kinds of narration (e.g.
     a page vs. a spoken choice label) with identical text never collide.
     """
-    voice = settings.narration_voices.get(language, "alloy")
-    inputs: dict[str, object] = {
-        "text": text,
-        "voice": voice,
-        "model_id": settings.narration_model,
-        "output_format": settings.narration_response_format,
-    }
-    if extra_inputs:
-        inputs.update(extra_inputs)
+    inputs = _narration_inputs(text, language, settings, extra_inputs)
     key = cache_key(inputs)
 
     def synthesize() -> bytes:
@@ -156,13 +250,16 @@ def synthesize_utterances(
     settings: Settings,
     cache: ArtifactCache,
     out_dir: Path,
-    language: Language = "it",
-    utterances: Mapping[UtteranceName, str] = IT_UTTERANCES,
+    language: Language,
+    utterances: Mapping[UtteranceName, str] | None = None,
     client: NarrationClient | None = None,
     *,
     s3_client: S3Client | None = None,
 ) -> dict[UtteranceName, Path]:
     """Produce the spoken-prompt assets: prompts/{lang}/{name}.{hash}.wav.
+
+    ``utterances`` defaults to the language's own lines in UTTERANCE_TEXTS —
+    never another language's.
 
     Filenames embed a hash of the audio content, so published prompt assets
     are immutable and cache-forever (docs/architecture.md "R2 layout").
@@ -171,12 +268,13 @@ def synthesize_utterances(
     pending/staged/prompts/{lang}/ for the workshop to read from anywhere.
     """
     client = client or NarrationClient(settings)
+    if utterances is None:
+        utterances = UTTERANCE_TEXTS[language]
     produced: dict[UtteranceName, Path] = {}
     for name, text in utterances.items():
         audio_path = _synthesize_cached(text, language, settings, client, cache, UTTERANCE_STEP)
         audio = audio_path.read_bytes()
-        content_hash = hashlib.sha256(audio).hexdigest()[:CONTENT_HASH_LENGTH]
-        destination = out_dir / "prompts" / language / f"{name}.{content_hash}{AUDIO_SUFFIX}"
+        destination = out_dir / "prompts" / language / utterance_filename(name, audio)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(audio)
         produced[name] = destination

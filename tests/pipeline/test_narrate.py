@@ -12,16 +12,19 @@ import re
 import threading
 from collections import Counter
 from pathlib import Path
+from typing import get_args
 
 import httpx
 from pydantic import SecretStr
 
 from src.config import Settings
 from src.pipeline.cache import ArtifactCache
-from src.pipeline.models import Page
+from src.pipeline.models import Language, Page
 from src.pipeline.providers import NarrationClient
 from src.pipeline.steps.narrate import (
     IT_UTTERANCES,
+    UTTERANCE_TEXTS,
+    UtteranceName,
     narrate_pages,
     synthesize_utterances,
 )
@@ -201,6 +204,7 @@ def test_utterance_audio_lands_under_prompts_it_with_hashed_filenames(tmp_path: 
         settings,
         ArtifactCache(tmp_path / "prompts-cache"),
         out_dir,
+        "it",
         client=_client(settings, calls),
     )
 
@@ -222,8 +226,48 @@ def test_rerunning_utterances_makes_zero_tts_calls_and_identical_filenames(tmp_p
     cache = ArtifactCache(tmp_path / "prompts-cache")
     client = _client(settings, calls)
 
-    first = synthesize_utterances(settings, cache, tmp_path / "out", client=client)
-    second = synthesize_utterances(settings, cache, tmp_path / "out", client=client)
+    first = synthesize_utterances(settings, cache, tmp_path / "out", "it", client=client)
+    second = synthesize_utterances(settings, cache, tmp_path / "out", "it", client=client)
 
     assert len(calls) == len(IT_UTTERANCES)  # one call per prompt, total
     assert first == second
+
+
+def test_every_language_in_the_roster_has_every_spoken_prompt() -> None:
+    """Given the locked language roster (models.Language) and the prompt names,
+    When the per-language prompt texts are read,
+    Then every language carries a non-empty line for every prompt — a language
+    added to the roster without its prompts fails CI here (H6, AI-481).
+    """
+    assert set(UTTERANCE_TEXTS) == set(get_args(Language))
+    names = set(get_args(UtteranceName))
+    for language, texts in UTTERANCE_TEXTS.items():
+        assert set(texts) == names, f"{language} is missing {names - set(texts)}"
+        for name, text in texts.items():
+            assert text.strip(), f"{language}.{name} is empty"
+
+
+def test_the_italian_lines_are_the_italian_prompt_texts() -> None:
+    assert UTTERANCE_TEXTS["it"] == IT_UTTERANCES
+
+
+def test_each_language_speaks_its_own_prompts(tmp_path: Path) -> None:
+    """Given a language other than Italian,
+    When its utterances are synthesized,
+    Then the TTS hears that language's lines (never the Italian ones) and the
+    audio lands under prompts/{lang}/ — the AI-436 latent bug.
+    """
+    calls: list[str] = []
+    settings = _settings()
+
+    produced = synthesize_utterances(
+        settings,
+        ArtifactCache(tmp_path / "prompts-cache"),
+        tmp_path / "out",
+        "es",
+        client=_client(settings, calls),
+    )
+
+    assert sorted(calls) == sorted(UTTERANCE_TEXTS["es"].values())
+    assert not set(calls) & set(IT_UTTERANCES.values())
+    assert {path.parent for path in produced.values()} == {tmp_path / "out" / "prompts" / "es"}
