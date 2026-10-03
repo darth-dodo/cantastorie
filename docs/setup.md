@@ -308,6 +308,35 @@ runs are reported even though the run itself lands `failed` gracefully.
 
 ---
 
+## Application logs (B6, AI-485)
+
+The app writes one line per event to stdout; `PYTHONUNBUFFERED=1` in the
+`Dockerfile` makes each line reach Render at once.
+
+- **Level:** `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`;
+  default `INFO`) sets the `src.*` loggers. Third-party libraries stay at
+  `WARNING`. Leave it unset in Render unless you are debugging.
+- **Format:** key=value (logfmt) lines, not JSON:
+  `ts=2026-10-03T17:30:51.466Z level=INFO logger=src.workshop.manager event=run_started run_id=… family=…`.
+  Render's log viewer shows raw text and searches by substring, so
+  `event=run_failed` or `run_id=<id>` finds every line for an event or a run.
+  JSON would be harder to read there and gives no extra filtering. A failure's
+  traceback follows on the next lines.
+- **Where to read them:** Render → the `cantastorie` service → **Logs**. Search
+  `run_id=<id>` (shown in the workshop URL) to follow a single run from
+  `run_submitted` through each `step_finished` (with `duration_ms`) to
+  `run_staged` or `run_failed`. uvicorn's access lines are unchanged.
+- **Privacy:** a family token is logged only as `family=<12 hex>`, a salted
+  sha256 prefix that stays the same across deploys. Story text, premises, API
+  keys and request bodies are never logged. Neither is a safety judge's free
+  text: a text- or image-gate rejection logs only the failed criterion names
+  (e.g. `criteria=safety/no_brands`), counts, `run_id` and the exception class,
+  with no traceback. Unexpected errors keep their full traceback. The judge's
+  reasons still reach the workshop's run page and Sentry (unchanged); only
+  stdout leaves them out.
+
+---
+
 ## 5. Verify (the AI-365 acceptance)
 
 On a phone on **cellular** (not home wifi), open the Render URL and confirm:
