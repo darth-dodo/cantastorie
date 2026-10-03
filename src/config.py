@@ -7,6 +7,37 @@ from typing import Self
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# OpenRouter's own routers (e.g. openrouter/auto) pick a model per request, so
+# they can land on the very family a judge must differ from.
+ROUTER_FAMILIES = frozenset({"openrouter"})
+
+
+def model_family(model_id: str) -> str:
+    """The provider family of an OpenRouter model id, normalized.
+
+    Case and surrounding whitespace are ignored, as is OpenRouter's ``~``
+    latest-alias marker, so ``" ~Anthropic/x"`` is family ``anthropic``.
+    """
+    return model_id.strip().lower().removeprefix("~").split("/", 1)[0].strip()
+
+
+def _require_cross_family(judge_field: str, judge: str, judged_field: str, judged: str) -> None:
+    judge_family = model_family(judge)
+    if judge_family in ROUTER_FAMILIES:
+        raise ValueError(
+            f"{judge_field} must name a concrete model, not a router ({judge.strip()!r}) "
+            f"that could route to {judged_field}'s family"
+        )
+    if model_family(judged) in ROUTER_FAMILIES:
+        raise ValueError(
+            f"{judged_field} must name a concrete model, not a router ({judged.strip()!r}): "
+            f"{judge_field} cannot be guaranteed a different family"
+        )
+    if judge_family == model_family(judged):
+        raise ValueError(
+            f"{judge_field} must come from a different model family than {judged_field}"
+        )
+
 
 class Settings(BaseSettings):
     """Pipeline settings; the player needs no keys at story time."""
@@ -169,19 +200,15 @@ class Settings(BaseSettings):
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
         # A shared writer/judge blind spot is the failure mode that matters
         # (docs/architecture.md → "Model roles"); refuse the config outright.
-        if self.write_model.split("/")[0] == self.safety_model.split("/")[0]:
-            raise ValueError(
-                "safety_model must come from a different model family than write_model"
-            )
+        _require_cross_family("safety_model", self.safety_model, "write_model", self.write_model)
         return self
 
     @model_validator(mode="after")
     def image_judge_is_a_different_family_than_the_image_model(self) -> Self:
         # A model grading its own family's pictures shares its blind spots.
-        if self.image_model.split("/")[0] == self.image_safety_model.split("/")[0]:
-            raise ValueError(
-                "image_safety_model must come from a different model family than image_model"
-            )
+        _require_cross_family(
+            "image_safety_model", self.image_safety_model, "image_model", self.image_model
+        )
         return self
 
 

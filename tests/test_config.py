@@ -178,5 +178,73 @@ def test_same_family_writer_and_judge_is_refused_outright() -> None:
         )
 
 
+# Cross-family hardening (B4 review): the family check must not be fooled by
+# case, whitespace, OpenRouter's "~" latest-alias marker, or a router id.
+_DISGUISED_SAME_FAMILY = [
+    pytest.param("Anthropic/claude-haiku-4.5", id="case"),
+    pytest.param("  anthropic/claude-haiku-4.5 ", id="whitespace"),
+    pytest.param("~anthropic/claude-haiku-latest", id="latest-alias"),
+]
+_ROUTERS = [
+    pytest.param("openrouter/auto", id="openrouter-auto"),
+    pytest.param(" OpenRouter/Auto", id="openrouter-auto-disguised"),
+]
+
+
+@pytest.mark.parametrize("judge", _DISGUISED_SAME_FAMILY)
+def test_a_disguised_same_family_text_judge_is_refused(judge: str) -> None:
+    with pytest.raises(ValidationError, match="safety_model"):
+        Settings(_env_file=None, write_model="anthropic/claude-sonnet-4.5", safety_model=judge)
+
+
+@pytest.mark.parametrize("judge", _ROUTERS)
+def test_a_router_cannot_be_the_text_judge(judge: str) -> None:
+    """openrouter/auto may route to the writer's own family."""
+    with pytest.raises(ValidationError, match="safety_model"):
+        Settings(_env_file=None, write_model="anthropic/claude-sonnet-4.5", safety_model=judge)
+
+
+@pytest.mark.parametrize(
+    "judge",
+    [
+        pytest.param("Google/gemini-2.5-flash", id="case"),
+        pytest.param(" google/gemini-2.5-flash ", id="whitespace"),
+        pytest.param("~google/gemini-flash-latest", id="latest-alias"),
+    ],
+)
+def test_a_disguised_same_family_image_judge_is_refused(judge: str) -> None:
+    with pytest.raises(ValidationError, match="image_safety_model"):
+        Settings(
+            _env_file=None,
+            image_model="google/gemini-3.1-flash-lite-image",
+            image_safety_model=judge,
+        )
+
+
+@pytest.mark.parametrize("judge", _ROUTERS)
+def test_a_router_cannot_be_the_image_judge(judge: str) -> None:
+    with pytest.raises(ValidationError, match="image_safety_model"):
+        Settings(_env_file=None, image_safety_model=judge)
+
+
+def test_a_router_cannot_be_the_judged_model_either() -> None:
+    """A routed writer or image model makes cross-family unprovable."""
+    with pytest.raises(ValidationError, match="write_model must name a concrete model"):
+        Settings(_env_file=None, write_model="openrouter/auto")
+    with pytest.raises(ValidationError, match="image_model must name a concrete model"):
+        Settings(_env_file=None, image_model="openrouter/auto")
+
+
+def test_distinct_families_still_load() -> None:
+    settings = Settings(
+        _env_file=None,
+        write_model=" Anthropic/claude-sonnet-4.5",
+        safety_model="openai/gpt-4.1-mini",
+        image_model="google/gemini-3.1-flash-lite-image",
+        image_safety_model="OpenAI/gpt-4.1-mini",
+    )
+    assert settings.image_safety_model == "OpenAI/gpt-4.1-mini"
+
+
 def test_settings_has_no_workshop_secret():
     assert not hasattr(Settings(_env_file=None), "workshop_secret")
