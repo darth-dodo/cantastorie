@@ -127,6 +127,16 @@ Without `ASSET_BASE`, the player falls back to the app's own `/static/content` m
 
 Revisit this if run volume grows enough that repeated deploys start re-buying real money, or once H3's CI-gated deploys still land mid-run often enough to be a pattern worth measuring — at that point a small disk mounted at `CONTENT_DIR` is the straightforward fix, not an architecture change.
 
+### Rolling-deploy overlap and shutdown cancellation (B5, AI-477)
+
+Render's deploys are zero-downtime: the new instance starts, passes `/health`, and only then is the old one terminated — so for a window during every deploy, **two instances of the app are alive at once**. Both run the boot `lifespan`. If a run is `running` when a deploy starts, both the outgoing and the incoming instance can call `resume_on_boot()` and pick up the *same* record — there is no distributed lock across instances, only the `RunStore`'s own optimistic-concurrency `save()` (`IfMatch` / `ConcurrentModificationError`).
+
+**Accepted for now, not fixed:**
+
+- **No corruption.** Whichever instance saves second with a stale etag gets `ConcurrentModificationError`, not a silent overwrite — the record itself stays consistent.
+- **Double generation cost.** The etag guard only protects the *write*. Both instances' `execute()` calls run the pipeline's step functions before either one saves, so the same narration/image/LLM calls can be paid for twice for one run during the overlap window. This is a real-money cost, not just wasted CPU, and there is no fix in this change — just this note. The product's volume (household-scale, ADR-005) and the overlap window's short duration keep the blast radius small; revisit with a run-level lock (e.g. a conditional "claim" write) if double-billing ever actually shows up in provider usage.
+- **Shutdown cancellation detaches rather than stops.** `lifespan`'s shutdown calls `resume_task.cancel()`, which raises `CancelledError` into the task at its next `await` — but when that `await` is `asyncio.to_thread(...)`, the underlying OS thread keeps running to completion in the background; Python cannot forcibly kill a thread. A cancelled boot resume's generation call can keep making provider calls and writing artifacts after the owning instance has otherwise shut down, orphaned and unobserved. This is a known limitation of `asyncio.to_thread` cancellation generally, not specific to this feature, and is accepted rather than worked around here.
+
 ### Preview environments (AI-464)
 
 `render.yaml` turns on Render **preview environments**: every pull request gets its own short-lived copy of the Blueprint on a temporary `onrender.com` URL. The preview is rebuilt on each push and deleted when the PR merges or closes, or after 3 idle days (`expireAfterDays`). Render posts the URL on the PR, so a change can be opened on a phone before it merges.
