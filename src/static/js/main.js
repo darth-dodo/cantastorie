@@ -288,12 +288,13 @@ export async function init(
   // woke the sound). Tapping the clouds retries that same story.
   function showStoryOffline(entry) {
     shown = { ...shown, screen: null }; // the next render rebuilds whatever is due
-    app.replaceChildren(
-      buildOffline(() => {
-        engine.unlock().catch((err) => console.warn("unlock failed", err));
-        openCover(entry).catch((err) => console.warn("cover retry failed", err));
-      }),
-    );
+    // The clouds stand in for the cover: openCover shimmers them
+    // (.offline.loading) while the retry is pending, so the tap is answered.
+    const clouds = buildOffline(() => {
+      engine.unlock().catch((err) => console.warn("unlock failed", err));
+      openCover(entry, clouds).catch((err) => console.warn("cover retry failed", err));
+    });
+    app.replaceChildren(clouds);
     if (engine.unlocked) {
       engine
         .playPrompt(offlinePromptUrl())

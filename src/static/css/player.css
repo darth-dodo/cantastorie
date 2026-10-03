@@ -1536,6 +1536,26 @@ button.presses:active {
   animation-delay: -4s;
 }
 
+/* A cover retry is pending: the same shimmer sweep as .cover.loading.
+   .screen is already absolutely positioned, so it anchors the ::after. */
+.screen.offline.loading {
+  overflow: hidden;
+}
+
+.screen.offline.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(245, 223, 174, 0.15) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
 .offline .prompt {
   max-width: 280px;
   font: 700 22px/1.35 var(--font-app);
@@ -1553,7 +1573,8 @@ button.presses:active {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .offline .puff {
+  .offline .puff,
+  .screen.offline.loading::after {
     animation: none;
   }
 }

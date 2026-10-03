@@ -748,6 +748,36 @@ describe("a network that never answers (B8, AI-473)", () => {
     expect(document.querySelector(".bead")).not.toBeNull();
   });
 
+  it("the clouds shimmer while a cover retry is pending, and stop when it settles", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    let mode = "hang"; // then "gated", then released
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = async (url, opts) => {
+      if (String(url).endsWith("story.json")) {
+        if (mode === "hang") return hang(url, opts);
+        await gate;
+      }
+      return routedFetch(url);
+    };
+    running = await init(document, { fetchFn, engine: fakeEngine(), storyTimeoutMs: 50 });
+    document.querySelector(".cover").click();
+    await vi.waitFor(() => expect(document.querySelector(".offline")).not.toBeNull());
+    const clouds = document.querySelector(".offline");
+    expect(clouds.classList.contains("loading")).toBe(false);
+
+    // The retry tap is answered at once: the clouds shimmer while it loads.
+    mode = "gated";
+    clouds.click();
+    expect(clouds.classList.contains("loading")).toBe(true);
+
+    release();
+    await vi.waitFor(() => expect(running.playback.hasStory()).toBe(true));
+    expect(clouds.classList.contains("loading")).toBe(false);
+  });
+
   it("a double tap on a gated load opens the story once, and replays the saved path once", async () => {
     const branchingStory = JSON.parse(
       readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
