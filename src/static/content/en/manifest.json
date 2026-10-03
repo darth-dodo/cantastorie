@@ -1,6 +1,12 @@
 {
   "language": "en",
-  "prompts": {},
+  "prompts": {
+    "greeting": "/static/content/en/prompts/greeting.wav",
+    "story_start": "/static/content/en/prompts/story-start.wav",
+    "end": "/static/content/en/prompts/end.wav",
+    "audio_retry": "/static/content/en/prompts/audio-retry.wav",
+    "offline": "/static/content/en/prompts/offline.wav"
+  },
   "stories": [
     {
       "id": "cosmo-space-cowboy",
