@@ -92,8 +92,9 @@ Proposing a framework, bundler, direct provider SDK, or a second narration key c
 
 ## Environment
 
-- `.env` holds `OPENROUTER_API_KEY` (required for pipeline) and optionally `ELEVENLABS_API_KEY`.
-- Copy `.env.example` to `.env` and fill in.
+- `.env` holds `OPENROUTER_API_KEY` (required for the pipeline — the only key the system strictly needs).
+- Everything else is optional and gates a feature when unset: `R2_*` (publish and bucket-direct playback), `CLERK_*` (the `/workshop` and `/parent` areas), `LANGSMITH_*` (pipeline/app tracing), `SENTRY_DSN` (error monitoring).
+- Copy `.env.example` to `.env` and fill in; see `src/config.py` for the full field list and defaults.
 - Keys are pipeline-only — never in the browser, never at story time.
 
 ## Docs Authority
