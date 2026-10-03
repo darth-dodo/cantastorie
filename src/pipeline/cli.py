@@ -83,6 +83,12 @@ def _report_prompt_run(result: PromptPublishResult, *, local: bool) -> None:
             "all five prompts; rerun with --force to re-narrate"
         )
         return
+    if result.skip_reason == "no manifest" and result.dry_run:
+        typer.echo(
+            f"{prefix}{result.language}: would refuse (no manifest; needs --force) — "
+            f"no live manifest at {result.target}"
+        )
+        return
     if result.skip_reason == "no manifest":
         typer.echo(
             f"{prefix}{result.language}: refused — no live manifest at {result.target}; "
@@ -151,7 +157,7 @@ def publish_prompts_command(
             result = publish_prompts(lang, settings, dry_run=dry_run, force=force)
         _report_prompt_run(result, local=local)
         tts_calls += result.tts_calls
-        if result.skip_reason == "no manifest":
+        if result.skip_reason == "no manifest" and not result.dry_run:
             refused.append(code)
     verb = "Would make" if dry_run else "Made"
     typer.echo(f"{verb} {tts_calls} TTS call(s) across {len(languages)} language(s).")

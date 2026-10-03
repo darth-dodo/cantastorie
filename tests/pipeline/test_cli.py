@@ -424,3 +424,37 @@ def test_publish_prompts_exits_one_when_a_language_has_no_manifest(
     assert result.exit_code == 1
     assert "es: refused" in result.output
     assert "--force" in result.output
+
+
+def test_a_dry_run_reports_a_missing_manifest_and_carries_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given one language with no live manifest,
+    When the operator dry-runs every language,
+    Then that language is reported "would refuse (no manifest; needs --force)",
+    every other language is still planned, and the dry run exits 0."""
+    seen: list[str] = []
+
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        seen.append(language)
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[],
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="no manifest" if language == "bg" else None,
+        )
+
+    monkeypatch.setattr(cli, "publish_prompts", fake)
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "all", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert seen == list(get_args(Language))
+    assert "bg: would refuse (no manifest; needs --force)" in result.output
+    assert "Refused" not in result.output
