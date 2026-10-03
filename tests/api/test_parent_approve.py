@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
+import src.api.routes.parent as parent_module
 from src.api import auth as auth_mod
 from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
@@ -98,10 +99,16 @@ PARENT: dict[str, Any] = {"sub": "user_parent", "family_token": FAMILY}
 
 
 def test_approving_a_staged_pack_publishes_to_the_family_overlay(
-    tmp_path: Path, s3: S3Client
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     harness = Harness(tmp_path, s3)
+    # A reviewed pack whose staged story is still in the pending bucket (B2).
+    monkeypatch.setattr(parent_module, "_build_client", lambda settings: s3)
+    s3.put_object(
+        Bucket=PENDING_BUCKET, Key="pending/staged/first_snow-it-fake0001/story.json", Body=b"{}"
+    )
     record = _staged_run(harness.store, FAMILY, ["first_snow-it-fake0001"])
+    harness.store.save(record.mark_reviewed("first_snow-it-fake0001"))
     harness.sign_in(PARENT)
 
     response = harness.client.post(f"/parent/packs/{record.id}/approve", follow_redirects=False)

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.auth as auth_module
+import src.api.routes.parent as parent_module
 from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_family_publisher, get_run_manager
 from src.api.routes.parent import router as parent_router
@@ -94,7 +95,8 @@ def _make_client(
 
 def test_approve_lands_on_your_stories(monkeypatch: pytest.MonkeyPatch) -> None:
     """Approving a staged pack must redirect to /parent/stories, not /parent."""
-    run = _make_staged_run()
+    run = _make_staged_run().mark_reviewed("story-abc")  # approve follows review (B2)
+    monkeypatch.setattr(parent_module, "_staged_story_exists", lambda settings, story_id: True)
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
     r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)

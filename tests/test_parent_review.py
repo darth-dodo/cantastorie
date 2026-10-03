@@ -155,8 +155,14 @@ def test_parent_review_approve_redirects(monkeypatch: pytest.MonkeyPatch) -> Non
     run = _make_staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
+    mock_client = MagicMock()
+    mock_client.get_object.return_value = {
+        "Body": MagicMock(read=lambda: json.dumps(STORY_DATA).encode())
+    }
 
-    r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)
+    with patch("src.api.routes.parent._build_client", return_value=mock_client):
+        client.get(f"/parent/staged/story-abc?run={run.id}")  # the review (B2)
+        r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/parent/stories"
 
