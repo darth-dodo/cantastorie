@@ -33,8 +33,8 @@ IT_UTTERANCES: Mapping[UtteranceName, str] = {
 # lacks any UtteranceName.
 UTTERANCE_TEXTS: Mapping[Language, Mapping[UtteranceName, str]] = {
     "it": IT_UTTERANCES,
-    # Machine-drafted, pending native review. Same lines as the English
-    # column of docs/product.md **Spoken Prompts**.
+    # Final English copy (product.md calls English the source), verbatim
+    # from docs/product.md **Spoken Prompts**.
     "en": {
         "shelf_greeting": "Hello! Which story shall we hear today?",
         "story_start": "Here we go!",
