@@ -26,7 +26,7 @@ from pydantic_ai.models.test import TestModel
 from src.config import Settings
 from src.pipeline.content_rules import ARM_PAGES, PAGE_COUNT, check_story
 from src.pipeline.generate import generate_story
-from src.pipeline.models import Story
+from src.pipeline.models import IMAGE_SAFETY_CRITERIA, Story
 from src.pipeline.providers import NarrationClient
 from src.pipeline.publish import STORY_FILE
 
@@ -52,11 +52,22 @@ _PASSING_REPORT = {
             "kindness_resolves",
             "within_limits",
             "right_language",
-            "calm_pictures",
             "nothing_real",
         )
     ]
 }
+
+
+def _calm_judge() -> TestModel:
+    """A vision-judge double that passes every image on all three criteria."""
+    return TestModel(
+        custom_output_args={
+            "verdicts": [
+                {"criterion": c, "passed": True, "reason": "ok"} for c in IMAGE_SAFETY_CRITERIA
+            ]
+        }
+    )
+
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
@@ -122,6 +133,7 @@ def _generate_branching(tmp_path: Path) -> tuple[Settings, str]:
         revise_model=TestModel(custom_output_args=_GOOD_BRANCHING_DRAFT),
         narration_client=_fake_narration(),
         image_transport=_fake_images(),
+        image_safety_model=_calm_judge(),
     )
     return settings, staged
 

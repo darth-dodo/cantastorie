@@ -99,7 +99,7 @@ def report_args(failing: dict[str, str] | None = None) -> dict[str, object]:
 
 
 class JudgeModel(FunctionModel):
-    """A safety-judge double: emits queued nine-rule reports, records settings."""
+    """A safety-judge double: emits queued eight-rule reports, records settings."""
 
     def __init__(self, *reports: dict[str, object]) -> None:
         self.calls = 0
@@ -233,13 +233,13 @@ def _story(draft: StoryDraft | None = None, story_id: str = "story-1") -> Story:
     )
 
 
-def test_the_safety_gate_verdicts_all_nine_rules_at_temperature_zero(
+def test_the_safety_gate_verdicts_all_eight_text_rules_at_temperature_zero(
     tmp_path: Path,
 ) -> None:
     """Given a written story,
     When the safety gate judges it (product.md "Safety" enforcement: the
     safety node verdicts each story per rule at temperature 0),
-    Then the typed report covers all nine rules and the model call carried
+    Then the typed report covers all eight text rules and the model call carried
     temperature 0 — asserted on the settings the model actually received.
     """
     judge = JudgeModel(report_args())

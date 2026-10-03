@@ -33,13 +33,13 @@ flowchart LR
 
     subgraph Pipeline["Pipeline (same repo)"]
         CLI["typer CLI:<br/>generate · publish · audit"]
-        GEN["generate.py<br/>write → narrate → illustrate →<br/>assemble → stage"]
+        GEN["generate.py<br/>write → narrate → illustrate →<br/>image safety → assemble → stage"]
         Cache[("content/&lt;story&gt;/<br/>artifact cache")]
         CLI --> GEN
         GEN <--> Cache
     end
 
-    OR["OpenRouter<br/>write · safety · images ·<br/>narration (Gemini TTS)"]
+    OR["OpenRouter<br/>write · safety · images ·<br/>image safety · narration (Gemini TTS)"]
     CK["Clerk<br/>JWKS · public_metadata"]
     R2["Cloudflare R2<br/>published/ · pending/"]
 
@@ -186,17 +186,20 @@ While no published `story.json` backs a cover, a page timer (3.8 s, `?speed=` ov
 
 ## The Pipeline (`src/pipeline/`)
 
-Plain Python, typed end to end. The full run is live: `generate` walks write → safety (→ revise, bounded) → narrate → illustrate → assemble and stages the result; `publish` promotes a staged story to the public bucket and updates the manifest. `generate.py` is the one authoring function — the CLI and the workshop's `RunManager` are two front doors to it. Glosses and word timings are the two steps that do not exist yet (slice 6).
+Plain Python, typed end to end. The full run is live: `generate` walks write → safety (→ revise, bounded) → narrate → illustrate → image safety (→ redraw, bounded) → assemble and stages the result; `publish` promotes a staged story to the public bucket and updates the manifest. `generate.py` is the one authoring function — the CLI and the workshop's `RunManager` are two front doors to it. Glosses and word timings are the two steps that do not exist yet (slice 6).
 
 ```mermaid
 flowchart LR
     G["generate<br/>(CLI or workshop)"] --> W["write"]
-    W --> SG{"safety gate<br/>9 rules, judge ≠ writer family"}
+    W --> SG{"safety gate<br/>8 text rules, judge ≠ writer family"}
     SG -- pass --> N["narrate<br/>Gemini TTS (no timings)"]
     SG -- fail --> RV["revise (bounded)"]
     RV --> SG
-    N --> I["illustrate<br/>sheet → pages + cover"]
-    I --> A["assemble<br/>content-rule validation"]
+    N --> I["illustrate<br/>sheet → pages + cards + cover"]
+    I --> IS{"image safety<br/>3 criteria per shown image,<br/>judge ≠ image family"}
+    IS -- "fail (≤ 2 redraws)" --> I
+    IS -- "still failing" --> RJ["reject story"]
+    IS -- pass --> A["assemble<br/>content-rule validation"]
     A --> ST["stage → pending/"]
     ST -- "operator approves<br/>(workshop)" --> PB["publish → published/"]
 
@@ -204,19 +207,21 @@ flowchart LR
     W -.-> Cache
     N -.-> Cache
     I -.-> Cache
+    IS -.-> Cache
 ```
 
 ### Module responsibilities
 
 | Module | Owns | Notable constraints enforced in code |
 |--------|------|--------------------------------------|
-| `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `ChoiceOption`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `Story.shape` is `linear`/`branching`; `ChoicePoint` is exactly two options, each `ChoiceOption` carrying an optional `card_image` and spoken `audio`; `SafetyReport` must contain each of the nine rules exactly once |
+| `models.py` | The `story.json` contract (`Story`, `Page`, `ChoicePoint`, `ChoiceOption`, `WordTiming`) and safety vocabulary | `Language`/`Theme` are `Literal` types locked to the product doc; `Story.shape` is `linear`/`branching`; `ChoicePoint` is exactly two options, each `ChoiceOption` carrying an optional `card_image` and spoken `audio`; `SafetyReport` must contain each of the eight text rules exactly once; `ImageSafetyReport` each of `no_text` / `nothing_frightening` / `calm` exactly once |
 | `cache.py` | Content-addressed artifact store; the filesystem **is** the checkpoint | `cache_key()` = sha256 of canonical-JSON inputs; writes are tmp-then-rename atomic; `run_step()` makes unchanged inputs a pure lookup — zero API calls |
-| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; narration requests `pcm` (Gemini rejects `mp3`) and wraps it into a WAV container, with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
+| `providers.py` | The only transport: Pydantic AI over OpenRouter; narration via OpenRouter's `/audio/speech` (Gemini 3.1 Flash TTS) | Keys are `SecretStr`, unwrapped only at the transport boundary; `build_model` wraps every chat model in Pydantic AI's `OpenRouterProvider`, so the judges' temperature 0 is really sent (a bare `OpenAIProvider` strips it from `openai/...` ids; `tests/pipeline/test_judge_temperature.py` asserts it on the wire); narration requests `pcm` (Gemini rejects `mp3`) and wraps it into a WAV container, with no timestamps (ADR-008; Deepgram STT reconstructs them at slice 6) |
 | `generate.py` | The whole authoring run, write through stage, as one function — the seam shared by the CLI and the workshop's `RunManager` | Provider seams (models, narration client, image transport) are injectable, so the full run is exercised with zero network |
 | `cli.py` | `generate` / `publish` / `audit` entry points — all live | All three run the real machinery; `audit` verifies every reachable published asset (`audit_published_bucket`) and also runs in CI (AI-378) |
 | `steps/illustrate.py` | Character sheet first, then every page and the cover generated **against that sheet** — never page-to-page chaining (drift compounds) | `STYLE_PROMPT` is a module constant participating verbatim in every cache key: edit it and every image knowingly regenerates. Uses httpx against OpenRouter chat completions directly because pydantic-ai 2.5.0 can't parse image *outputs*; the ban is on direct vendor SDKs, and OpenRouter remains the only gateway |
-| `src/config.py` | Settings for both halves (shared with the API) | A model validator **refuses config where the safety judge and writer share a model family** — the shared-blind-spot failure mode |
+| `steps/image_safety.py` | **Calm pictures** on the rendered images ([ADR-011](adr/ADR-011-image-safety-vision-judge.md)): `illustrate_safely` judges every page, choice card and cover (not the character sheet, which never ships) with a vision model over OpenRouter, redraws a failing image, and rejects the story past the bound | Pydantic AI with a typed `ImageSafetyReport`, temperature 0, the PNG sent as a base64 data URL; verdicts cached on the image's SHA-256; a redraw bumps a per-slot `regeneration` cache input so only that image is re-bought; `IMAGE_SAFETY_MAX_REGENERATIONS = 2`, then `ImageSafetyRejectedError` (its message lands on the failed run record) |
+| `src/config.py` | Settings for both halves (shared with the API) | Model validators **refuse config where the safety judge and writer share a model family**, and where the image safety judge (`image_safety_model`) and `image_model` do — the shared-blind-spot failure mode |
 
 ### Why the cache shape matters
 
@@ -303,7 +308,7 @@ LangSmith, off by default and inert when off. `init_observability` (called from 
 | `tests/test_app.py`, `test_config.py`, `test_observability.py` | pytest | Routes, static mount, dev manifest fixture, settings (including the judge≠writer refusal), observability wiring |
 | `tests/api/*` | pytest | Clerk JWT verification (`test_auth.py`), the Clerk metadata client against mocked transports (`test_clerk_client.py`), provision mint/link/idempotency (`test_parent_provision.py`), and the `/parent` pages, tenancy scoping, and Clerk-containment guard (`test_parent_pages.py`) |
 | `tests/workshop/*` | pytest | Run-record lifecycle and transitions (`test_records.py`), manager execution/resume/reaper and per-family run caps (`test_manager.py`), workshop routes and Clerk auth (`test_routes.py`), `WorkshopScope` resolution (`test_scope.py`) |
-| `tests/pipeline/*` | pytest | Model contract (nine-rule completeness, choice arity), cache atomicity and hit/miss, provider transports against mocked httpx, authoring/narrate/illustrate/assemble steps, content rules, generate end to end, publish and audit |
+| `tests/pipeline/*` | pytest | Model contract (eight-rule and three-criterion completeness, choice arity), cache atomicity and hit/miss, provider transports against mocked httpx, authoring/narrate/illustrate/image-safety/assemble steps, content rules, generate end to end, publish and audit |
 | `tests/e2e/*.spec.js` | Playwright | The two-tap start, the full playback loop, failure states, and shelf-layout regressions in a real browser |
 
 The provider and Clerk tests mock at the httpx-transport seam, so logic is tested without a key in the environment — the same property the runtime has.

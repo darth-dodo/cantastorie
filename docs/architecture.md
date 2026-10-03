@@ -36,7 +36,7 @@ graph LR
     R2["Cloudflare R2<br/>audio · images · manifests"]
     F["FastAPI on Render<br/>player page · parent area"]
     P["Pipeline CLI<br/>plain Python + Pydantic AI"]
-    OR["OpenRouter<br/>story · safety · glosses · images · narration"]
+    OR["OpenRouter<br/>story · safety · glosses · images · image safety · narration"]
 
     B -- "bucket-direct fetch" --> R2
     B -- "page load, parent HTMX" --> F
@@ -95,19 +95,20 @@ src/
 │   └── records.py          Durable run records in R2 (pending prefix)
 ├── pipeline/
 │   ├── cli.py              Typer CLI: generate, publish, audit
-│   ├── generate.py         The linear pipeline: author → narrate → illustrate → assemble → stage
+│   ├── generate.py         The linear pipeline: author → narrate → illustrate → image safety → assemble → stage
 │   ├── steps/
 │   │   ├── write.py        Native-language story authoring (strong model)
-│   │   ├── safety.py       Per-rule verdicts, different model family, temperature 0
+│   │   ├── safety.py       Per-rule text verdicts (eight rules), different model family, temperature 0
 │   │   ├── revise.py       Bounded revise loop (two failed revisions → reject)
 │   │   ├── narrate.py      Gemini TTS via OpenRouter (pcm wrapped to WAV; timings stay empty until slice 6's Deepgram pass)
 │   │   ├── illustrate.py   Character sheet first, then pages against it
+│   │   ├── image_safety.py Vision judge over every shown image, bounded redraws (ADR-011)
 │   │   ├── assemble.py     story.json assembly + validation
     │   │   └── gloss.py        Word-to-English gloss maps (cheap model)
 │   ├── cache.py            Content-addressed artifact cache
 │   ├── content_rules.py    The nine content rules, shared by write and safety prompts
-│   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, GlossMap
-│   ├── providers.py        OpenRouter transport (chat, images, TTS)
+│   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, ImageSafetyVerdict, GlossMap
+│   ├── providers.py        OpenRouter transport (chat, images, TTS); every model via OpenRouterProvider, so judges' temperature 0 reaches the wire
 │   └── publish.py          R2 staging + publish, manifest update, immutable naming
 ├── observability.py        LangSmith tracing + Sentry error monitoring for pipeline and app
 ├── templates/              Jinja2: index.html (player shell) + workshop/ screens
@@ -141,7 +142,7 @@ A batch job, not an agent: linear steps, one bounded loop, artifacts on disk. Ea
 ```mermaid
 graph TD
     O["outline<br/>theme + language + shape"] --> W["write<br/>native-language authoring"]
-    W --> S{"safety gate<br/>9 rules, temperature 0,<br/>different model family"}
+    W --> S{"safety gate<br/>8 text rules, temperature 0,<br/>different model family"}
     S -- "all pass" --> G["gloss<br/>word-to-English map"]
     S -- "any fail" --> RV["revise<br/>targeted rewrite"]
     RV --> S2{"safety gate again"}
@@ -149,7 +150,11 @@ graph TD
     S2 -- "second fail" --> X["reject story"]
     G --> N["narrate<br/>Gemini TTS via OpenRouter,<br/>one pinned voice (no timestamps)"]
     N --> I["illustrate<br/>character sheet, then pages"]
-    I --> A["assemble<br/>story.json + validation"]
+    I --> IS{"image safety<br/>every page, card, cover:<br/>no text · nothing frightening · calm"}
+    IS -- "any fail" --> RD["redraw that image<br/>(at most 2 times)"]
+    RD --> IS
+    IS -- "still failing" --> X
+    IS -- "all pass" --> A["assemble<br/>story.json + validation"]
     A --> ST["stage<br/>local review folder"]
     ST -- "operator approves" --> PB["publish<br/>R2 + manifest"]
 ```
@@ -170,6 +175,9 @@ Every generated artifact is keyed by a hash of its inputs:
 | Choice card image | option label + character sheet hash + card prompt + model |
 | Choice label audio | option label + voice ID + model/settings |
 | Gloss map | story text + model |
+| Image safety verdict | image bytes (SHA-256) + judge model + temperature + prompt version |
+
+A safety-driven redraw adds a `regeneration` count to that one image's inputs, so it gets a fresh key while every other image stays a cache hit.
 
 Editing page 5's text and re-running regenerates page 5's audio and image — nothing else. Re-running an unchanged story costs zero API calls.
 
@@ -179,6 +187,7 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 |------|-------------|------|
 | Write / revise | Strong authoring model | Content rules embedded in the prompt; authored natively per language, never translated |
 | Safety gate | **Different family** than the writer, temperature 0 | A shared writer/judge blind spot is the failure mode that matters; cross-family judging is one config line |
+| Image safety | Vision model, **different family** than the image model, temperature 0 | **Calm pictures** judged on the rendered images, not the text ([ADR-011](adr/ADR-011-image-safety-vision-judge.md)); verdicts no text / nothing frightening / calm per page, card and cover; a failure is redrawn at most twice, then the story is rejected. Refused at config load if the families match |
 | Glosses | Cheap fast model | Mechanical contextual mapping |
 | Narrate | TTS model (Gemini 3.1 Flash TTS via OpenRouter, `google/gemini-3.1-flash-tts-preview`) | One house voice across all languages, pinned at the AI-366 bake-off; `pcm` output wrapped to WAV (Gemini rejects `mp3`); no timestamps (see [Narration / Audio](#narration--audio)) |
 | Illustrate | Image-capable model | Character sheet fed as reference to every page — chaining page-to-page compounds drift |
@@ -395,5 +404,6 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | [ADR-003](adr/ADR-003-parent-authentication-clerk.md) | Parent Authentication via Clerk (Accepted — Phase 2 parent area auth) |
 | [ADR-006](adr/ADR-006-family-voice-narration.md) | Nonna Narrates — family voice narration (Proposed) |
 | [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) | Default voices on Gemini TTS via OpenRouter; cloning scoped to Voxtral on the Mistral API |
+| [ADR-011](adr/ADR-011-image-safety-vision-judge.md) | Image safety via a cross-family vision judge over every rendered image |
 | [Architecture Decision Records](adr/) | The full ADR index |
 | Implementation Plans | `docs/plans/` *(created per slice)* |

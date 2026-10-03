@@ -15,6 +15,7 @@ OpenRouter stays the only gateway; the ban is on direct vendor SDKs.
 import base64
 import functools
 import hashlib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +58,26 @@ STEP_NAME = "illustrate"
 # Images are stored as raw PNG bytes; store and load MUST use this same
 # suffix or every lookup misses and every re-run re-buys the image.
 IMAGE_SUFFIX = ".png"
+
+
+def page_slot(page_id: str) -> str:
+    return f"page {page_id}"
+
+
+def card_slot(card_key: str) -> str:
+    return f"card {card_key}"
+
+
+COVER_SLOT = "cover"
+
+
+def _regenerated(inputs: dict[str, str], regeneration: int) -> dict[str, object]:
+    """Key a safety-driven redraw apart from the render it replaces.
+
+    Attempt 0 keeps the original key untouched, so adding the image safety
+    step invalidates no image already on disk.
+    """
+    return {**inputs, "regeneration": regeneration} if regeneration else dict(inputs)
 
 
 class IllustrationSet(BaseModel):
@@ -159,7 +180,7 @@ def _card_prompt(label: str) -> str:
     )
 
 
-def _artifact_path(cache: ArtifactCache, inputs: dict[str, str]) -> Path:
+def _artifact_path(cache: ArtifactCache, inputs: Mapping[str, object]) -> Path:
     return cache.story_dir / STEP_NAME / f"{cache_key(inputs)}{IMAGE_SUFFIX}"
 
 
@@ -176,14 +197,21 @@ def illustrate_story(
     settings: Settings,
     cache: ArtifactCache,
     transport: httpx.BaseTransport | None = None,
+    regenerations: Mapping[str, int] | None = None,
 ) -> IllustrationSet:
     """Produce the character sheet, one image per page, and the cover.
+
+    ``regenerations`` maps a slot (``page_slot``/``card_slot``/``COVER_SLOT``)
+    to how many times the image safety step has sent it back; each count is a
+    distinct cache key, so a rejected image is redrawn and every other image
+    stays a cache hit.
 
     Cache keys follow docs/architecture.md → "Content-addressed caching":
     the sheet is keyed on story summary + style prompt + model; every page
     (and the cover) is keyed on its text + the sheet's content hash + style
     prompt + model. Editing one page regenerates exactly that page.
     """
+    redraws = regenerations or {}
     client = ImageClient(settings, transport=transport)
     try:
         # 1. The sheet comes first — every other image derives from it.
@@ -206,12 +234,15 @@ def illustrate_story(
         #    page's image. Pages are independent given the sheet, so they fan
         #    out through the bounded pool instead of one slow call at a time.
         def _render_page(page: Page) -> tuple[str, Path]:
-            page_inputs = {
-                "page_text": page.text,
-                "character_sheet_hash": sheet_hash,
-                "style_prompt": STYLE_PROMPT,
-                "model": settings.image_model,
-            }
+            page_inputs = _regenerated(
+                {
+                    "page_text": page.text,
+                    "character_sheet_hash": sheet_hash,
+                    "style_prompt": STYLE_PROMPT,
+                    "model": settings.image_model,
+                },
+                redraws.get(page_slot(page.id), 0),
+            )
             run_step(
                 cache,
                 STEP_NAME,
@@ -229,13 +260,16 @@ def illustrate_story(
         #    Keyed f"{page_id}:{index}" so Task 7 can address each option.
         def _render_card(item: tuple[str, int, ChoiceOption]) -> tuple[str, Path]:
             page_id, index, option = item
-            card_inputs = {
-                "label": option.label,
-                "character_sheet_hash": sheet_hash,
-                "style_prompt": STYLE_PROMPT,
-                "card_prompt": CARD_PROMPT,
-                "model": settings.image_model,
-            }
+            card_inputs = _regenerated(
+                {
+                    "label": option.label,
+                    "character_sheet_hash": sheet_hash,
+                    "style_prompt": STYLE_PROMPT,
+                    "card_prompt": CARD_PROMPT,
+                    "model": settings.image_model,
+                },
+                redraws.get(card_slot(f"{page_id}:{index}"), 0),
+            )
             run_step(
                 cache,
                 STEP_NAME,
@@ -256,12 +290,15 @@ def illustrate_story(
         )
 
         # 4. The cover derives from the same sheet.
-        cover_inputs = {
-            "cover_title": story.title,
-            "character_sheet_hash": sheet_hash,
-            "style_prompt": STYLE_PROMPT,
-            "model": settings.image_model,
-        }
+        cover_inputs = _regenerated(
+            {
+                "cover_title": story.title,
+                "character_sheet_hash": sheet_hash,
+                "style_prompt": STYLE_PROMPT,
+                "model": settings.image_model,
+            },
+            redraws.get(COVER_SLOT, 0),
+        )
         run_step(
             cache,
             STEP_NAME,
