@@ -59,8 +59,8 @@ IT_UTTERANCES: Mapping[UtteranceName, str] = {
 # lacks any UtteranceName.
 UTTERANCE_TEXTS: Mapping[Language, Mapping[UtteranceName, str]] = {
     "it": IT_UTTERANCES,
-    # Machine-drafted, pending native review. Same lines as the English and
-    # Spanish columns of docs/product.md **Spoken Prompts**.
+    # Machine-drafted, pending native review. Same lines as the English
+    # column of docs/product.md **Spoken Prompts**.
     "en": {
         "shelf_greeting": "Hello! Which story shall we hear today?",
         "story_start": "Here we go!",
@@ -68,7 +68,7 @@ UTTERANCE_TEXTS: Mapping[Language, Mapping[UtteranceName, str]] = {
         "audio_retry": "Oh! The story is napping. Tap the bird to wake it.",
         "offline": "The clouds took our stories. Try again soon!",
     },
-    # Machine-drafted, pending native review.
+    # Final Spanish copy, verbatim from docs/product.md **Spoken Prompts**.
     "es": {
         "shelf_greeting": "¡Hola! ¿Qué cuento escuchamos hoy?",
         "story_start": "¡Allá vamos!",

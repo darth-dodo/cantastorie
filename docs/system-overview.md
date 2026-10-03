@@ -321,5 +321,5 @@ The provider and Clerk tests mock at the httpx-transport seam, so logic is teste
 | `localStorage` progress | IndexedDB (progress, settings, lockout, family token) | slice 2 |
 | Empty word timings in `story.json` | Deepgram STT transcription pass | slice 6 (reading mode) |
 | No gloss step in the pipeline | Word-to-English gloss maps (cheap model) | slice 6 (reading mode) |
-| Five spoken prompts per language, published by `publish-prompts` (only `it` is live in production as of 2026-10-03; the other lines are machine-drafted, pending native review) | All ten prompts per enabled language, reviewed | slice 4 |
+| Five spoken prompts per language, published by `publish-prompts` (only `it` is live in production as of 2026-10-03; Spanish is final copy; the other lines are machine-drafted, pending native review) | All ten prompts per enabled language, reviewed | slice 4 |
 | Mock shelf covers + captions | Manifest + published `story.json` per cover | pipeline output |
