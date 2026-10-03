@@ -399,8 +399,73 @@ def test_staged_assets_are_served_and_traversal_is_blocked(tmp_path: Path, s3: S
     story_id = _stage_fake_story(harness.settings, s3)
 
     assert harness.client.get(f"/workshop/staged/{story_id}/assets/p1.mp3").content == b"mp3:p1"
-    escape = harness.client.get(f"/workshop/staged/{story_id}/assets/../../secret.txt")
-    assert escape.status_code in (400, 404)
+    # `{name}` matches a single path segment. A literal ".." gets collapsed by
+    # the HTTP client before the request is even sent, so the router 404s on a
+    # route that no longer matches `/assets/{name}` and the guard at
+    # workshop.py's `if "/" in name or ".." in name` is never reached — the
+    # earlier form of this test proved nothing (confirmed by that line showing
+    # up in coverage's missing-lines list). A raw "%2F" would also stop the
+    # segment from matching (Starlette decodes it before routing, splitting
+    # the path further), so only the dots are percent-encoded: the client
+    # leaves "%2e%2e" alone, Starlette decodes it to ".." inside `name`, and
+    # the guard itself has to reject it.
+    escape = harness.client.get(f"/workshop/staged/{story_id}/assets/%2e%2e")
+    assert escape.status_code == 404
+
+
+NON_OPERATOR_CLAIMS = {"sub": "user_fam", "family_token": "fam_1"}
+
+# The six routes flagged in docs/audits/release-readiness.md H8: coverage
+# showed their `if not scope.is_operator` guard never exercised by a
+# non-operator. `needs_form` routes require Form() fields FastAPI resolves
+# before the handler body runs, so the guard is reached only if they're sent.
+GUARDED_WORKSHOP_ROUTES = [
+    ("start_run", "/workshop/runs", True),
+    ("approve_run", "/workshop/runs/{run_id}/approve", False),
+    ("reject_run", "/workshop/runs/{run_id}/reject", False),
+    ("run_again", "/workshop/runs/{run_id}/again", False),
+    ("delete_run", "/workshop/runs/{run_id}/delete", False),
+    ("delete_staged_story", "/workshop/staged/{story_id}/delete", False),
+]
+
+
+def _run_snapshot(store: RunStore) -> list[tuple[str, str, tuple[str, ...]]]:
+    """A comparable fingerprint of every run's id/state/story_ids, regardless
+    of owner — enough to prove a route did or didn't mutate anything."""
+    return sorted((r.id, r.state, tuple(r.story_ids)) for r in store.list_runs())
+
+
+@pytest.mark.parametrize(
+    "path_template,needs_form",
+    [(path, needs_form) for _, path, needs_form in GUARDED_WORKSHOP_ROUTES],
+    ids=[name for name, _, _ in GUARDED_WORKSHOP_ROUTES],
+)
+def test_non_operator_is_denied_with_no_side_effects(
+    tmp_path: Path, s3: S3Client, path_template: str, needs_form: bool
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    story_id = _stage_fake_story(harness.settings, s3)
+    # The run belongs to the SAME family as the caller: this proves the 403
+    # comes from the `is_operator` guard, not merely from family-partitioned
+    # storage denying access to someone else's run.
+    family_token = NON_OPERATOR_CLAIMS["family_token"]
+    record = new_run(family_token, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    staged = record.advance("running").advance("staged", story_ids=[story_id])
+    harness.store.save(staged)
+    harness.sign_in(NON_OPERATOR_CLAIMS)
+
+    path = path_template.format(run_id=staged.id, story_id=story_id)
+    before_runs = _run_snapshot(harness.store)
+    before_staged_keys = _staged_keys(s3, story_id)
+    before_published = list(harness.published)
+
+    data = {"theme": "the_sleepy_sea", "language": "it", "count": "1"} if needs_form else None
+    response = harness.client.post(path, data=data, follow_redirects=False)
+
+    assert response.status_code == 403
+    assert _run_snapshot(harness.store) == before_runs  # no run submitted/approved/rejected/deleted
+    assert _staged_keys(s3, story_id) == before_staged_keys  # nothing deleted
+    assert harness.published == before_published  # nothing approved/published
 
 
 def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(

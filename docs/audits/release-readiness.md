@@ -184,6 +184,8 @@ The player tests seed `{ screen: "shelf" }` explicitly, with a comment noting it
 
 **Fix**: normalize on load. Persist progress only and always boot to the shelf; the resume overlay already reconstructs the rest.
 
+Fixed in code (AI-468).
+
 ---
 
 ### B8 — No timeout on any player fetch, so a slow-but-alive network is a permanent blank screen
@@ -290,6 +292,8 @@ The manifest is the index of an entire shelf and the code's own docstring calls 
 
 **Fix**: route every manifest write through the existing optimistic-concurrency helper.
 
+Fixed in code (AI-474).
+
 ### H6 — The default language ships zero spoken prompts
 
 Measured from the shipped content directories:
@@ -332,6 +336,8 @@ Removing the `if not scope.is_operator` guard from all six would leave the full 
 Relatedly, the path-traversal test at `tests/workshop/test_routes.py:396-404` asserts nothing useful: the HTTP client normalizes the dot segments before sending, so the request 404s at the router and the guard is never reached — confirmed by line 508 appearing in the missing-lines list. Deleting the guard would not fail that test.
 
 **Fix**: one parametrised test posting to each of the six routes as a non-operator and asserting 403; send the encoded form in the traversal test so the guard is actually exercised.
+
+Fixed in code (AI-472).
 
 ---
 
@@ -439,17 +445,17 @@ Ordered by risk reduction per unit of effort.
 - [ ] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)
 - [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
-- [ ] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
+- [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
 - [ ] Spoken prompts shipped for every language in the selector, or the selector gated to complete languages (H6)
 - [x] Path allowlist and tests on `/published/{path}` (H7)
-- [ ] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
+- [x] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
 - [ ] `premise` capped server-side on `PackRequest` (H2)
 - [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3)
 - [ ] Staging keyed by tenant, with a content hash bound to the approval (H1)
-- [ ] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
+- [x] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
 - [ ] `--workers 1` and `numInstances: 1` made explicit with the reason, or the family cap made a conditional write (M11)
 - [ ] `/health/ready` checking config and R2; `healthCheckPath` repointed (M1)
 - [ ] R2 object versioning or nightly manifest snapshots enabled (M13)
