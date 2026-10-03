@@ -1,7 +1,7 @@
 """Behavior specs for the CLI.
 
 generate runs the whole authoring pass and stages a story; publish uploads a
-staged story to R2. Both validate the locked vocabularies (product.md **5
+staged story to R2. Both validate the locked vocabularies (product.md **8
 languages** and the theme list). The heavy lifting is proven in test_generate
 and test_publish; here we prove the CLI wiring and its guardrails, so the
 provider-driven functions are stubbed.
