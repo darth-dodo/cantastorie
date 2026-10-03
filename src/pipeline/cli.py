@@ -1,8 +1,10 @@
-"""Typer CLI: generate, publish, audit.
+"""Typer CLI: generate, publish, publish-prompts, audit.
 
 generate runs the whole authoring pass and stages a story for review; publish
-uploads a staged story to R2. audit verifies every reachable asset in the
-published bucket is approved and listed — the provable-safety gate (AI-378).
+uploads a staged story to R2. publish-prompts narrates and publishes a
+language's spoken prompts (H6, AI-481). audit verifies every reachable asset
+in the published bucket is approved and listed — the provable-safety gate
+(AI-378).
 """
 
 from typing import Literal, cast, get_args
@@ -13,6 +15,7 @@ from src.config import get_settings
 from src.observability import init_error_monitoring, init_observability
 from src.pipeline.generate import generate_story
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
+from src.pipeline.prompts import PromptPublishResult, publish_prompts, write_dev_prompts
 from src.pipeline.publish import audit_published_bucket, publish_story
 
 app = typer.Typer(help="Cantastorie authoring pipeline", no_args_is_help=True)
@@ -70,6 +73,65 @@ def publish(story_id: str = typer.Option(..., help="Story working-folder id")) -
         f"Published {result.story_id}: {len(result.uploaded)} uploaded, "
         f"{len(result.skipped)} unchanged; manifest lists {len(result.manifest_story_ids)}."
     )
+
+
+def _report_prompt_run(result: PromptPublishResult, *, local: bool) -> None:
+    prefix = "[dry run] " if result.dry_run else ""
+    typer.echo(f"{prefix}{result.language}: {result.target}")
+    for line in result.lines:
+        state = "cached" if line.cached else "needs TTS"
+        typer.echo(f"  {line.manifest_key:<12} {state:<9} {line.text}")
+        if line.url:
+            typer.echo(f"  {'':<12} -> {line.url}")
+    noun = "written" if local else "uploaded"
+    if result.dry_run:
+        change = "would change" if result.manifest_changed else "unchanged"
+        typer.echo(f"  would make {result.tts_calls} TTS call(s); manifest {change}")
+    else:
+        change = "updated" if result.manifest_changed else "unchanged"
+        typer.echo(
+            f"  {len(result.uploaded)} {noun}, {len(result.skipped)} unchanged; manifest {change}"
+        )
+
+
+@app.command("publish-prompts")
+def publish_prompts_command(
+    language: str = typer.Option(..., help="A roster language code, or 'all'"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the plan; no TTS, no writes"),
+    yes: bool = typer.Option(False, "--yes", help="Confirm writing the shared public bucket"),
+    local: bool = typer.Option(
+        False, "--local", help="Write the dev fixtures under src/static/content/ instead of R2"
+    ),
+) -> None:
+    """Narrate and publish the spoken prompts for one language, or all of them."""
+    if language == "all":
+        languages = list(_LANGUAGES)
+    elif language in _LANGUAGES:
+        languages = [language]
+    else:
+        typer.echo(f"Unknown language {language!r}; roster: {', '.join(_LANGUAGES)}, or all")
+        raise typer.Exit(1)
+
+    settings = get_settings()
+    if not (dry_run or local or yes):
+        typer.echo(
+            f"Refusing: this writes the shared public shelf (bucket {settings.r2_bucket!r}, "
+            "published/prompts/ and each language's live manifest) and spends TTS. "
+            "Run with --dry-run first, then rerun with --yes."
+        )
+        raise typer.Exit(1)
+
+    tts_calls = 0
+    for code in languages:
+        lang = cast("Language", code)
+        if local:
+            result = write_dev_prompts(lang, settings, dry_run=dry_run)
+        else:
+            result = publish_prompts(lang, settings, dry_run=dry_run)
+        _report_prompt_run(result, local=local)
+        tts_calls += result.tts_calls
+    verb = "Would make" if dry_run else "Made"
+    typer.echo(f"{verb} {tts_calls} TTS call(s) across {len(languages)} language(s).")
 
 
 @app.command()

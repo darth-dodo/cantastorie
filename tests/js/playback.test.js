@@ -184,6 +184,20 @@ describe("Story start prompt — \"Tap a cover. 'Si parte!' — and page 1 narra
     await playback.openStory(fixtureStory());
     expect(narrations()).toEqual(["/s/p1.wav"]);
   });
+
+  it("an empty prompts map (a language whose prompts aren't published yet) plays the story to the end screen silently", async () => {
+    // H6: a manifest with no prompts must degrade to no prompt lines, never a
+    // stalled story or a thrown error. A fresh store and engine: the
+    // beforeEach instance (with PROMPTS) would otherwise react to it too.
+    store = createStore();
+    engine = fakeEngine();
+    playback = createPlayback({ store, engine, prefetcher, prompts: {}, isHidden });
+    await playback.openStory(fixtureStory());
+    for (let i = 0; i < 8; i++) engine.endNarration();
+    await flush();
+    expect(store.state.screen).toBe("end");
+    expect(promptsSpoken()).toEqual([]);
+  });
 });
 
 describe("Auto page turn — \"Pages turn themselves within 500 ms of the audio ending, with a gentle crossfade\"", () => {

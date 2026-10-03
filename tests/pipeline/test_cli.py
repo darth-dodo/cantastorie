@@ -8,12 +8,15 @@ provider-driven functions are stubbed.
 """
 
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from typer.testing import CliRunner
 
 from src.pipeline import cli
 from src.pipeline.cli import app
+from src.pipeline.models import Language
+from src.pipeline.prompts import PromptLine, PromptPublishResult
 from src.pipeline.publish import AuditResult, PublishResult
 
 runner = CliRunner()
@@ -275,3 +278,85 @@ def test_audit_reports_violations_and_exits_one(
     assert "2 violations" in result.output
     assert "bad-story" in result.output
     assert "orphan" in result.output
+
+
+# ---------------------------------------------------------------------------
+# publish-prompts (H6, AI-481): the operator's spoken-prompt run
+# ---------------------------------------------------------------------------
+
+
+def _fake_prompt_run(seen: list[tuple[str, bool]]) -> object:
+    def fake(language: str, settings: object, *, dry_run: bool = False) -> PromptPublishResult:
+        seen.append((language, dry_run))
+        line = PromptLine(name="offline", manifest_key="offline", text="t", cached=False, url=None)
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[line],
+            uploaded=[] if dry_run else ["k"],
+            skipped=[],
+            manifest_changed=True,
+        )
+
+    return fake
+
+
+def test_publish_prompts_refuses_the_shared_bucket_without_yes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given no --yes and no --dry-run,
+    When publish-prompts targets R2,
+    Then it refuses before any TTS call or write, and says how to proceed."""
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "es"])
+
+    assert result.exit_code == 1
+    assert seen == []
+    assert "--yes" in result.output
+
+
+def test_publish_prompts_with_yes_publishes_the_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "es", "--yes"])
+
+    assert result.exit_code == 0
+    assert seen == [("es", False)]
+    assert "1 uploaded" in result.output
+
+
+def test_publish_prompts_dry_run_needs_no_yes_and_covers_all_languages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "all", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert seen == [(lang, True) for lang in get_args(Language)]
+    assert "8 TTS call(s)" in result.output
+
+
+def test_publish_prompts_local_writes_dev_fixtures_without_yes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--local never touches the bucket, so it needs no --yes."""
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run([]))
+    monkeypatch.setattr(cli, "write_dev_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "de", "--local"])
+
+    assert result.exit_code == 0
+    assert seen == [("de", False)]
+
+
+def test_publish_prompts_rejects_a_language_outside_the_roster() -> None:
+    result = runner.invoke(app, ["publish-prompts", "--language", "fr", "--dry-run"])
+    assert result.exit_code == 1
+    assert "fr" in result.output
