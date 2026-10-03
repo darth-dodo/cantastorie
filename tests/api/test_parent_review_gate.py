@@ -20,7 +20,7 @@ from mypy_boto3_s3 import S3Client
 
 import src.api.routes.parent as parent_module
 from src.api.routes._templates import TEMPLATES_DIR
-from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
+from src.workshop.records import V1_STORY_IDS_KEY, RunRecord, RunStore, StoryRequest, new_run
 from tests.api.test_parent_approve import BUCKET, FAMILY, PARENT, PENDING_BUCKET, Harness
 
 
@@ -124,11 +124,11 @@ def test_a_record_saved_before_review_tracking_counts_as_unreviewed(
     _stage_story(s3, "story-one")
     record = _staged_run(harness.store, "story-one")
     key = f"pending/{FAMILY}/runs/{record.id}.json"
-    # As saved before B2 and AI-480: schema 1, a story_ids list, no review field.
+    # As saved before B2 and AI-480: schema 1, a list of story ids, no review field.
     legacy = json.loads(s3.get_object(Bucket=PENDING_BUCKET, Key=key)["Body"].read())
     legacy.pop("reviewed")
     legacy.pop("story_id")
-    legacy.update(schema_version=1, story_ids=["story-one"])
+    legacy.update({"schema_version": 1, V1_STORY_IDS_KEY: ["story-one"]})
     s3.put_object(Bucket=PENDING_BUCKET, Key=key, Body=json.dumps(legacy).encode())
     harness.sign_in(PARENT)
 

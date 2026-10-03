@@ -33,8 +33,11 @@ if TYPE_CHECKING:
 
 PENDING_PREFIX = "pending"
 
-# 2 since AI-480: one story_id + reviewed flag (1 held story_ids lists).
+# 2 since AI-480: one story_id and a reviewed flag. Schema 1 held a list of
+# story ids and a list of reviewed ids under these keys; _upgrade_v1 reads them.
 SCHEMA_VERSION = 2
+V1_STORY_IDS_KEY = "story_ids"
+V1_REVIEWED_IDS_KEY = "reviewed_story_ids"
 
 logger = logging.getLogger(__name__)
 
@@ -112,24 +115,24 @@ class RunRecord(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _upgrade_v1(cls, data: Any) -> Any:
-        """Read a schema-1 record (a story_ids list) as schema 2 (one story_id).
+        """Read a schema-1 record (a list of story ids) as schema 2 (one story_id).
 
         Approved and rejected records are never saved again, so this shim stays
         for good. A v1 run with several stories keeps its first and logs the
         rest: they stay staged in R2, but no record points at them any more.
         """
         if not isinstance(data, dict) or (
-            "story_ids" not in data and "reviewed_story_ids" not in data
+            V1_STORY_IDS_KEY not in data and V1_REVIEWED_IDS_KEY not in data
         ):
             return data
         data = dict(data)
-        story_ids = list(data.pop("story_ids", None) or [])
-        reviewed_ids = list(data.pop("reviewed_story_ids", None) or [])
-        story_id = story_ids[0] if story_ids else None
-        if len(story_ids) > 1:
+        legacy_ids = list(data.pop(V1_STORY_IDS_KEY, None) or [])
+        reviewed_ids = list(data.pop(V1_REVIEWED_IDS_KEY, None) or [])
+        story_id = legacy_ids[0] if legacy_ids else None
+        if len(legacy_ids) > 1:
             logger.warning(
-                f"Run record {data.get('id')} held {len(story_ids)} stories; "
-                f"keeping {story_id}, dropping {story_ids[1:]}"
+                f"Run record {data.get('id')} held {len(legacy_ids)} stories; "
+                f"keeping {story_id}, dropping {legacy_ids[1:]}"
             )
         data.setdefault("story_id", story_id)
         data.setdefault("reviewed", story_id is not None and story_id in reviewed_ids)

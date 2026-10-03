@@ -401,10 +401,10 @@ def _publish_manifest(
         load=lambda: _load_manifest(client, bucket, language, root),
         mutate=mutate,
     )
-    story_ids = [entry["id"] for entry in manifest["stories"]]
+    listed_ids = [entry["id"] for entry in manifest["stories"]]
     if wrote:
-        return [manifest_key], [], story_ids
-    return [], [manifest_key], story_ids
+        return [manifest_key], [], listed_ids
+    return [], [manifest_key], listed_ids
 
 
 def stage_story(

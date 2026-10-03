@@ -330,22 +330,30 @@ def _put_raw(s3: S3Client, record: records.RunRecord, body: dict[str, object]) -
     )
 
 
-def _v1(record: records.RunRecord, **fields: object) -> dict[str, object]:
-    """A record as persisted before AI-480: schema 1, a story_ids list, the
-    request's count, and no story_id or reviewed keys."""
+def _v1(
+    record: records.RunRecord,
+    *,
+    ids: list[str],
+    reviewed_ids: list[str] | None = None,
+) -> dict[str, object]:
+    """A record as persisted before AI-480: schema 1, a list of story ids,
+    the request's count, and no story_id or reviewed keys. `ids` and
+    `reviewed_ids` land under the schema-1 keys."""
     body = json.loads(record.model_dump_json())
     body.pop("story_id")
     body.pop("reviewed")
     body["schema_version"] = 1
     body["request"]["count"] = 1
-    body.update(fields)
+    body[records.V1_STORY_IDS_KEY] = ids
+    if reviewed_ids is not None:
+        body[records.V1_REVIEWED_IDS_KEY] = reviewed_ids
     return body
 
 
 def test_a_record_without_a_review_field_loads_unreviewed(s3: S3Client) -> None:
     store = RunStore(_settings(), client=s3)
     record = _staged("s1")
-    _put_raw(s3, record, _v1(record, story_ids=["s1"]))
+    _put_raw(s3, record, _v1(record, ids=["s1"]))
     loaded = store.load("a" * 32, record.id)
     assert loaded is not None
     assert loaded.story_id == "s1"
@@ -368,13 +376,13 @@ def test_advance_sets_the_story_id_and_later_steps_keep_it() -> None:
     assert staged.advance("approved").story_id == "s1"
 
 
-@pytest.mark.parametrize(("story_ids", "expected"), [([], None), (["s1"], "s1")])
+@pytest.mark.parametrize(("legacy_ids", "expected"), [([], None), (["s1"], "s1")])
 def test_a_v1_record_upgrades_its_story_ids_on_read(
-    s3: S3Client, story_ids: list[str], expected: str | None
+    s3: S3Client, legacy_ids: list[str], expected: str | None
 ) -> None:
     store = RunStore(_settings(), client=s3)
     record = _staged("s1")
-    _put_raw(s3, record, _v1(record, story_ids=story_ids))
+    _put_raw(s3, record, _v1(record, ids=legacy_ids))
 
     loaded = store.load("a" * 32, record.id)
 
@@ -388,7 +396,7 @@ def test_a_v1_record_with_several_stories_keeps_the_first_and_warns(
 ) -> None:
     store = RunStore(_settings(), client=s3)
     record = _staged("s1")
-    _put_raw(s3, record, _v1(record, story_ids=["s1", "s2", "s3"]))
+    _put_raw(s3, record, _v1(record, ids=["s1", "s2", "s3"]))
     caplog.set_level("WARNING", logger="src.workshop.records")
 
     loaded = store.load("a" * 32, record.id)
@@ -409,7 +417,7 @@ def test_a_v1_review_list_maps_to_the_single_reviewed_flag(
 ) -> None:
     store = RunStore(_settings(), client=s3)
     record = _staged("s1")
-    _put_raw(s3, record, _v1(record, story_ids=["s1"], reviewed_story_ids=reviewed_ids))
+    _put_raw(s3, record, _v1(record, ids=["s1"], reviewed_ids=reviewed_ids))
 
     loaded = store.load("a" * 32, record.id)
 
@@ -420,7 +428,7 @@ def test_a_v1_review_list_maps_to_the_single_reviewed_flag(
 def test_saving_an_upgraded_record_writes_the_v2_shape(s3: S3Client) -> None:
     store = RunStore(_settings(), client=s3)
     record = _staged("s1")
-    _put_raw(s3, record, _v1(record, story_ids=["s1"], reviewed_story_ids=["s1"]))
+    _put_raw(s3, record, _v1(record, ids=["s1"], reviewed_ids=["s1"]))
     loaded = store.load("a" * 32, record.id)
     assert loaded is not None
 
@@ -431,6 +439,6 @@ def test_saving_an_upgraded_record_writes_the_v2_shape(s3: S3Client) -> None:
     assert raw["schema_version"] == 2
     assert raw["story_id"] == "s1"
     assert raw["reviewed"] is True
-    assert "story_ids" not in raw
-    assert "reviewed_story_ids" not in raw
+    assert records.V1_STORY_IDS_KEY not in raw
+    assert records.V1_REVIEWED_IDS_KEY not in raw
     assert "count" not in raw["request"]

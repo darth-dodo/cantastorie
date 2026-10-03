@@ -138,10 +138,10 @@ def _seed() -> dict[str, str]:
     ids: dict[str, str] = {}
     for token in tokens:
         for lang in ("it", "en"):
-            story_ids = [f"{token[:6]}-{lang}-{i}" for i in range(3)]
+            shelf_ids = [f"{token[:6]}-{lang}-{i}" for i in range(3)]
             root = f"published/families/{token}/{lang}"
-            OBJECTS[f"{root}/manifest.json"] = manifest(story_ids)
-            for s in story_ids:
+            OBJECTS[f"{root}/manifest.json"] = manifest(shelf_ids)
+            for s in shelf_ids:
                 for key in story_files(root, s):
                     OBJECTS[key] = b"x"
         for n in range(3):

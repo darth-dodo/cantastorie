@@ -381,7 +381,7 @@ def test_clerk_loads_nowhere_in_the_child_player() -> None:
     assert offenders == [], f"Clerk reference reached a child-player path: {offenders}"
 
 
-# ── One story per run (AI-480): /parent/runs replaces /parent/packs ───────────
+# ── One story per run (AI-480): /parent/runs replaces the retired routes ──────
 
 
 @pytest.mark.parametrize(
@@ -442,7 +442,6 @@ def test_the_being_made_template_replaces_packs() -> None:
     assert not (parent_templates / "packs.html").exists()
     header = (parent_templates / "_header.html").read_text()
     assert '("being_made", "/parent", "Being made"' in header
-    assert "packs" not in header
 
 
 def test_published_at_maps_approved_story_ids_and_skips_runs_without_one() -> None:
