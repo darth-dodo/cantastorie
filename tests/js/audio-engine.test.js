@@ -330,9 +330,19 @@ describe("interleavings a double-tapping child can produce", () => {
   });
 
   it("the timeout covers only the wait for headers: a slow body still decodes", async () => {
-    const slowBody = vi.fn(async () => ({
+    // Headers at once, then a body that takes longer than the timeout. Like a
+    // real fetch, the body read dies if the signal aborts mid-download, so
+    // this only passes if the headers timer is cleared when headers arrive.
+    const slowBody = vi.fn(async (_url, { signal } = {}) => ({
       ok: true,
-      arrayBuffer: () => new Promise((resolve) => setTimeout(() => resolve(new ArrayBuffer(8)), 60)),
+      arrayBuffer: () =>
+        new Promise((resolve, reject) => {
+          const done = setTimeout(() => resolve(new ArrayBuffer(8)), 60);
+          signal?.addEventListener("abort", () => {
+            clearTimeout(done);
+            reject(signal.reason ?? new Error("aborted"));
+          });
+        }),
     }));
     const slow = createAudioEngine({ createContext: () => ctx, fetchFn: slowBody, audioLoadTimeoutMs: 20 });
     await expect(slow.load("big.wav")).resolves.toBeTruthy();
