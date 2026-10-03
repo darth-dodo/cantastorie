@@ -1,6 +1,6 @@
 """Spoken prompts per language, as an operator step (H6, AI-481).
 
-The five spoken prompts (narrate.py UTTERANCE_TEXTS) reach a child two ways:
+The five spoken prompts (utterance_texts.py UTTERANCE_TEXTS) reach a child two ways:
 
 **publish_prompts** narrates a language's lines through the narrate step,
 uploads the WAVs under ``published/prompts/{lang}/{name}.{hash}.wav`` (the
@@ -46,12 +46,11 @@ from src.pipeline.publish import (
     _write_manifest,
 )
 from src.pipeline.steps.narrate import (
-    UTTERANCE_TEXTS,
-    UtteranceName,
     cached_utterance_audio,
     synthesize_utterances,
     utterance_filename,
 )
+from src.pipeline.steps.utterance_texts import UTTERANCE_TEXTS, UtteranceName
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

@@ -21,13 +21,8 @@ from src.config import Settings
 from src.pipeline.cache import ArtifactCache
 from src.pipeline.models import Language, Page
 from src.pipeline.providers import NarrationClient
-from src.pipeline.steps.narrate import (
-    IT_UTTERANCES,
-    UTTERANCE_TEXTS,
-    UtteranceName,
-    narrate_pages,
-    synthesize_utterances,
-)
+from src.pipeline.steps.narrate import narrate_pages, synthesize_utterances
+from src.pipeline.steps.utterance_texts import IT_UTTERANCES, UTTERANCE_TEXTS, UtteranceName
 
 
 def _settings() -> Settings:

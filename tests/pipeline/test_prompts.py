@@ -25,7 +25,7 @@ from src.config import Settings
 from src.pipeline.prompts import DEV_PROMPT_FILES, publish_prompts, write_dev_prompts
 from src.pipeline.providers import NarrationClient
 from src.pipeline.publish import MANIFEST_PROMPT_KEYS
-from src.pipeline.steps.narrate import IT_UTTERANCES, UTTERANCE_TEXTS
+from src.pipeline.steps.utterance_texts import IT_UTTERANCES, UTTERANCE_TEXTS
 
 BUCKET = "cantastorie-published"
 PUBLIC_BASE = "https://cdn.example.test/published"

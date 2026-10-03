@@ -27,7 +27,7 @@ from src.pipeline.generate import generate_story
 from src.pipeline.models import Story
 from src.pipeline.providers import NarrationClient
 from src.pipeline.publish import STAGED_PREFIX, STORY_FILE
-from src.pipeline.steps.narrate import IT_UTTERANCES
+from src.pipeline.steps.utterance_texts import IT_UTTERANCES
 
 _PAGE = " ".join(["The water sings shh shh."] * 8)
 _GOOD_DRAFT = {"title": "La barchetta e la luna", "pages": [_PAGE] * 10}

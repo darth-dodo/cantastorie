@@ -103,7 +103,7 @@ published/prompts/{lang}/…
 
 ### Spoken prompts for every language (H6, AI-481)
 
-A story publish only carries Italian prompts (a generation run stages them for `it` alone), so the other languages' greeting, story-start, end, audio-retry and offline lines are published by a separate operator command. The lines live in `UTTERANCE_TEXTS` in `src/pipeline/steps/narrate.py`; Italian and Spanish are the final copy from `docs/product.md`, and every other set is machine-drafted and **pending native review**, so get those lines reviewed before running against production.
+A story publish only carries Italian prompts (a generation run stages them for `it` alone), so the other languages' greeting, story-start, end, audio-retry and offline lines are published by a separate operator command. The lines live in `UTTERANCE_TEXTS` in `src/pipeline/steps/utterance_texts.py`; Italian and Spanish are the final copy from `docs/product.md`, and every other set is machine-drafted and **pending native review**, so get those lines reviewed before running against production.
 
 ```bash
 # 1. See the plan: no TTS call, no write. Lists every line, cached or not.
