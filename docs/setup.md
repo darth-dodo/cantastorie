@@ -98,8 +98,38 @@ The pipeline's `publish` step is the **only** path that writes to the bucket (se
 ```
 published/it/manifest.json          ← short TTL, the only volatile file
 published/stories/{story-id}/…       ← immutable, content-hashed
-published/prompts/it/…
+published/prompts/{lang}/…
 ```
+
+### Spoken prompts for every language (H6, AI-481)
+
+A story publish only carries Italian prompts (a generation run stages them for `it` alone), so the other languages' greeting, story-start, end, audio-retry and offline lines are published by a separate operator command. The lines live in `UTTERANCE_TEXTS` in `src/pipeline/steps/narrate.py`; every non-Italian set is machine-drafted and **pending native review**, so get the lines reviewed before running against production.
+
+```bash
+# 1. See the plan: no TTS call, no write. Lists every line, cached or not.
+uv run cantastorie publish-prompts --language all --dry-run
+
+# 2. Publish one language (or all) to the shared public shelf.
+uv run cantastorie publish-prompts --language es --yes
+uv run cantastorie publish-prompts --language all --yes
+```
+
+- **What it writes**: five WAVs under `published/prompts/{lang}/{name}.{hash}.wav` (immutable, hashed names), then the language's `published/{lang}/manifest.json` `prompts` map. The manifest write goes through the same IfMatch-and-retry helper as publish and unpublish, so a concurrent story publish is never lost. Stories in the manifest are left alone.
+- **Guard**: without `--yes` (and without `--dry-run` or `--local`) the command refuses, because it writes the shared public bucket.
+- **Idempotent**: audio is cached under `content/_prompts/` (the narrate step's content-addressed cache), uploads skip objects that already hold the same bytes, and an unchanged manifest is not rewritten. A rerun costs zero TTS calls and writes nothing. Run it from the same checkout each time, or the cache is cold.
+- **Cost**: a cold run is 8 languages × 5 lines = **40 TTS calls** (Gemini 3.1 Flash TTS via OpenRouter, ADR-008). Each line is a few seconds of audio, so a full run should cost well under US$1. That figure is **unverified**: check the OpenRouter usage page after the first run. `it` already has prompts from story publishes; including it re-narrates its five lines and repoints its manifest at the new files.
+- **Offline prompt**: the player fetches the offline line **same-origin**, from `/static/content/{lang}/prompts/offline.wav` (the clouds screen shows exactly when R2 is unreachable), so publishing to R2 does not cover it. Run the `--local` form below and commit the files so the deployed app serves them.
+
+#### Dev fixtures
+
+`--local` writes the same audio into `src/static/content/{lang}/prompts/` under the fixed dev names (`greeting.wav`, `story-start.wav`, `end.wav`, `audio-retry.wav`, `offline.wav`) and points an existing `src/static/content/{lang}/manifest.json` at them. It never creates a missing manifest, which would turn the dev offline screen into an empty shelf. It shares the cache with the R2 run, so after a production run it costs no TTS. It needs no `--yes`.
+
+```bash
+uv run cantastorie publish-prompts --language all --local --dry-run
+uv run cantastorie publish-prompts --language all --local
+```
+
+Writing `it` replaces the committed chime stand-ins with spoken lines. Writing `en` gives the English dev shelf prompts, which `tests/e2e/failure-states.spec.js` currently describes as having none; rerun the E2E suite after committing. Until prompts exist for a language, the player stays silent where a prompt would play: no greeting, no start or end line, and a silent sleeping bird. It never blocks or errors (`tests/js/playback.test.js`).
 
 ---
 
@@ -270,3 +300,4 @@ On a phone on **cellular** (not home wifi), open the Render URL and confirm:
 - **Render Starter**: ~$7/month, always-on (the cold-start decision — a bedtime app is opened cold nightly, and the free tier's spin-down would blow the 4-second first-open budget).
 - **Preview environments**: one extra Starter instance per open PR, prorated, and deleted after merge, close or 3 idle days.
 - **R2**: zero egress fees; storage for the launch library is pennies.
+- **Spoken prompts**: a one-off of about 40 TTS calls for all eight languages (unverified estimate: well under US$1). Reruns are free (see [Spoken prompts for every language](#spoken-prompts-for-every-language-h6-ai-481)).

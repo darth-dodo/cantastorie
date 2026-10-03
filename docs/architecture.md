@@ -187,7 +187,7 @@ Exact model IDs live in `config.py`, chosen and re-benchmarked freely since Open
 
 ### Spoken prompts as first-class assets
 
-The ten spoken prompts are first-class pipeline assets (generated, reviewed, published per language), not an afterthought — slice 1 already needs the shelf greeting and story start. They are narrated through the same `narrate` step and provider as story pages.
+The ten spoken prompts are first-class pipeline assets (generated, reviewed, published per language), not an afterthought — slice 1 already needs the shelf greeting and story start. They are narrated through the same `narrate` step and provider as story pages. Every language in the roster has its lines (`UTTERANCE_TEXTS` in `steps/narrate.py`, five per language today; the non-Italian sets are machine-drafted, pending native review). A generation run stages only the Italian set; the operator's `cantastorie publish-prompts` command publishes any language's set to `published/prompts/{lang}/` and its manifest (H6, AI-481; runbook in [setup.md](setup.md#spoken-prompts-for-every-language-h6-ai-481)).
 
 Page timings, by contrast, are **not** produced day one: the narration provider returns audio without word timestamps, so `story.json` page timings stay empty until reading mode reconstructs them via the Deepgram STT pass. See [Narration / Audio](#narration--audio) for the trade-off and the path back to timings.
 
@@ -270,7 +270,7 @@ The loaded story exposes `pagesFrom(pageId)`, an ordered walk of one arm. When a
 
 ## Narration / Audio
 
-Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across seven languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
+Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across eight languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
 
 ### Provider: Gemini TTS defaults via OpenRouter; Voxtral cloning via Mistral; Deepgram alongside
 

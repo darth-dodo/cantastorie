@@ -55,9 +55,9 @@ Behind Clerk operator sign-in, `/workshop` is where stories are born: start a ge
 
 For reading-along parents and emerging readers, an optional text panel will show the current page with karaoke word highlighting and tap-word English glosses drawn from a precomputed gloss map — no network call. It is parent-enabled and off by default; the core experience never requires reading. The pipeline's word-timing (Deepgram) and gloss steps ship with this slice.
 
-### Seven Languages
+### Eight Languages
 
-Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, German, Bulgarian, and Russian ride along. Stories are authored natively per language, never translated: an Italian story reaches for *biscotti della nonna*, a Spanish one for *magdalenas*.
+Italian and Spanish are the flagships — deepest content, first through every quality gate. English, Greek, German, Bulgarian, Russian, and Marathi ride along. Stories are authored natively per language, never translated: an Italian story reaches for *biscotti della nonna*, a Spanish one for *magdalenas*.
 
 ### Truly Private, Parent-Approved
 
