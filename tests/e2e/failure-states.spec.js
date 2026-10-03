@@ -102,6 +102,52 @@ test.describe("When Things Go Wrong (product.md)", () => {
     await expect(page.locator(".cover").first()).toBeVisible({ timeout: 10_000 });
   });
 
+  // B8 (AI-473): a network that accepts the request and never answers. The
+  // route handler never calls fulfill (route.abort() would reject at once),
+  // so only the player's own fetch timeout can end the wait.
+  test("the shelf hangs: the fetch times out into the clouds, and a tap once it answers brings the stories", async ({ page }) => {
+    await page.route("**/manifest.json", () => {});
+    await page.goto("/play?theme=dusk");
+
+    // Within the manifest timeout (8 s), the clouds, never a blank page.
+    await expect(page.locator(".offline")).toBeVisible({ timeout: 12_000 });
+    await expect(page.locator(".cover")).toHaveCount(0);
+
+    await page.unroute("**/manifest.json");
+    await page.locator(".offline").click();
+    await expect(page.locator(".cover").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("a story hangs: the cover shimmers, the clouds speak, and a tap once it answers opens the story", async ({ page }) => {
+    const HUNG_STORY = "**/la-barchetta-e-la-luna/story.json";
+    const offlinePromptRequests = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/prompts/offline")) offlinePromptRequests.push(request.url());
+    });
+    await page.route(HUNG_STORY, () => {});
+    await page.goto("/play?lang=it&theme=dusk");
+
+    const cover = page.getByRole("button", { name: STORY_TITLE });
+    await cover.click();
+
+    // The tap is answered at once: the cover shimmers while the story loads.
+    await expect(cover).toHaveClass(/\bloading\b/);
+
+    // Within the story timeout (10 s), the clouds, never the silent mock
+    // story: the child stays on the shelf and the line is spoken.
+    await expect(page.locator(".offline")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".player")).toHaveCount(0);
+    expect(await page.evaluate(() => window.__shell.store.state.screen)).toBe("shelf");
+    await expect.poll(() => offlinePromptRequests.length, { timeout: 5_000 }).toBeGreaterThan(0);
+
+    // The network returns; a tap on the clouds retries that story, and it
+    // opens (the timed-out promise was not kept in the cache).
+    await page.unroute(HUNG_STORY);
+    await page.locator(".offline").click();
+    await expect(page.locator(".player")).toBeVisible({ timeout: 10_000 });
+    expect(await page.evaluate(() => window.__shell.playback.hasStory())).toBe(true);
+  });
+
   test("the voice freezes mid-story: the sleeping bird appears, and a tap wakes the story where it stopped", async ({ page }) => {
     await openTheStoryAndHearPageOne(page);
 

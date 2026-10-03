@@ -214,6 +214,8 @@ The failure-state e2e tests use `route.abort()`, which rejects instantly; no tes
 
 **Fix**: wrap both fetches in `AbortSignal.timeout(...)` — the codebase already uses this pattern for the story-start prompt — falling into the existing offline screen and page-timer fallbacks.
 
+Fixed in code (AI-473). After review, a published cover whose story fails to load shows the clouds instead of the page timer, and narration loads time out too.
+
 ---
 
 ### B9 — Narration dies permanently when the device sleeps
@@ -458,7 +460,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
-- [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
+- [x] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
 - [ ] Spoken prompts shipped for every language in the selector, or the selector gated to complete languages (H6)
 - [x] Path allowlist and tests on `/published/{path}` (H7)

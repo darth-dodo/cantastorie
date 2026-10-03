@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAudioEngine } from "../../src/static/js/audio-engine.js";
+import { AUDIO_LOAD_TIMEOUT_MS, createAudioEngine } from "../../src/static/js/audio-engine.js";
 
 // A fake Web Audio context that records what the engine asks of it.
 // jsdom has no AudioContext; the engine takes injected factories precisely
@@ -307,6 +307,53 @@ describe("interleavings a double-tapping child can produce", () => {
     flaky = false;
     await expect(recovering.load("p5.mp3")).resolves.toBeTruthy();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  // B8 review (AI-473): a network that accepts the request and never sends
+  // headers. The fake honors an abort signal the way a real fetch does.
+  const hang = (_url, { signal } = {}) =>
+    new Promise((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(signal.reason ?? new Error("aborted")));
+    });
+
+  it("a fetch that never answers is aborted after the time-to-headers timeout and evicted", async () => {
+    let up = false;
+    const fetchSpy = vi.fn((url, opts) =>
+      up ? Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }) : hang(url, opts),
+    );
+    const hung = createAudioEngine({ createContext: () => ctx, fetchFn: fetchSpy, audioLoadTimeoutMs: 20 });
+    await expect(hung.load("p5.wav")).rejects.toThrow();
+
+    up = true;
+    await expect(hung.load("p5.wav")).resolves.toBeTruthy();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("the timeout covers only the wait for headers: a slow body still decodes", async () => {
+    // Headers at once, then a body that takes longer than the timeout. Like a
+    // real fetch, the body read dies if the signal aborts mid-download, so
+    // this only passes if the headers timer is cleared when headers arrive.
+    const slowBody = vi.fn(async (_url, { signal } = {}) => ({
+      ok: true,
+      arrayBuffer: () =>
+        new Promise((resolve, reject) => {
+          const done = setTimeout(() => resolve(new ArrayBuffer(8)), 60);
+          signal?.addEventListener("abort", () => {
+            clearTimeout(done);
+            reject(signal.reason ?? new Error("aborted"));
+          });
+        }),
+    }));
+    const slow = createAudioEngine({ createContext: () => ctx, fetchFn: slowBody, audioLoadTimeoutMs: 20 });
+    await expect(slow.load("big.wav")).resolves.toBeTruthy();
+  });
+
+  it("AUDIO_LOAD_TIMEOUT_MS is 8 s and every load carries an abort signal", async () => {
+    expect(AUDIO_LOAD_TIMEOUT_MS).toBe(8000);
+    const spy = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+    const e = createAudioEngine({ createContext: () => ctx, fetchFn: spy });
+    await e.load("p1.wav");
+    expect(spy.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });
 
