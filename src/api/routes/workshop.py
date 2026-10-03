@@ -132,7 +132,7 @@ def _record_or_404(manager: RunManager, scope: WorkshopScope, run_id: str) -> Ru
 
 def _story_record_or_404(manager: RunManager, story_id: str) -> RunRecord:
     for record in manager.store.list_runs():
-        if story_id in record.story_ids:
+        if record.story_id == story_id:
             return record
     raise HTTPException(status_code=404)
 
@@ -337,7 +337,9 @@ async def run_page(
     if not scope.is_operator:
         return RedirectResponse(home_path(scope.is_operator), status_code=303)
     record = _record_or_404(manager, scope, run_id)
-    staged_stories = _staged_story_summaries(record.story_ids, settings)
+    staged_stories = _staged_story_summaries(
+        ([record.story_id] if record.story_id else []), settings
+    )
     return templates.TemplateResponse(
         request,
         "workshop/run.html",
@@ -364,7 +366,9 @@ async def run_progress(
         # Polled every 2 s: all of this stays off the event loop (AI-465).
         manager.reap_stale()  # a stale run's own poll heals it, so it stops polling (AI-417)
         record = _record_or_404(manager, scope, run_id)
-        return record, _staged_story_summaries(record.story_ids, settings)
+        return record, _staged_story_summaries(
+            ([record.story_id] if record.story_id else []), settings
+        )
 
     record, staged_stories = await run_in_threadpool(read_progress)
     return templates.TemplateResponse(
@@ -399,7 +403,7 @@ async def approve_run(
             status_code=400,
             detail=f"Run is in {record.state} state, must be staged to approve",
         )
-    for story_id in record.story_ids:
+    for story_id in [record.story_id] if record.story_id else []:
         publisher(story_id)
     manager.store.save(record.advance("approved"))
     return _to_login()
@@ -454,9 +458,9 @@ async def delete_run(
     if record.state in LIVE_STATES:
         raise HTTPException(status_code=400)
     runs = manager.store.list_runs()
-    for story_id in record.story_ids:
+    for story_id in [record.story_id] if record.story_id else []:
         other_records = [
-            other for other in runs if other.id != record.id and story_id in other.story_ids
+            other for other in runs if other.id != record.id and other.story_id == story_id
         ]
         if not other_records:
             delete_staged_story(story_id, settings)
@@ -489,9 +493,7 @@ async def delete_staged_story_route(
         unpublish_story(story_id, settings)
     delete_staged_story(story_id, settings)
     shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
-    updated = record.model_copy(
-        update={"story_ids": [s for s in record.story_ids if s != story_id]}
-    )
+    updated = record.model_copy(update={"story_id": None})
     manager.store.save(updated)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
@@ -521,7 +523,7 @@ async def staged_story(
         record = manager.store.load(scope.store_token, run_id)
     if record is None:
         for candidate in manager.store.list_runs():
-            if story_id in candidate.story_ids:
+            if candidate.story_id == story_id:
                 record = candidate
                 break
     return templates.TemplateResponse(

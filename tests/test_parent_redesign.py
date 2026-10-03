@@ -80,7 +80,7 @@ def _make_approved_run(family_token: str = VALID_TOKEN, story_id: str = "story-a
     req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(family_token, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=[story_id])
+    run = run.advance("staged", story_id=story_id)
     run = run.advance("approved")
     return run
 

@@ -52,9 +52,9 @@ def s3() -> Iterator[S3Client]:
         yield client
 
 
-def _staged_run(store: RunStore, family_token: str, story_ids: list[str]) -> RunRecord:
+def _staged_run(store: RunStore, family_token: str, story_id: str | None) -> RunRecord:
     record = new_run(family_token, StoryRequest(theme="first_snow", language="it"))
-    record = record.advance("running").advance("staged", story_ids=story_ids)
+    record = record.advance("running").advance("staged", story_id=story_id)
     store.save(record)
     return record
 
@@ -107,8 +107,8 @@ def test_approving_a_staged_pack_publishes_to_the_family_overlay(
     s3.put_object(
         Bucket=PENDING_BUCKET, Key="pending/staged/first_snow-it-fake0001/story.json", Body=b"{}"
     )
-    record = _staged_run(harness.store, FAMILY, ["first_snow-it-fake0001"])
-    harness.store.save(record.mark_reviewed("first_snow-it-fake0001"))
+    record = _staged_run(harness.store, FAMILY, "first_snow-it-fake0001")
+    harness.store.save(record.mark_reviewed())
     harness.sign_in(PARENT)
 
     response = harness.client.post(f"/parent/packs/{record.id}/approve", follow_redirects=False)
@@ -122,7 +122,7 @@ def test_approving_a_staged_pack_publishes_to_the_family_overlay(
 
 def test_a_family_cannot_approve_another_familys_run(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
-    other = _staged_run(harness.store, OTHER_FAMILY, ["first_snow-it-fake0002"])
+    other = _staged_run(harness.store, OTHER_FAMILY, "first_snow-it-fake0002")
     harness.sign_in(PARENT)  # session = FAMILY
 
     response = harness.client.post(f"/parent/packs/{other.id}/approve", follow_redirects=False)
@@ -148,7 +148,7 @@ def test_approving_a_non_staged_run_does_not_publish(tmp_path: Path, s3: S3Clien
 
 def test_approve_requires_a_signed_in_parent(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
-    record = _staged_run(harness.store, FAMILY, ["first_snow-it-fake0003"])
+    record = _staged_run(harness.store, FAMILY, "first_snow-it-fake0003")
 
     response = harness.client.post(f"/parent/packs/{record.id}/approve", follow_redirects=False)
 

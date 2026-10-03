@@ -113,9 +113,9 @@ def _overlay_manifest(s3: S3Client, family_token: str, language: str) -> dict[st
     return dict(json.loads(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()))
 
 
-def _approved_run(store: RunStore, family_token: str, story_ids: list[str]) -> RunRecord:
+def _approved_run(store: RunStore, family_token: str, story_id: str) -> RunRecord:
     record = new_run(family_token, StoryRequest(theme="first_snow", language="it"))
-    record = record.advance("running").advance("staged").advance("approved", story_ids=story_ids)
+    record = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     store.save(record)
     return record
 
@@ -224,7 +224,7 @@ def test_a_parent_sees_only_own_approved_packs(tmp_path: Path, s3: S3Client) -> 
     _put_overlay_manifest(s3, FAMILY, "it", [("sea-it-1", "La barchetta")])
     _put_overlay_manifest(s3, "c" * 32, "it", [("neve-it-1", "Prima neve")])
     harness = Harness(tmp_path, s3)
-    _approved_run(harness.store, FAMILY, ["sea-it-1"])
+    _approved_run(harness.store, FAMILY, "sea-it-1")
     harness.sign_in(PARENT)
 
     page = harness.client.get("/parent/stories")
@@ -247,7 +247,7 @@ def test_a_parent_deletes_own_story_forever(tmp_path: Path, s3: S3Client) -> Non
     _put_overlay_manifest(s3, FAMILY, "it", [("sea-it-1", "La barchetta")])
     _put_overlay_assets(s3, FAMILY, "sea-it-1")
     harness = Harness(tmp_path, s3)
-    _approved_run(harness.store, FAMILY, ["sea-it-1"])
+    _approved_run(harness.store, FAMILY, "sea-it-1")
     harness.sign_in(PARENT)
 
     response = harness.client.post(

@@ -64,10 +64,9 @@ router = APIRouter(prefix="/parent")
 def _published_at(runs: list[RunRecord]) -> dict[str, datetime]:
     """The family's published story ids, each with its approval (publish) time."""
     return {
-        story_id: record.updated_at
+        record.story_id: record.updated_at
         for record in runs
-        if record.state == "approved"
-        for story_id in record.story_ids
+        if record.state == "approved" and record.story_id is not None
     }
 
 
@@ -385,7 +384,9 @@ async def pack_progress(
     if record is None:
         raise HTTPException(status_code=404)
     staged_stories = (
-        await run_in_threadpool(_staged_story_summaries, record.story_ids, settings)
+        await run_in_threadpool(
+            _staged_story_summaries, ([record.story_id] if record.story_id else []), settings
+        )
         if record.state == "staged"
         else []
     )
@@ -430,11 +431,14 @@ async def approve_pack(
     if not record.fully_reviewed:
         raise HTTPException(status_code=409, detail="Review every story before approving")
     present = await run_in_threadpool(
-        lambda: all(_staged_story_exists(settings, s) for s in record.story_ids)
+        lambda: all(
+            _staged_story_exists(settings, s)
+            for s in ([record.story_id] if record.story_id else [])
+        )
     )
     if not present:
         raise HTTPException(status_code=409, detail="A staged story is missing")
-    for story_id in record.story_ids:
+    for story_id in [record.story_id] if record.story_id else []:
         publisher(story_id, ctx.family_token)
     manager.store.save(record.advance("approved"))
     if request.headers.get("HX-Request"):
@@ -455,17 +459,17 @@ def _staged_story_exists(settings: Settings, story_id: str) -> bool:
 def _record_review(manager: RunManager, record: RunRecord, story_id: str) -> RunRecord:
     """The parent has been served this staged story's review page — every page,
     picture and sound on one screen — so it counts as reviewed (B2). Blocking."""
-    if record.state != "staged" or story_id in record.reviewed_story_ids:
+    if record.state != "staged" or record.story_id != story_id or record.reviewed:
         return record
     try:
-        reviewed = record.mark_reviewed(story_id)
+        reviewed = record.mark_reviewed()
         manager.store.save(reviewed)
     except ConcurrentModificationError:
         # A concurrent write (another tab's review) moved the record on: redo it once.
         fresh = manager.store.load(record.family_token, record.id)
         if fresh is None or fresh.state != "staged":
             return fresh or record
-        reviewed = fresh.mark_reviewed(story_id)
+        reviewed = fresh.mark_reviewed()
         manager.store.save(reviewed)
     return reviewed
 
@@ -490,12 +494,12 @@ async def parent_staged_story(
         record = None
         if run_id:
             candidate = manager.store.load(ctx.family_token, run_id)
-            if candidate and story_id in candidate.story_ids:
+            if candidate and candidate.story_id == story_id:
                 record = candidate
         if record is None:
             # Fall back: scan this family's runs only.
             for candidate in manager.store.list_runs(family_token=ctx.family_token):
-                if story_id in candidate.story_ids:
+                if candidate.story_id == story_id:
                     record = candidate
                     break
         if record is None:
@@ -550,10 +554,10 @@ async def parent_staged_asset(
         # Tenancy: load() and list_runs() are both scoped to the session's family.
         if run:
             record = manager.store.load(ctx.family_token, run)
-            owned = record is not None and story_id in record.story_ids
+            owned = record is not None and record.story_id == story_id
         else:
             owned = any(
-                story_id in r.story_ids
+                r.story_id == story_id
                 for r in manager.store.list_runs(family_token=ctx.family_token)
             )
         if not owned:

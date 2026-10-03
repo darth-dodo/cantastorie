@@ -67,8 +67,8 @@
       {% for run in runs %}
         {% set extras = run_extras[run.id] %}
         {% set title = run.request.premise if run.request.premise else run.request.theme.replace("_", " ") %}
-        {% if run.state == "staged" and run.story_ids | length == 1 %}
-          {% set href = "/workshop/staged/" ~ run.story_ids[0] ~ "?run=" ~ run.id %}
+        {% if run.state == "staged" and run.story_id %}
+          {% set href = "/workshop/staged/" ~ run.story_id ~ "?run=" ~ run.id %}
         {% else %}
           {% set href = "/workshop/runs/" ~ run.id %}
         {% endif %}

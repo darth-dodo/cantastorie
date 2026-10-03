@@ -147,7 +147,7 @@ def _seed() -> dict[str, str]:
         for n in range(3):
             run = new_run(token, request)
             if n == 0:
-                run = run.advance("running").advance("staged", story_ids=[f"staged-{token[:6]}"])
+                run = run.advance("running").advance("staged", story_id=f"staged-{token[:6]}")
                 for key in story_files("pending/staged", f"staged-{token[:6]}"):
                     OBJECTS[key] = b"x"
                 OBJECTS[f"pending/staged/staged-{token[:6]}/story.json"] = json.dumps(
@@ -156,7 +156,7 @@ def _seed() -> dict[str, str]:
                 if token == FAMILY:
                     ids["staged_run"] = run.id
             elif n == 1:
-                run = run.advance("running").advance("staged", story_ids=[]).advance("approved")
+                run = run.advance("running").advance("staged").advance("approved")
             OBJECTS[f"pending/{token}/runs/{run.id}.json"] = run.model_dump_json().encode()
     return ids
 

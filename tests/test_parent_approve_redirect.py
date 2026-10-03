@@ -70,7 +70,7 @@ def _make_staged_run() -> RunRecord:
     req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(VALID_TOKEN, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=["story-abc"])
+    run = run.advance("staged", story_id="story-abc")
     return run
 
 
@@ -95,7 +95,7 @@ def _make_client(
 
 def test_approve_lands_on_your_stories(monkeypatch: pytest.MonkeyPatch) -> None:
     """Approving a staged pack must redirect to /parent/stories, not /parent."""
-    run = _make_staged_run().mark_reviewed("story-abc")  # approve follows review (B2)
+    run = _make_staged_run().mark_reviewed()  # approve follows review (B2)
     monkeypatch.setattr(parent_module, "_staged_story_exists", lambda settings, story_id: True)
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)

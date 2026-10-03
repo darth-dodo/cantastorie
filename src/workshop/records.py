@@ -1,4 +1,4 @@
-"""Workshop run records (AI-387, ADR-005): the durable trace of a pack request.
+"""Workshop run records (AI-387, ADR-005): the durable trace of a story request.
 
 A run record follows queued → running → staged → approved | rejected, with a
 retryable failed off running. Records persist to R2 under
@@ -17,11 +17,11 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import boto3
 from botocore.exceptions import ClientError
-from pydantic import BaseModel, Field, PrivateAttr, ValidationError
+from pydantic import BaseModel, Field, PrivateAttr, ValidationError, model_validator
 
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.publish import CLIENT_CONFIG, STAGED_PREFIX, child_prefixes, parallel_map
@@ -32,6 +32,11 @@ if TYPE_CHECKING:
     from src.config import Settings
 
 PENDING_PREFIX = "pending"
+
+# 2 since AI-480: one story_id + reviewed flag (1 held story_ids lists).
+SCHEMA_VERSION = 2
+
+logger = logging.getLogger(__name__)
 
 RunState = Literal["queued", "running", "staged", "approved", "rejected", "failed"]
 
@@ -86,29 +91,57 @@ def story_request_error_message(error: ValidationError) -> str:
 
 
 class RunRecord(BaseModel):
-    """One pack request's durable state. Records are values: advance() returns
+    """One story request's durable state. Records are values: advance() returns
     a copy, so a stale in-memory reference never mutates underfoot."""
 
-    schema_version: int = 1
+    schema_version: int = SCHEMA_VERSION
     id: str
     family_token: str
     request: StoryRequest
     state: RunState = "queued"
-    story_ids: list[str] = Field(default_factory=list)
-    # The staged stories a parent has opened on the review page, which renders
-    # every page (B2). Records saved before review tracking have none: unreviewed.
-    reviewed_story_ids: list[str] = Field(default_factory=list)
+    # The one story this run staged; None until it stages.
+    story_id: str | None = None
+    # The parent opened the staged story's review page, which renders every
+    # page (B2). Records saved before review tracking load unreviewed.
+    reviewed: bool = False
     error: str | None = None
     created_at: datetime
     updated_at: datetime
     _etag: str | None = PrivateAttr(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_v1(cls, data: Any) -> Any:
+        """Read a schema-1 record (a story_ids list) as schema 2 (one story_id).
+
+        Approved and rejected records are never saved again, so this shim stays
+        for good. A v1 run with several stories keeps its first and logs the
+        rest: they stay staged in R2, but no record points at them any more.
+        """
+        if not isinstance(data, dict) or (
+            "story_ids" not in data and "reviewed_story_ids" not in data
+        ):
+            return data
+        data = dict(data)
+        story_ids = list(data.pop("story_ids", None) or [])
+        reviewed_ids = list(data.pop("reviewed_story_ids", None) or [])
+        story_id = story_ids[0] if story_ids else None
+        if len(story_ids) > 1:
+            logger.warning(
+                f"Run record {data.get('id')} held {len(story_ids)} stories; "
+                f"keeping {story_id}, dropping {story_ids[1:]}"
+            )
+        data.setdefault("story_id", story_id)
+        data.setdefault("reviewed", story_id is not None and story_id in reviewed_ids)
+        data["schema_version"] = SCHEMA_VERSION
+        return data
 
     def advance(
         self,
         state: RunState,
         *,
         error: str | None = None,
-        story_ids: list[str] | None = None,
+        story_id: str | None = None,
     ) -> RunRecord:
         if state not in _TRANSITIONS[self.state]:
             raise InvalidTransition(f"{self.state} → {state} is not in the run lifecycle")
@@ -117,26 +150,22 @@ class RunRecord(BaseModel):
                 "state": state,
                 # A retry starts clean; a failure carries its reason.
                 "error": error if state == "failed" else None,
-                "story_ids": self.story_ids if story_ids is None else story_ids,
-                # Freshly staged stories have not been seen yet.
-                "reviewed_story_ids": [] if state == "staged" else self.reviewed_story_ids,
+                "story_id": self.story_id if story_id is None else story_id,
+                # A freshly staged story has not been seen yet.
+                "reviewed": False if state == "staged" else self.reviewed,
                 "updated_at": datetime.now(UTC),
             }
         )
 
     @property
-    def unreviewed_story_ids(self) -> list[str]:
-        return [s for s in self.story_ids if s not in self.reviewed_story_ids]
-
-    @property
     def fully_reviewed(self) -> bool:
-        """Every staged story was opened for review — and there is at least one."""
-        return bool(self.story_ids) and not self.unreviewed_story_ids
+        """The run's story was opened for review — and there is a story."""
+        return self.story_id is not None and self.reviewed
 
-    def mark_reviewed(self, story_id: str) -> RunRecord:
-        if story_id in self.reviewed_story_ids:
+    def mark_reviewed(self) -> RunRecord:
+        if self.reviewed:
             return self
-        return self.model_copy(update={"reviewed_story_ids": [*self.reviewed_story_ids, story_id]})
+        return self.model_copy(update={"reviewed": True})
 
 
 def new_run(family_token: str, request: StoryRequest) -> RunRecord:
@@ -256,7 +285,7 @@ class RunStore:
         try:
             record = RunRecord.model_validate(json.loads(response["Body"].read()))
         except (json.JSONDecodeError, ValidationError) as error:
-            logging.getLogger(__name__).warning(f"Skipping malformed run record at {key}: {error}")
+            logger.warning(f"Skipping malformed run record at {key}: {error}")
             return None
         record._etag = response.get("ETag")
         return record

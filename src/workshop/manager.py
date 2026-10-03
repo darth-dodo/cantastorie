@@ -197,14 +197,15 @@ class RunManager:
                     staged = await asyncio.to_thread(
                         self._generate_pack, record.request, self._settings
                     )
-                record = record.advance("staged", story_ids=[p.rsplit("/", 1)[-1] for p in staged])
+                story_id = next((p.rsplit("/", 1)[-1] for p in staged), None)
+                record = record.advance("staged", story_id=story_id)
                 logger.info(
                     "run_staged",
                     extra={
                         "event": "run_staged",
                         **fields,
                         "duration_ms": int((time.perf_counter() - started) * 1000),
-                        "story_ids": ",".join(record.story_ids),
+                        "story_id": record.story_id,
                     },
                 )
             except Exception as error:

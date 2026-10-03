@@ -250,7 +250,7 @@ def test_starting_a_run_executes_it_in_the_background_to_staged(
     assert response.status_code == 303
     [record] = harness.store.list_runs()
     assert record.state == "staged"
-    assert record.story_ids == ["the_sleepy_sea-it-fake0001"]
+    assert record.story_id == "the_sleepy_sea-it-fake0001"
     assert response.headers["location"] == f"/workshop/runs/{record.id}"
 
 
@@ -417,7 +417,7 @@ def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
 
     fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
 
@@ -445,7 +445,7 @@ def test_the_staged_story_page_shows_delete_when_the_run_is_settled(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
 
     page = harness.client.get(f"/workshop/staged/{story_id}")
 
@@ -462,7 +462,7 @@ def test_the_staged_story_page_shows_remove_from_shelf_when_approved(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    approved = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     harness.store.save(approved)
 
     page = harness.client.get(f"/workshop/staged/{story_id}?run={record.id}")
@@ -509,9 +509,9 @@ GUARDED_WORKSHOP_ROUTES = [
 
 
 def _run_snapshot(store: RunStore) -> list[tuple[str, str, tuple[str, ...]]]:
-    """A comparable fingerprint of every run's id/state/story_ids, regardless
+    """A comparable fingerprint of every run's id/state/story_id, regardless
     of owner — enough to prove a route did or didn't mutate anything."""
-    return sorted((r.id, r.state, tuple(r.story_ids)) for r in store.list_runs())
+    return sorted((r.id, r.state, r.story_id) for r in store.list_runs())
 
 
 @pytest.mark.parametrize(
@@ -529,7 +529,7 @@ def test_non_operator_is_denied_with_no_side_effects(
     # storage denying access to someone else's run.
     family_token = NON_OPERATOR_CLAIMS["family_token"]
     record = new_run(family_token, StoryRequest(theme="the_sleepy_sea", language="it"))
-    staged = record.advance("running").advance("staged", story_ids=[story_id])
+    staged = record.advance("running").advance("staged", story_id=story_id)
     harness.store.save(staged)
     harness.sign_in(NON_OPERATOR_CLAIMS)
 
@@ -554,7 +554,7 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
 
     response = harness.client.post(f"/workshop/runs/{record.id}/approve", follow_redirects=False)
 
@@ -572,7 +572,7 @@ def test_approving_a_non_staged_run_is_rejected_without_publishing(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    failed = record.advance("running").advance("failed", story_ids=[story_id])
+    failed = record.advance("running").advance("failed", story_id=story_id)
     harness.store.save(failed)
 
     response = harness.client.post(f"/workshop/runs/{record.id}/approve", follow_redirects=False)
@@ -605,7 +605,7 @@ def test_deleting_a_staged_story_removes_its_artifacts_and_updates_its_run(
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    staged = record.advance("running").advance("staged", story_ids=[story_id])
+    staged = record.advance("running").advance("staged", story_id=story_id)
     harness.store.save(staged)
 
     response = harness.client.post(
@@ -620,7 +620,7 @@ def test_deleting_a_staged_story_removes_its_artifacts_and_updates_its_run(
     assert not content_dir.exists()
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
-    assert reloaded.story_ids == []
+    assert reloaded.story_id is None
 
 
 def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
@@ -630,7 +630,7 @@ def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    staged = record.advance("running").advance("staged", story_ids=[story_id])
+    staged = record.advance("running").advance("staged", story_id=story_id)
     harness.store.save(staged)
 
     response = harness.client.post(f"/workshop/staged/{story_id}/delete", follow_redirects=False)
@@ -638,7 +638,7 @@ def test_deleting_a_staged_story_keeps_the_run_record_when_it_is_the_last_story(
     assert response.status_code == 303
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
-    assert reloaded.story_ids == []
+    assert reloaded.story_id is None
 
 
 @pytest.mark.parametrize("state", ["queued", "running"])
@@ -650,12 +650,12 @@ def test_deleting_a_story_from_a_protected_run_is_rejected(
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
     if state == "queued":
-        protected = record.model_copy(update={"story_ids": [story_id]})
+        protected = record.model_copy(update={"story_id": story_id})
     elif state == "running":
-        protected = record.advance("running", story_ids=[story_id])
+        protected = record.advance("running", story_id=story_id)
     else:
         protected = (
-            record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+            record.advance("running").advance("staged", story_id=story_id).advance("approved")
         )
     harness.store.save(protected)
 
@@ -676,7 +676,7 @@ def test_deleting_an_approved_story_unpublishes_cleans_artifacts_and_updates_run
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    approved = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     harness.store.save(approved)
     unpublished: list[str] = []
     monkeypatch.setattr(
@@ -698,7 +698,7 @@ def test_deleting_an_approved_story_unpublishes_cleans_artifacts_and_updates_run
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
     assert reloaded.state == "approved"
-    assert reloaded.story_ids == []
+    assert reloaded.story_id is None
 
 
 def test_deleting_a_rejected_story_cleans_artifacts_without_unpublish(
@@ -711,7 +711,7 @@ def test_deleting_a_rejected_story_cleans_artifacts_without_unpublish(
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    rejected = record.advance("running").advance("staged", story_ids=[story_id]).advance("rejected")
+    rejected = record.advance("running").advance("staged", story_id=story_id).advance("rejected")
     harness.store.save(rejected)
     unpublished: list[str] = []
     monkeypatch.setattr(
@@ -732,7 +732,7 @@ def test_deleting_a_rejected_story_cleans_artifacts_without_unpublish(
     assert not content_dir.exists()
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
-    assert reloaded.story_ids == []
+    assert reloaded.story_id is None
 
 
 def test_deleting_an_unknown_staged_story_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
@@ -751,7 +751,7 @@ def test_deleting_a_failed_story_redirects_for_non_htmx_requests(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    failed = record.advance("running").advance("failed", story_ids=[story_id])
+    failed = record.advance("running").advance("failed", story_id=story_id)
     harness.store.save(failed)
 
     response = harness.client.post(f"/workshop/staged/{story_id}/delete", follow_redirects=False)
@@ -760,7 +760,7 @@ def test_deleting_a_failed_story_redirects_for_non_htmx_requests(
     assert response.headers["location"] == "/workshop"
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
-    assert reloaded.story_ids == []
+    assert reloaded.story_id is None
 
 
 def test_deleting_an_unknown_run_returns_not_found(tmp_path: Path, s3: S3Client) -> None:
@@ -794,7 +794,7 @@ def test_deleting_an_approved_run_cleans_its_artifacts_and_unpublishes(
     content_dir.mkdir(parents=True)
     (content_dir / "checkpoint.json").write_text("checkpoint")
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    approved = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     harness.store.save(approved)
     unpublished: list[str] = []
     monkeypatch.setattr(
@@ -821,7 +821,7 @@ def test_approved_run_progress_links_its_published_stories(tmp_path: Path, s3: S
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    approved = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     harness.store.save(approved)
 
     progress = harness.client.get(f"/workshop/runs/{record.id}/progress")
@@ -843,13 +843,13 @@ def test_deleting_a_run_does_not_remove_shared_story_artifacts(
     deleted = (
         new_run("operator", request)
         .advance("running")
-        .advance("staged", story_ids=[story_id])
+        .advance("staged", story_id=story_id)
         .advance("approved")
     )
     shared = (
         new_run("operator", request)
         .advance("running")
-        .advance("staged", story_ids=[story_id])
+        .advance("staged", story_id=story_id)
         .advance("approved")
     )
     harness.store.save(deleted)
@@ -1051,7 +1051,7 @@ def test_run_again_works_on_any_settled_state(tmp_path: Path, s3: S3Client) -> N
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    approved = record.advance("running").advance("staged", story_ids=[story_id]).advance("approved")
+    approved = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     harness.store.save(approved)
 
     response = harness.client.post(f"/workshop/runs/{record.id}/again", follow_redirects=False)
@@ -1093,7 +1093,7 @@ def test_run_page_includes_staged_story_review_links_with_page_count(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)  # has 1 page
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
 
     page = harness.client.get(f"/workshop/runs/{record.id}")
     fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
@@ -1113,7 +1113,7 @@ def test_story_page_shows_approve_reject_only_when_run_is_staged(
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
 
     # Staged: footer forms should be present
     page = harness.client.get(f"/workshop/staged/{story_id}?run={record.id}")
@@ -1152,7 +1152,7 @@ def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3
     harness.sign_in()
     story_id = _stage_fake_story(harness.settings, s3)  # title="La barchetta", 1 page
     record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
-    harness.store.save(record.advance("running").advance("staged", story_ids=[story_id]))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
 
     page = harness.client.get(f"/workshop/runs/{record.id}")
 

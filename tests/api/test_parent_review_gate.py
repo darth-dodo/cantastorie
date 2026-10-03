@@ -52,9 +52,9 @@ def _stage_story(s3: S3Client, story_id: str) -> None:
     )
 
 
-def _staged_run(store: RunStore, story_ids: list[str]) -> RunRecord:
+def _staged_run(store: RunStore, story_id: str | None) -> RunRecord:
     record = new_run(FAMILY, StoryRequest(theme="the_sleepy_sea", language="en"))
-    record = record.advance("running").advance("staged", story_ids=story_ids)
+    record = record.advance("running").advance("staged", story_id=story_id)
     store.save(record)
     return record
 
@@ -68,7 +68,7 @@ def _approve(harness: Harness, run_id: str) -> int:
 def test_approve_without_review_is_409_and_publishes_nothing(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
     _stage_story(s3, "story-one")
-    record = _staged_run(harness.store, ["story-one"])
+    record = _staged_run(harness.store, "story-one")
     harness.sign_in(PARENT)
 
     assert _approve(harness, record.id) == 409
@@ -81,7 +81,7 @@ def test_approve_without_review_is_409_and_publishes_nothing(tmp_path: Path, s3:
 def test_reviewing_the_story_then_approving_publishes(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
     _stage_story(s3, "story-one")
-    record = _staged_run(harness.store, ["story-one"])
+    record = _staged_run(harness.store, "story-one")
     harness.sign_in(PARENT)
 
     page = harness.client.get(f"/parent/staged/story-one?run={record.id}")
@@ -92,33 +92,10 @@ def test_reviewing_the_story_then_approving_publishes(tmp_path: Path, s3: S3Clie
     assert harness.published == [("story-one", FAMILY)]
 
 
-def test_reviewing_only_part_of_a_run_is_409(tmp_path: Path, s3: S3Client) -> None:
-    """Every staged story is reviewed, not just the first one."""
-    harness = Harness(tmp_path, s3)
-    _stage_story(s3, "story-one")
-    _stage_story(s3, "story-two")
-    record = _staged_run(harness.store, ["story-one", "story-two"])
-    harness.sign_in(PARENT)
-
-    page = harness.client.get(f"/parent/staged/story-one?run={record.id}")
-    assert page.status_code == 200
-    # The approve control waits for the rest; the page points at what is left.
-    assert "Approve &amp; publish" not in page.text
-    assert f"/parent/staged/story-two?run={record.id}" in page.text
-
-    assert _approve(harness, record.id) == 409
-    assert harness.published == []
-
-    finished = harness.client.get(f"/parent/staged/story-two?run={record.id}")
-    assert "Approve &amp; publish" in finished.text
-    assert _approve(harness, record.id) == 303
-    assert harness.published == [("story-one", FAMILY), ("story-two", FAMILY)]
-
-
 def test_a_reviewed_story_that_is_gone_cannot_be_approved(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
     _stage_story(s3, "story-one")
-    record = _staged_run(harness.store, ["story-one"])
+    record = _staged_run(harness.store, "story-one")
     harness.sign_in(PARENT)
     harness.client.get(f"/parent/staged/story-one?run={record.id}")
     s3.delete_object(Bucket=PENDING_BUCKET, Key="pending/staged/story-one/story.json")
@@ -129,7 +106,7 @@ def test_a_reviewed_story_that_is_gone_cannot_be_approved(tmp_path: Path, s3: S3
 
 def test_a_staged_run_with_no_stories_cannot_be_approved(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
-    record = _staged_run(harness.store, [])
+    record = _staged_run(harness.store, None)
     harness.sign_in(PARENT)
 
     assert _approve(harness, record.id) == 409
@@ -141,10 +118,10 @@ def test_a_record_saved_before_review_tracking_counts_as_unreviewed(
 ) -> None:
     harness = Harness(tmp_path, s3)
     _stage_story(s3, "story-one")
-    record = _staged_run(harness.store, ["story-one"])
+    record = _staged_run(harness.store, "story-one")
     key = f"pending/{FAMILY}/runs/{record.id}.json"
     legacy = json.loads(s3.get_object(Bucket=PENDING_BUCKET, Key=key)["Body"].read())
-    legacy.pop("reviewed_story_ids", None)
+    legacy.pop("reviewed", None)
     s3.put_object(Bucket=PENDING_BUCKET, Key=key, Body=json.dumps(legacy).encode())
     harness.sign_in(PARENT)
 
@@ -156,7 +133,7 @@ def test_the_run_row_never_offers_approve(tmp_path: Path, s3: S3Client) -> None:
     """The Being-made row links to review; approving happens only on the review page."""
     harness = Harness(tmp_path, s3)
     _stage_story(s3, "story-one")
-    record = _staged_run(harness.store, ["story-one"])
+    record = _staged_run(harness.store, "story-one")
     harness.sign_in(PARENT)
 
     row = harness.client.get(f"/parent/packs/{record.id}/progress").text
@@ -166,12 +143,12 @@ def test_the_run_row_never_offers_approve(tmp_path: Path, s3: S3Client) -> None:
     assert 'data-testid="parent-approve"' not in row
 
 
-@pytest.mark.parametrize("story_ids", [[], ["story-missing"]])
+@pytest.mark.parametrize("story_id", [None, "story-missing"])
 def test_the_run_row_shows_an_error_when_nothing_can_be_reviewed(
-    tmp_path: Path, s3: S3Client, story_ids: list[str]
+    tmp_path: Path, s3: S3Client, story_id: str | None
 ) -> None:
     harness = Harness(tmp_path, s3)
-    record = _staged_run(harness.store, story_ids)
+    record = _staged_run(harness.store, story_id)
     harness.sign_in(PARENT)
 
     row = harness.client.get(f"/parent/packs/{record.id}/progress").text
@@ -181,13 +158,13 @@ def test_the_run_row_shows_an_error_when_nothing_can_be_reviewed(
     assert 'data-testid="parent-review-missing"' in row
 
 
-@pytest.mark.parametrize("story_ids", [[], ["story-missing"]])
+@pytest.mark.parametrize("story_id", [None, "story-missing"])
 def test_an_unreviewable_run_can_still_be_rejected_from_its_row(
-    tmp_path: Path, s3: S3Client, story_ids: list[str]
+    tmp_path: Path, s3: S3Client, story_id: str | None
 ) -> None:
     """The error state is not a dead end: the parent can clear the run."""
     harness = Harness(tmp_path, s3)
-    record = _staged_run(harness.store, story_ids)
+    record = _staged_run(harness.store, story_id)
     harness.sign_in(PARENT)
 
     row = harness.client.get(f"/parent/packs/{record.id}/progress").text

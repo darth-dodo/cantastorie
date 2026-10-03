@@ -73,7 +73,7 @@ def test_execute_lands_staged_with_the_pack_story_ids(s3: S3Client) -> None:
 
     [record] = store.list_runs(family_token="family-abc")
     assert record.state == "staged"
-    assert record.story_ids == ["the_sleepy_sea-it-0"]
+    assert record.story_id == "the_sleepy_sea-it-0"
 
 
 def test_a_generation_error_lands_failed_with_the_reason(s3: S3Client) -> None:

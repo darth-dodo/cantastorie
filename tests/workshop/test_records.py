@@ -79,7 +79,7 @@ def test_new_run_starts_queued_with_identity_and_timestamps() -> None:
     assert record.family_token == "family-abc"
     assert record.request == REQUEST
     assert record.id
-    assert record.story_ids == []
+    assert record.story_id is None
     assert record.error is None
     assert record.updated_at >= record.created_at
 
@@ -294,47 +294,143 @@ def test_story_request_error_message_is_friendly_for_a_too_long_premise() -> Non
     assert "300" in message
 
 
-# ── Parent review (B2, AI-475): every staged story is seen before approve ─────
+# ── Parent review (B2, AI-475): the run's one story is seen before approve ────
 
 
-def _staged(story_ids: list[str]) -> records.RunRecord:
-    return new_run("a" * 32, REQUEST).advance("running").advance("staged", story_ids=story_ids)
+def _staged(story_id: str | None = "s1") -> records.RunRecord:
+    return new_run("a" * 32, REQUEST).advance("running").advance("staged", story_id=story_id)
 
 
-def test_a_staged_run_starts_unreviewed_and_marks_stories_one_at_a_time() -> None:
-    record = _staged(["s1", "s2"])
-    assert record.reviewed_story_ids == []
+def test_a_staged_run_starts_unreviewed_until_its_story_is_marked() -> None:
+    record = _staged("s1")
+    assert record.reviewed is False
     assert not record.fully_reviewed
-    record = record.mark_reviewed("s1")
-    assert record.unreviewed_story_ids == ["s2"]
-    assert not record.fully_reviewed
-    record = record.mark_reviewed("s2").mark_reviewed("s2")
-    assert record.reviewed_story_ids == ["s1", "s2"]
+    record = record.mark_reviewed()
+    assert record.reviewed is True
     assert record.fully_reviewed
+    assert record.mark_reviewed() == record  # idempotent
 
 
-def test_a_run_with_no_stories_is_never_fully_reviewed() -> None:
-    assert not _staged([]).fully_reviewed
+def test_a_run_with_no_story_is_never_fully_reviewed() -> None:
+    assert not _staged(None).mark_reviewed().fully_reviewed
 
 
 def test_restaging_a_run_clears_its_review() -> None:
-    reviewed = _staged(["s1"]).mark_reviewed("s1")
-    assert reviewed.advance("approved").reviewed_story_ids == ["s1"]
+    reviewed = _staged("s1").mark_reviewed()
+    assert reviewed.advance("approved").reviewed is True
     rerun = reviewed.model_copy(update={"state": "running"})
-    assert rerun.advance("staged", story_ids=["s9"]).reviewed_story_ids == []
+    assert rerun.advance("staged", story_id="s9").reviewed is False
+
+
+def _put_raw(s3: S3Client, record: records.RunRecord, body: dict[str, object]) -> None:
+    s3.put_object(
+        Bucket=PENDING_BUCKET,
+        Key=f"pending/{record.family_token}/runs/{record.id}.json",
+        Body=json.dumps(body).encode(),
+    )
+
+
+def _v1(record: records.RunRecord, **fields: object) -> dict[str, object]:
+    """A record as persisted before AI-480: schema 1, a story_ids list, the
+    request's count, and no story_id or reviewed keys."""
+    body = json.loads(record.model_dump_json())
+    body.pop("story_id")
+    body.pop("reviewed")
+    body["schema_version"] = 1
+    body["request"]["count"] = 1
+    body.update(fields)
+    return body
 
 
 def test_a_record_without_a_review_field_loads_unreviewed(s3: S3Client) -> None:
     store = RunStore(_settings(), client=s3)
-    record = _staged(["s1"])
-    legacy = json.loads(record.model_dump_json())
-    legacy.pop("reviewed_story_ids", None)
-    s3.put_object(
-        Bucket=PENDING_BUCKET,
-        Key=f"pending/{'a' * 32}/runs/{record.id}.json",
-        Body=json.dumps(legacy).encode(),
-    )
+    record = _staged("s1")
+    _put_raw(s3, record, _v1(record, story_ids=["s1"]))
     loaded = store.load("a" * 32, record.id)
     assert loaded is not None
-    assert loaded.reviewed_story_ids == []
+    assert loaded.story_id == "s1"
+    assert loaded.reviewed is False
     assert not loaded.fully_reviewed
+
+
+# ── One story per run (AI-480): story_id, and the v1 read shim ────────────────
+
+
+def test_a_new_run_has_no_story_until_it_stages() -> None:
+    record = new_run("family-abc", REQUEST)
+    assert record.story_id is None
+    assert record.schema_version == 2
+
+
+def test_advance_sets_the_story_id_and_later_steps_keep_it() -> None:
+    staged = new_run("family-abc", REQUEST).advance("running").advance("staged", story_id="s1")
+    assert staged.story_id == "s1"
+    assert staged.advance("approved").story_id == "s1"
+
+
+@pytest.mark.parametrize(("story_ids", "expected"), [([], None), (["s1"], "s1")])
+def test_a_v1_record_upgrades_its_story_ids_on_read(
+    s3: S3Client, story_ids: list[str], expected: str | None
+) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = _staged("s1")
+    _put_raw(s3, record, _v1(record, story_ids=story_ids))
+
+    loaded = store.load("a" * 32, record.id)
+
+    assert loaded is not None
+    assert loaded.story_id == expected
+    assert loaded.schema_version == 2
+
+
+def test_a_v1_record_with_several_stories_keeps_the_first_and_warns(
+    s3: S3Client, caplog: pytest.LogCaptureFixture
+) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = _staged("s1")
+    _put_raw(s3, record, _v1(record, story_ids=["s1", "s2", "s3"]))
+    caplog.set_level("WARNING", logger="src.workshop.records")
+
+    loaded = store.load("a" * 32, record.id)
+
+    assert loaded is not None
+    assert loaded.story_id == "s1"
+    warning = " ".join(r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+    assert record.id in warning
+    assert "s2" in warning
+    assert "s3" in warning
+
+
+@pytest.mark.parametrize(
+    ("reviewed_ids", "expected"), [(["s1"], True), ([], False), (["other"], False)]
+)
+def test_a_v1_review_list_maps_to_the_single_reviewed_flag(
+    s3: S3Client, reviewed_ids: list[str], expected: bool
+) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = _staged("s1")
+    _put_raw(s3, record, _v1(record, story_ids=["s1"], reviewed_story_ids=reviewed_ids))
+
+    loaded = store.load("a" * 32, record.id)
+
+    assert loaded is not None
+    assert loaded.reviewed is expected
+
+
+def test_saving_an_upgraded_record_writes_the_v2_shape(s3: S3Client) -> None:
+    store = RunStore(_settings(), client=s3)
+    record = _staged("s1")
+    _put_raw(s3, record, _v1(record, story_ids=["s1"], reviewed_story_ids=["s1"]))
+    loaded = store.load("a" * 32, record.id)
+    assert loaded is not None
+
+    store.save(loaded)
+
+    key = f"pending/{'a' * 32}/runs/{record.id}.json"
+    raw = json.loads(s3.get_object(Bucket=PENDING_BUCKET, Key=key)["Body"].read())
+    assert raw["schema_version"] == 2
+    assert raw["story_id"] == "s1"
+    assert raw["reviewed"] is True
+    assert "story_ids" not in raw
+    assert "reviewed_story_ids" not in raw
+    assert "count" not in raw["request"]

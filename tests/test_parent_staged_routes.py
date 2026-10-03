@@ -24,7 +24,7 @@ OTHER_TOKEN = "ffffffffffffffffffffffffffffffff"  # pragma: allowlist secret
 
 def _staged_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
     run = new_run(family_token, StoryRequest(theme="the_sleepy_sea", language="it"))
-    return run.advance("running").advance("staged", story_ids=[story_id])
+    return run.advance("running").advance("staged", story_id=story_id)
 
 
 class _FakeS3:
@@ -169,7 +169,7 @@ def test_run_row_polls_only_while_live(
 ) -> None:
     run = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     for state in states:
-        run = run.advance(state, story_ids=[] if state == "staged" else None)  # type: ignore[arg-type]
+        run = run.advance(state)  # type: ignore[arg-type]
     monkeypatch.setattr(parent_module, "_checkpointed_steps", lambda record, settings: set())
     client = _make_client(monkeypatch, _FakeManager({run.id: run}))
     text = client.get(f"/parent/packs/{run.id}/progress").text
