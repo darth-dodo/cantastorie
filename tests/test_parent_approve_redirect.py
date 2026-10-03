@@ -1,4 +1,4 @@
-"""Test that approving a pack redirects to /parent/stories (AI-445)."""
+"""Test that approving a story redirects to /parent/stories (AI-445)."""
 
 from __future__ import annotations
 
@@ -94,10 +94,10 @@ def _make_client(
 
 
 def test_approve_lands_on_your_stories(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Approving a staged pack must redirect to /parent/stories, not /parent."""
+    """Approving a staged story must redirect to /parent/stories, not /parent."""
     run = _make_staged_run().mark_reviewed()  # approve follows review (B2)
     monkeypatch.setattr(parent_module, "_staged_story_exists", lambda settings, story_id: True)
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
-    r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)
+    r = client.post(f"/parent/runs/{run.id}/approve", follow_redirects=False)
     assert r.headers["location"] == "/parent/stories"

@@ -177,14 +177,14 @@ def test_make_route_has_four_minute_note(monkeypatch: pytest.MonkeyPatch) -> Non
 # ── Being made tab no longer contains the form ────────────────────────────────
 
 
-def test_packs_tab_does_not_have_make_form(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_being_made_tab_does_not_have_make_form(monkeypatch: pytest.MonkeyPatch) -> None:
     """GET /parent (Being made tab) does NOT contain the make-a-story form."""
     manager = _FakeManager({})
     client = _make_client(monkeypatch, manager)
     r = client.get("/parent")
     assert r.status_code == 200
     # The form's action target must NOT appear in the Being Made tab
-    assert 'action="/parent/packs"' not in r.text
+    assert 'action="/parent/runs"' not in r.text
     # The custom premise field must NOT appear here
     assert "data-custom-premise" not in r.text
 

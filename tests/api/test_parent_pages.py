@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 import src.api.auth as auth_module
 import src.api.routes.parent as parent_module
 from src.api.auth import SESSION_COOKIE
+from src.api.routes._templates import TEMPLATES_DIR
 from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import Settings, get_settings
@@ -136,7 +139,7 @@ class _FakeManager:
         return record
 
 
-def _packs_client(
+def _parent_client(
     monkeypatch: pytest.MonkeyPatch,
     manager: _FakeManager,
     *,
@@ -146,7 +149,7 @@ def _packs_client(
     monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
     # Stub out R2 calls — parent routes call list_family_shelf for tab counts.
     monkeypatch.setattr(parent_module, "list_family_shelf", lambda settings, family_token: [])
-    # Issuer set so the cap-hit branch can render packs.html (_fapi_host would
+    # Issuer set so the cap-hit branch can render being_made.html (_fapi_host would
     # otherwise try to base64-decode the dummy publishable key). The minted
     # token must carry a matching iss so require_parent still verifies.
     issuer = "https://test.clerk.test"
@@ -159,13 +162,13 @@ def _packs_client(
     return client
 
 
-def test_pack_request_submits_under_session_family_token(
+def test_story_request_submits_under_session_family_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager = _FakeManager()
-    client = _packs_client(monkeypatch, manager)
+    client = _parent_client(monkeypatch, manager)
     response = client.post(
-        "/parent/packs",
+        "/parent/runs",
         data={"theme": "the_sleepy_sea", "language": "it", "premise": ""},
         follow_redirects=False,
     )
@@ -179,9 +182,9 @@ def test_pack_request_submits_under_session_family_token(
 def test_form_cannot_override_family_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tenancy rule: a posted family_token field is ignored entirely."""
     manager = _FakeManager()
-    client = _packs_client(monkeypatch, manager)
+    client = _parent_client(monkeypatch, manager)
     client.post(
-        "/parent/packs",
+        "/parent/runs",
         data={
             "theme": "the_sleepy_sea",
             "language": "it",
@@ -198,11 +201,11 @@ def test_cap_hit_renders_friendly_message_with_active_state(
     active = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     running = active.advance("running")
     manager = _FakeManager(
-        raise_cap=RunCapExceeded("a story pack is already being made", active=running)
+        raise_cap=RunCapExceeded("a story is already being made", active=running)
     )
-    client = _packs_client(monkeypatch, manager)
+    client = _parent_client(monkeypatch, manager)
     response = client.post(
-        "/parent/packs",
+        "/parent/runs",
         data={"theme": "the_sleepy_sea", "language": "it"},
     )
     assert response.status_code == 200
@@ -210,10 +213,10 @@ def test_cap_hit_renders_friendly_message_with_active_state(
     assert "running" in response.text  # the active run's state is shown
 
 
-def test_unauthenticated_pack_post_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unauthenticated_story_post_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_app(clerk_settings())
     response = TestClient(app).post(
-        "/parent/packs", data={"theme": "the_sleepy_sea", "language": "it"}
+        "/parent/runs", data={"theme": "the_sleepy_sea", "language": "it"}
     )
     assert response.status_code == 401
 
@@ -232,28 +235,28 @@ def _store_with_runs(manager: _FakeManager, records: list[Any]) -> None:
     manager.store = _FakeStore()  # type: ignore[attr-defined]
 
 
-def test_my_packs_lists_only_this_familys_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_being_made_lists_only_this_familys_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     other = new_run("f" * 32, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine, other])
-    client = _packs_client(monkeypatch, manager)
+    client = _parent_client(monkeypatch, manager)
     response = client.get("/parent")
     assert response.status_code == 200
     assert mine.id in response.text
     assert other.id not in response.text
 
 
-def test_packs_page_seeds_the_session_family_token_for_same_device_overlay(
+def test_being_made_page_seeds_the_session_family_token_for_same_device_overlay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The packs page emits the family token so a same-device child player adopts
+    """The Being made page emits the family token so a same-device child player adopts
     it (IndexedDB) and merges the family overlay. The token is the SESSION token,
     never a form value — same tenancy boundary as everything else here."""
     mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
-    client = _packs_client(monkeypatch, manager)
+    client = _parent_client(monkeypatch, manager)
 
     response = client.get("/parent")
 
@@ -267,8 +270,8 @@ def test_cross_tenant_progress_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
     others = new_run("f" * 32, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [others])
-    client = _packs_client(monkeypatch, manager)  # session = VALID_TOKEN (family A)
-    assert client.get(f"/parent/packs/{others.id}/progress").status_code == 404
+    client = _parent_client(monkeypatch, manager)  # session = VALID_TOKEN (family A)
+    assert client.get(f"/parent/runs/{others.id}/progress").status_code == 404
 
 
 def test_progress_poll_reaps_stale_runs_so_a_family_can_self_heal(
@@ -289,10 +292,10 @@ def test_own_progress_fragment_polls_parent_url(monkeypatch: pytest.MonkeyPatch)
     mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
-    client = _packs_client(monkeypatch, manager)
-    response = client.get(f"/parent/packs/{mine.id}/progress")
+    client = _parent_client(monkeypatch, manager)
+    response = client.get(f"/parent/runs/{mine.id}/progress")
     assert response.status_code == 200
-    assert f"/parent/packs/{mine.id}/progress" in response.text  # hx-get, not /workshop
+    assert f"/parent/runs/{mine.id}/progress" in response.text  # hx-get, not /workshop
     assert "/workshop" not in response.text  # no operator URLs leak to parents
     assert "Delete run" not in response.text  # operator controls hidden
 
@@ -304,8 +307,8 @@ def test_progress_fragment_keeps_the_run_title_and_language(
     mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
-    client = _packs_client(monkeypatch, manager)
-    response = client.get(f"/parent/packs/{mine.id}/progress")
+    client = _parent_client(monkeypatch, manager)
+    response = client.get(f"/parent/runs/{mine.id}/progress")
     assert "the sleepy sea" in response.text
     assert "Italiano" in response.text
 
@@ -318,8 +321,8 @@ def test_failed_run_shows_rested_not_the_pipeline_error(
     run = run.advance("running").advance("failed", error="Traceback: ElevenLabs 429")
     manager = _FakeManager()
     _store_with_runs(manager, [run])
-    client = _packs_client(monkeypatch, manager)
-    response = client.get(f"/parent/packs/{run.id}/progress")
+    client = _parent_client(monkeypatch, manager)
+    response = client.get(f"/parent/runs/{run.id}/progress")
     assert response.status_code == 200
     assert "rested" in response.text
     assert "ElevenLabs" not in response.text
@@ -376,3 +379,79 @@ def test_clerk_loads_nowhere_in_the_child_player() -> None:
         if pattern.search(path.read_text()):
             offenders.append(str(path))
     assert offenders == [], f"Clerk reference reached a child-player path: {offenders}"
+
+
+# ── One story per run (AI-480): /parent/runs replaces /parent/packs ───────────
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/parent/packs"),
+        ("get", "/parent/packs/abc/progress"),
+        ("post", "/parent/packs/abc/approve"),
+        ("post", "/parent/packs/abc/reject"),
+    ],
+)
+def test_the_old_pack_routes_are_gone(
+    monkeypatch: pytest.MonkeyPatch, method: str, path: str
+) -> None:
+    client = _parent_client(monkeypatch, _FakeManager())
+    response = getattr(client, method)(path, follow_redirects=False)
+    assert response.status_code in (404, 405)
+
+
+def test_a_story_request_submits_one_story_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _FakeManager()
+    client = _parent_client(monkeypatch, manager)
+    client.post(
+        "/parent/runs",
+        data={"theme": "the_sleepy_sea", "language": "it", "premise": "a lost mitten"},
+        follow_redirects=False,
+    )
+    [(_, request)] = manager.submits
+    assert request == StoryRequest(theme="the_sleepy_sea", language="it", premise="a lost mitten")
+
+
+def test_being_made_rows_poll_the_runs_progress_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _parent_client(monkeypatch, manager)
+
+    page = client.get("/parent").text
+
+    assert f'hx-get="/parent/runs/{mine.id}/progress"' in page
+    assert 'aria-current="page">Being made' in page
+
+
+def test_the_parent_pages_never_say_pack(monkeypatch: pytest.MonkeyPatch) -> None:
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _parent_client(monkeypatch, manager)
+
+    for path in ("/parent", "/parent/make", f"/parent/runs/{mine.id}/progress"):
+        text = client.get(path).text.lower()
+        assert re.search(r"\bpacks?\b", text) is None, path
+
+
+def test_the_being_made_template_replaces_packs() -> None:
+    parent_templates = Path(TEMPLATES_DIR) / "parent"
+    assert (parent_templates / "being_made.html").is_file()
+    assert not (parent_templates / "packs.html").exists()
+    header = (parent_templates / "_header.html").read_text()
+    assert '("being_made", "/parent", "Being made"' in header
+    assert "packs" not in header
+
+
+def test_published_at_maps_approved_story_ids_and_skips_runs_without_one() -> None:
+    request = StoryRequest(theme="the_sleepy_sea", language="it")
+    approved = new_run(VALID_TOKEN, request).advance("running").advance("staged", story_id="s1")
+    approved = approved.advance("approved")
+    empty = new_run(VALID_TOKEN, request).advance("running").advance("staged").advance("approved")
+    staged = new_run(VALID_TOKEN, request).advance("running").advance("staged", story_id="s2")
+
+    published = parent_module._published_at([approved, empty, staged])
+
+    assert published == {"s1": approved.updated_at}

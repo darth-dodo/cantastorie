@@ -126,7 +126,7 @@ def _make_client(
 
 
 def test_staged_label_reads_needs_your_eyes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The packs page must show 'needs your eyes' for staged runs (not 'staged — review')."""
+    """The Being made page must show 'needs your eyes' for staged runs (not 'staged — review')."""
     run = _make_staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)

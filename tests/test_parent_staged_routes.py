@@ -132,7 +132,7 @@ def test_reject_own_staged_run(monkeypatch: pytest.MonkeyPatch) -> None:
     run = _staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
-    r = client.post(f"/parent/packs/{run.id}/reject", follow_redirects=False)
+    r = client.post(f"/parent/runs/{run.id}/reject", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/parent"
     assert manager.store.load(VALID_TOKEN, run.id).state == "rejected"
@@ -142,14 +142,14 @@ def test_reject_another_familys_run_is_404(monkeypatch: pytest.MonkeyPatch) -> N
     theirs = _staged_run(family_token=OTHER_TOKEN)
     manager = _FakeManager({theirs.id: theirs})
     client = _make_client(monkeypatch, manager)
-    assert client.post(f"/parent/packs/{theirs.id}/reject").status_code == 404
+    assert client.post(f"/parent/runs/{theirs.id}/reject").status_code == 404
     assert manager.store._runs[theirs.id].state == "staged"
 
 
 def test_reject_a_run_that_is_not_staged_is_400(monkeypatch: pytest.MonkeyPatch) -> None:
     run = _make_queued_run()
     client = _make_client(monkeypatch, _FakeManager({run.id: run}))
-    assert client.post(f"/parent/packs/{run.id}/reject").status_code == 400
+    assert client.post(f"/parent/runs/{run.id}/reject").status_code == 400
 
 
 # ── Being-made row: polls while live, stops once settled ─────────────────────
@@ -172,7 +172,7 @@ def test_run_row_polls_only_while_live(
         run = run.advance(state)  # type: ignore[arg-type]
     monkeypatch.setattr(parent_module, "_checkpointed_steps", lambda record, settings: set())
     client = _make_client(monkeypatch, _FakeManager({run.id: run}))
-    text = client.get(f"/parent/packs/{run.id}/progress").text
+    text = client.get(f"/parent/runs/{run.id}/progress").text
     assert ('hx-trigger="every 2s"' in text) is polls
 
 

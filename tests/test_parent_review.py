@@ -2,7 +2,7 @@
 
 Tests:
 (a) GET /parent/staged/{story_id} for a family's own staged run → 200 + page text + Approve/Reject
-(b) POST /parent/packs/{run_id}/approve from review redirects to /parent/stories
+(b) POST /parent/runs/{run_id}/approve from review redirects to /parent/stories
 (c) A parent cannot review another family's staged run → 404
 """
 
@@ -151,7 +151,7 @@ def test_parent_review_page_renders(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_parent_review_approve_redirects(monkeypatch: pytest.MonkeyPatch) -> None:
-    """POST /parent/packs/{run_id}/approve from review page redirects to /parent/stories."""
+    """POST /parent/runs/{run_id}/approve from review page redirects to /parent/stories."""
     run = _make_staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
@@ -162,7 +162,7 @@ def test_parent_review_approve_redirects(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with patch("src.api.routes.parent._build_client", return_value=mock_client):
         client.get(f"/parent/staged/story-abc?run={run.id}")  # the review (B2)
-        r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)
+        r = client.post(f"/parent/runs/{run.id}/approve", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/parent/stories"
 

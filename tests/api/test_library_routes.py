@@ -1,7 +1,7 @@
 """Behavior specs for published-story CRUD routes (operator library + parent deletes).
 
 The operator sees everything live on R2 and can delete any story, bundled
-launch content included. Parents see only their own family's approved packs
+launch content included. Parents see only their own family's approved stories
 and get the same single destructive action. All S3 traffic runs on moto;
 Clerk sessions are minted locally against a mock JWKS.
 """

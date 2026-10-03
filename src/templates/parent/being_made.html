@@ -10,7 +10,7 @@
 {% endblock %}
 {% block content %}
 <div class="ws-page">
-  {% set active = "packs" %}{% include "parent/_header.html" %}
+  {% set active = "being_made" %}{% include "parent/_header.html" %}
 
   {% include "parent/_cap_card.html" %}
 
@@ -20,7 +20,7 @@
       {% for record in runs %}
         {% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
         <div data-run-id="{{ record.id }}"
-             hx-get="/parent/packs/{{ record.id }}/progress"
+             hx-get="/parent/runs/{{ record.id }}/progress"
              hx-trigger="load"
              hx-swap="outerHTML">
           <div class="ws-run-card ws-run-row">

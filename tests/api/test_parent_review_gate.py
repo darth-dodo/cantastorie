@@ -60,9 +60,7 @@ def _staged_run(store: RunStore, story_id: str | None) -> RunRecord:
 
 
 def _approve(harness: Harness, run_id: str) -> int:
-    return harness.client.post(
-        f"/parent/packs/{run_id}/approve", follow_redirects=False
-    ).status_code
+    return harness.client.post(f"/parent/runs/{run_id}/approve", follow_redirects=False).status_code
 
 
 def test_approve_without_review_is_409_and_publishes_nothing(tmp_path: Path, s3: S3Client) -> None:
@@ -136,7 +134,7 @@ def test_the_run_row_never_offers_approve(tmp_path: Path, s3: S3Client) -> None:
     record = _staged_run(harness.store, "story-one")
     harness.sign_in(PARENT)
 
-    row = harness.client.get(f"/parent/packs/{record.id}/progress").text
+    row = harness.client.get(f"/parent/runs/{record.id}/progress").text
 
     assert 'data-testid="parent-review-link"' in row
     assert "/approve" not in row
@@ -151,7 +149,7 @@ def test_the_run_row_shows_an_error_when_nothing_can_be_reviewed(
     record = _staged_run(harness.store, story_id)
     harness.sign_in(PARENT)
 
-    row = harness.client.get(f"/parent/packs/{record.id}/progress").text
+    row = harness.client.get(f"/parent/runs/{record.id}/progress").text
 
     assert "/approve" not in row
     assert 'data-testid="parent-approve"' not in row
@@ -167,11 +165,11 @@ def test_an_unreviewable_run_can_still_be_rejected_from_its_row(
     record = _staged_run(harness.store, story_id)
     harness.sign_in(PARENT)
 
-    row = harness.client.get(f"/parent/packs/{record.id}/progress").text
+    row = harness.client.get(f"/parent/runs/{record.id}/progress").text
 
-    assert f'action="/parent/packs/{record.id}/reject"' in row
+    assert f'action="/parent/runs/{record.id}/reject"' in row
     assert 'data-testid="parent-reject"' in row
-    response = harness.client.post(f"/parent/packs/{record.id}/reject", follow_redirects=False)
+    response = harness.client.post(f"/parent/runs/{record.id}/reject", follow_redirects=False)
     assert response.status_code == 303
     reloaded = harness.store.load(FAMILY, record.id)
     assert reloaded is not None

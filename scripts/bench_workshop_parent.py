@@ -192,7 +192,7 @@ def main() -> None:
         ("parent", parent, "/parent"),
         ("parent", parent, "/parent/stories"),
         ("parent", parent, "/parent/make"),
-        ("parent", parent, f"/parent/packs/{ids['staged_run']}/progress"),
+        ("parent", parent, f"/parent/runs/{ids['staged_run']}/progress"),
         ("operator", operator, "/workshop"),
         ("operator", operator, "/workshop/library"),
     ]

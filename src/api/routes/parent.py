@@ -1,7 +1,10 @@
-"""Parent-area API routes (AI-410, ADR-003).
+"""Parent-area routes (AI-410, ADR-003): the /parent pages and their actions.
 
-Only the provision endpoint lives here for now; the /parent pages (sign-in,
-pack request form, my-packs) arrive in the next step of the design.
+Sign-in and provisioning, Your stories, the make-a-story form, and Being made.
+Each run a family requests makes one story (AI-480): POST /parent/runs starts
+it, /parent/runs/{id}/progress polls its row, and approve/reject settle it
+after the review page at /parent/staged/{story_id}. Every read and write is
+scoped to the session's family token.
 """
 
 from __future__ import annotations
@@ -193,11 +196,11 @@ async def parent_home(
         # First sign-in: page JS POSTs /parent/api/provision then reloads.
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
-    # Provisioned parents get the packs page with their own runs, newest first.
+    # Provisioned parents land on Being made with their own runs, newest first.
     view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
     return templates.TemplateResponse(
         request,
-        "parent/packs.html",
+        "parent/being_made.html",
         {
             **context,
             "family_token": ctx.family_token,  # seeds same-device overlay adoption
@@ -328,8 +331,8 @@ async def delete_parent_story(
     return RedirectResponse("/parent/stories", status_code=303)
 
 
-@router.post("/packs")
-async def request_pack(
+@router.post("/runs")
+async def parent_request_story(
     request: Request,
     ctx: Annotated[ParentContext, Depends(require_parent)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -361,13 +364,13 @@ async def request_pack(
             "inflight_count": view.inflight_count,
             "owned_count": len(view.owned),
         }
-        return templates.TemplateResponse(request, "parent/packs.html", context)
+        return templates.TemplateResponse(request, "parent/being_made.html", context)
     background.add_task(manager.execute, record)
     return RedirectResponse("/parent", status_code=303)
 
 
-@router.get("/packs/{run_id}/progress", response_class=HTMLResponse)
-async def pack_progress(
+@router.get("/runs/{run_id}/progress", response_class=HTMLResponse)
+async def parent_run_progress(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
@@ -383,12 +386,11 @@ async def pack_progress(
     record = await run_in_threadpool(read_record)
     if record is None:
         raise HTTPException(status_code=404)
-    staged = (
+    staged_story = (
         await run_in_threadpool(_staged_story_summary, record.story_id, settings)
         if record.state == "staged"
         else None
     )
-    staged_stories = [staged] if staged else []
     return templates.TemplateResponse(
         request,
         "parent/_run_row.html",
@@ -396,14 +398,14 @@ async def pack_progress(
             "record": record,
             "live": ["queued", "running"],
             "steps": _checkpointed_steps(record, settings),
-            "staged_stories": staged_stories,
-            "base_url": "/parent/packs",
+            "staged_story": staged_story,
+            "base_url": "/parent/runs",
         },
     )
 
 
-@router.post("/packs/{run_id}/approve")
-async def approve_pack(
+@router.post("/runs/{run_id}/approve")
+async def parent_approve_run(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
@@ -411,7 +413,7 @@ async def approve_pack(
     manager: Manager,
     publisher: Annotated[FamilyPublisher, Depends(get_family_publisher)],
 ) -> Response:
-    """A family approves its own staged pack → publish to its private overlay.
+    """A family approves its own staged story → publish to its private overlay.
 
     Tenancy: the run is loaded family-scoped, so another family's run 404s.
     There is no shared shelf here — every story lands under the family's own
@@ -526,7 +528,7 @@ async def parent_staged_story(
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "story": story,
             "record": record,
-            "base_url": "/parent/packs",
+            "base_url": "/parent/runs",
         },
     )
 
@@ -581,14 +583,14 @@ async def parent_staged_asset(
     )
 
 
-@router.post("/packs/{run_id}/reject")
-async def reject_pack(
+@router.post("/runs/{run_id}/reject")
+async def parent_reject_run(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
     manager: Manager,
 ) -> Response:
-    """A family rejects its own staged pack."""
+    """A family rejects its own staged story."""
     record = manager.store.load(ctx.family_token, run_id)
     if record is None:
         raise HTTPException(status_code=404)

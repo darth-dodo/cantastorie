@@ -1,6 +1,6 @@
 """Behavior specs for parent approve → private overlay publish (Seam 2).
 
-A family approving a staged pack publishes it to their own overlay lane
+A family approving a staged story publishes it to their own overlay lane
 (published/families/{token}/…), never the shared shelf, and settles the run to
 approved. Tenancy is enforced: a family cannot approve another family's run
 (404), and the family_token is taken from the session, never the URL/form.
@@ -100,11 +100,11 @@ class Harness:
 PARENT: dict[str, Any] = {"sub": "user_parent", "family_token": FAMILY}
 
 
-def test_approving_a_staged_pack_publishes_to_the_family_overlay(
+def test_approving_a_staged_story_publishes_to_the_family_overlay(
     tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     harness = Harness(tmp_path, s3)
-    # A reviewed pack whose staged story is still in the pending bucket (B2).
+    # A reviewed run whose staged story is still in the pending bucket (B2).
     monkeypatch.setattr(parent_module, "_build_client", lambda settings: s3)
     s3.put_object(
         Bucket=PENDING_BUCKET, Key="pending/staged/first_snow-it-fake0001/story.json", Body=b"{}"
@@ -113,7 +113,7 @@ def test_approving_a_staged_pack_publishes_to_the_family_overlay(
     harness.store.save(record.mark_reviewed())
     harness.sign_in(PARENT)
 
-    response = harness.client.post(f"/parent/packs/{record.id}/approve", follow_redirects=False)
+    response = harness.client.post(f"/parent/runs/{record.id}/approve", follow_redirects=False)
 
     assert response.status_code == 303
     assert harness.published == [("first_snow-it-fake0001", FAMILY)]
@@ -127,7 +127,7 @@ def test_a_family_cannot_approve_another_familys_run(tmp_path: Path, s3: S3Clien
     other = _staged_run(harness.store, OTHER_FAMILY, "first_snow-it-fake0002")
     harness.sign_in(PARENT)  # session = FAMILY
 
-    response = harness.client.post(f"/parent/packs/{other.id}/approve", follow_redirects=False)
+    response = harness.client.post(f"/parent/runs/{other.id}/approve", follow_redirects=False)
 
     assert response.status_code == 404
     assert harness.published == []
@@ -142,7 +142,7 @@ def test_approving_a_non_staged_run_does_not_publish(tmp_path: Path, s3: S3Clien
     harness.store.save(record.advance("running"))  # still running, not staged
     harness.sign_in(PARENT)
 
-    response = harness.client.post(f"/parent/packs/{record.id}/approve", follow_redirects=False)
+    response = harness.client.post(f"/parent/runs/{record.id}/approve", follow_redirects=False)
 
     assert response.status_code == 400
     assert harness.published == []
@@ -152,7 +152,7 @@ def test_approve_requires_a_signed_in_parent(tmp_path: Path, s3: S3Client) -> No
     harness = Harness(tmp_path, s3)
     record = _staged_run(harness.store, FAMILY, "first_snow-it-fake0003")
 
-    response = harness.client.post(f"/parent/packs/{record.id}/approve", follow_redirects=False)
+    response = harness.client.post(f"/parent/runs/{record.id}/approve", follow_redirects=False)
 
     assert response.status_code == 401
     assert harness.published == []
