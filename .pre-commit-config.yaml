@@ -62,7 +62,6 @@ repos:
           - boto3-stubs[s3]>=1.35.0
           - langsmith>=0.3.0
           - sentry-sdk>=2.0.0
-          - openai>=1.0.0
         args: [--config-file=pyproject.toml, src]
         pass_filenames: false
         # Only run on src/ to avoid test file issues
