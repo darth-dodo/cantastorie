@@ -39,7 +39,9 @@ from src.pipeline.steps.illustrate import (
 STEP_NAME = "image_safety"
 
 # Bump when the instructions change: prompt text is a cache-key input by proxy.
-PROMPT_VERSION = 1
+# Also bumped when temperature 0 started reaching the wire (B4 review): verdicts
+# sampled at the provider default are re-bought.
+PROMPT_VERSION = 2
 
 # How many times one image may be redrawn after a failed verdict before the
 # whole story is rejected. Each redraw is one image call plus one judge call.
@@ -85,7 +87,10 @@ def build_image_safety_agent(model: Model) -> Agent[None, ImageSafetyReport]:
         model=model,
         output_type=ImageSafetyReport,
         instructions=IMAGE_SAFETY_INSTRUCTIONS,
-        model_settings=IMAGE_SAFETY_MODEL_SETTINGS,
+        # A fresh copy per agent: pydantic-ai pops sampling params from the
+        # settings dict in place when it profiles a model as reasoning, which
+        # would strip temperature from this module constant for every later run.
+        model_settings=ModelSettings(**IMAGE_SAFETY_MODEL_SETTINGS),
     )
 
 

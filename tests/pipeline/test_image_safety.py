@@ -17,8 +17,6 @@ import pytest
 from pydantic import SecretStr, ValidationError
 from pydantic_ai.messages import BinaryContent, ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
 from src.config import Settings
 from src.pipeline.cache import ArtifactCache
@@ -32,6 +30,7 @@ from src.pipeline.models import (
     Page,
     Story,
 )
+from src.pipeline.providers import build_model
 from src.pipeline.steps.image_safety import (
     IMAGE_SAFETY_MAX_REGENERATIONS,
     IMAGE_SAFETY_TEMPERATURE,
@@ -333,15 +332,15 @@ def test_the_judge_sends_the_image_as_a_base64_data_url_through_openrouter(
             },
         )
 
-    provider = OpenAIProvider(
-        base_url="https://openrouter.test/api/v1",
-        api_key="sk-or-test",
+    settings = _settings(tmp_path)
+    model = build_model(
+        settings.image_safety_model,
+        settings,
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
-    model = OpenAIChatModel("openai/gpt-4.1-mini", provider=provider)
     png = b"\x89PNG-calm"
 
-    report = judge_image(png, _settings(tmp_path), ArtifactCache(tmp_path / "s"), model=model)
+    report = judge_image(png, settings, ArtifactCache(tmp_path / "s"), model=model)
 
     assert report.passed
     sent = json.dumps(bodies[0])

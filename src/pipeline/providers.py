@@ -15,24 +15,36 @@ import io
 import wave
 
 import httpx
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from src.config import Settings
 from src.observability import build_traced_openai_client, typed_traceable
 from src.pipeline.models import Language
 
 
-def build_model(model_id: str, settings: Settings) -> OpenAIChatModel:
+def build_model(
+    model_id: str, settings: Settings, *, http_client: httpx.AsyncClient | None = None
+) -> OpenAIChatModel:
+    """A Pydantic AI chat model on OpenRouter, for every LLM step.
+
+    OpenRouterProvider, not a bare OpenAIProvider: with the plain provider,
+    pydantic-ai 2.5 profiles an ``openai/...`` id as a reasoning model and
+    silently strips ``temperature`` — both safety judges would then sample at
+    the provider default instead of 0. The client is built here (traced or
+    plain) so ``openrouter_base_url`` stays configurable.
+    """
     if settings.langsmith_tracing:
-        provider = OpenAIProvider(openai_client=build_traced_openai_client(settings))
+        client = build_traced_openai_client(settings, http_client=http_client)
     else:
-        provider = OpenAIProvider(
+        client = AsyncOpenAI(
             base_url=settings.openrouter_base_url,
             api_key=settings.openrouter_api_key.get_secret_value(),
+            http_client=http_client,
         )
-    return OpenAIChatModel(model_id, provider=provider)
+    return OpenAIChatModel(model_id, provider=OpenRouterProvider(openai_client=client))
 
 
 class NarrationResult(BaseModel):

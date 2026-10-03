@@ -20,7 +20,9 @@ from src.pipeline.models import SafetyReport, Story
 from src.pipeline.providers import build_model
 
 # Bump when the instructions change: prompt text is a cache-key input by proxy.
-PROMPT_VERSION = 2
+# Also bumped when temperature 0 started reaching the wire (B4 review): verdicts
+# sampled at the provider default are re-bought.
+PROMPT_VERSION = 3
 
 SAFETY_TEMPERATURE = 0.0
 SAFETY_MODEL_SETTINGS = ModelSettings(temperature=SAFETY_TEMPERATURE)
@@ -54,7 +56,10 @@ def build_safety_agent(model: Model) -> Agent[None, SafetyReport]:
         model=model,
         output_type=SafetyReport,
         instructions=SAFETY_INSTRUCTIONS,
-        model_settings=SAFETY_MODEL_SETTINGS,
+        # A fresh copy per agent: pydantic-ai pops sampling params from the
+        # settings dict in place when it profiles a model as reasoning, which
+        # would strip temperature from this module constant for every later run.
+        model_settings=ModelSettings(**SAFETY_MODEL_SETTINGS),
     )
 
 
