@@ -258,6 +258,8 @@ Injection is mitigated on the output side: the cross-family judge is enforced at
 
 **Fix**: `premise: str | None = Field(default=None, max_length=300)` on `PackRequest`.
 
+Fixed in code (AI-470).
+
 ### H3 — Deploy pipeline is not gated, and production dependencies are unpinned
 
 ```
@@ -450,7 +452,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Path allowlist and tests on `/published/{path}` (H7)
 - [x] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
-- [ ] `premise` capped server-side on `PackRequest` (H2)
+- [x] `premise` capped server-side on `PackRequest` (H2)
 - [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3)
 - [ ] Staging keyed by tenant, with a content hash bound to the approval (H1)
 - [x] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)

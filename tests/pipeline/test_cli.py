@@ -112,6 +112,62 @@ def test_generate_rejects_a_theme_outside_the_locked_set() -> None:
     assert "dragons" in result.output
 
 
+def test_generate_rejects_a_premise_over_the_bound() -> None:
+    """AI-470: the same 300-character bound as PackRequest applies here — the
+    CLI is another way to reach the writer prompt, not a separate rule."""
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--theme",
+            "the_sleepy_sea",
+            "--language",
+            "it",
+            "--premise",
+            "x" * 301,
+        ],
+    )
+    assert result.exit_code != 0
+    assert "300" in result.output
+
+
+def test_generate_accepts_a_premise_at_the_bound(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """AI-470: exactly 300 characters is the bound, not the cutoff — guards
+    against an off-by-one (`>=` instead of `>`) in the CLI's own check."""
+    seen: dict[str, object] = {}
+
+    def fake_generate(
+        theme: str,
+        language: str,
+        settings: object,
+        shape: str = "linear",
+        premise: str | None = None,
+    ) -> Path:
+        seen["premise"] = premise
+        return tmp_path / "staging" / "the-sleepy-sea-it-abc12345"
+
+    monkeypatch.setattr(cli, "generate_story", fake_generate)
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--theme",
+            "the_sleepy_sea",
+            "--language",
+            "it",
+            "--premise",
+            "x" * 300,
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen["premise"] == "x" * 300
+
+
 def test_generate_forwards_an_optional_premise(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

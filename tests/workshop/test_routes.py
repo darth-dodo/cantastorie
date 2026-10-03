@@ -282,6 +282,51 @@ def test_starting_a_run_with_an_unknown_shape_is_rejected(tmp_path: Path, s3: S3
     assert harness.store.list_runs() == []
 
 
+def test_starting_a_run_with_a_too_long_premise_is_rejected(tmp_path: Path, s3: S3Client) -> None:
+    """AI-470: a direct POST past the form's maxlength still hits the bound
+    and gets a plain-language message, not a raw JSON error dump."""
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+
+    response = harness.client.post(
+        "/workshop/runs",
+        data={
+            "theme": "the_sleepy_sea",
+            "language": "it",
+            "count": "1",
+            "premise": "x" * 301,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 422
+    assert harness.store.list_runs() == []
+    assert "too long" in response.text
+    assert '"loc"' not in response.text
+
+
+def test_starting_a_run_with_a_premise_at_the_bound_is_accepted(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+
+    response = harness.client.post(
+        "/workshop/runs",
+        data={
+            "theme": "the_sleepy_sea",
+            "language": "it",
+            "count": "1",
+            "premise": "x" * 300,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    [record] = harness.store.list_runs()
+    assert record.request.premise == "x" * 300
+
+
 def test_the_progress_fragment_reports_the_run_state(tmp_path: Path, s3: S3Client) -> None:
     harness = _Harness(tmp_path, s3)
     harness.sign_in()

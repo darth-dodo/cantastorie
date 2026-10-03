@@ -108,3 +108,34 @@ def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert r.status_code == 200
     assert "already being made" in r.text  # cap message shown
+
+
+def test_premise_over_the_bound_is_rejected_with_a_clear_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AI-470: a direct POST past the textarea's maxlength gets a 422 with a
+    plain-language message, not a raw JSON error dump."""
+    manager = _FakeManager()
+    client = _make_client(monkeypatch, manager)
+
+    r = client.post(
+        "/parent/packs",
+        data={"theme": "the_sleepy_sea", "language": "it", "premise": "x" * 301},
+    )
+
+    assert r.status_code == 422
+    assert "too long" in r.text
+    assert '"loc"' not in r.text
+
+
+def test_premise_at_the_bound_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _FakeManager()
+    client = _make_client(monkeypatch, manager)
+
+    r = client.post(
+        "/parent/packs",
+        data={"theme": "the_sleepy_sea", "language": "it", "premise": "x" * 300},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303

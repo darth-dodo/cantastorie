@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field, model_validator
 
 Language = Literal["it", "es", "en", "el", "de", "bg", "ru", "mr"]
 
+# The one bound on a parent- or operator-supplied premise (AI-470): the
+# pipeline CLI, the workshop bench and the parent make-a-story form all import
+# this rather than each hardcoding "300", so the bound can't drift apart.
+PREMISE_MAX_LENGTH = 300
+
 Theme = Literal[
     "animals_helping_each_other",
     "tiny_garden_adventure",

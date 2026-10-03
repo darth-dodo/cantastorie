@@ -25,12 +25,13 @@ from typing import Annotated, Protocol, get_args
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from pydantic import ValidationError
 
 from src.api.auth import verify_clerk_session
 from src.api.routes._nav import fapi_host, home_path
 from src.api.routes._templates import TEMPLATES_DIR, templates  # noqa: F401 — re-exported for tests
 from src.config import Settings, get_settings
-from src.pipeline.models import Language, Story, Theme
+from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Story, Theme
 from src.pipeline.publish import (
     STAGED_PREFIX,
     STORY_FILE,
@@ -45,7 +46,13 @@ from src.pipeline.publish import (
     unpublish_story,
 )
 from src.workshop.manager import RunManager
-from src.workshop.records import InvalidTransition, PackRequest, RunRecord, RunStore
+from src.workshop.records import (
+    InvalidTransition,
+    PackRequest,
+    RunRecord,
+    RunStore,
+    pack_request_error_message,
+)
 from src.workshop.scope import WorkshopScope, resolve_scope
 
 LIVE_STATES = frozenset({"queued", "running"})
@@ -182,15 +189,9 @@ def _rel_time(dt: datetime) -> str:
     return dt.strftime("%b %-d")
 
 
-@router.get("", response_class=HTMLResponse)
-async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> Response:
-    scope = await _scope(request, settings)
-    if scope is None:
-        return _sign_in_page(request, settings)
-    if not scope.is_operator:
-        # No dead-end: a signed-in parent belongs in the parent area.
-        return RedirectResponse(home_path(scope.is_operator), status_code=303)
-
+async def _dashboard_ctx(
+    request: Request, settings: Settings, manager: RunManager, *, form_error: str | None = None
+) -> dict[str, object]:
     def read_runs() -> list[RunRecord]:
         # One read of the store: the reaper sweeps the same list (AI-465), then
         # retire zombie runs before the bench renders them (AI-417).
@@ -218,19 +219,30 @@ async def dashboard(request: Request, settings: WorkshopSettings, manager: Manag
         for r in runs
     }
     debug = request.query_params.get("debug") == "1"
-    return templates.TemplateResponse(
-        request,
-        "workshop/dashboard.html",
-        _base_ctx(
-            settings,
-            runs=runs,
-            run_extras=run_extras,
-            themes=get_args(Theme),
-            languages=get_args(Language),
-            live=LIVE_STATES,
-            debug=debug,
-        ),
+    return _base_ctx(
+        settings,
+        runs=runs,
+        run_extras=run_extras,
+        themes=get_args(Theme),
+        languages=get_args(Language),
+        live=LIVE_STATES,
+        debug=debug,
+        form_error=form_error,
+        premise_max_length=PREMISE_MAX_LENGTH,
     )
+
+
+@router.get("", response_class=HTMLResponse)
+async def dashboard(request: Request, settings: WorkshopSettings, manager: Manager) -> Response:
+    scope = await _scope(request, settings)
+    if scope is None:
+        return _sign_in_page(request, settings)
+    if not scope.is_operator:
+        # No dead-end: a signed-in parent belongs in the parent area.
+        return RedirectResponse(home_path(scope.is_operator), status_code=303)
+
+    ctx = await _dashboard_ctx(request, settings, manager)
+    return templates.TemplateResponse(request, "workshop/dashboard.html", ctx)
 
 
 @router.get("/library", response_class=HTMLResponse)
@@ -290,7 +302,7 @@ async def start_run(
     count: Annotated[int, Form()] = 1,
     premise: Annotated[str, Form()] = "",
     shape: Annotated[str, Form()] = "linear",
-) -> RedirectResponse:
+) -> Response:
     scope = await _scope(request, settings)
     if scope is None:
         return _to_login()
@@ -298,13 +310,19 @@ async def start_run(
         raise HTTPException(status_code=403)
     if shape not in ("linear", "branching"):
         raise HTTPException(status_code=400, detail=f"Unknown shape {shape!r}")
-    pack = PackRequest(
-        theme=theme,  # type: ignore[arg-type]
-        language=language,  # type: ignore[arg-type]
-        count=count,
-        premise=premise or None,
-        shape=shape,  # type: ignore[arg-type]
-    )
+    try:
+        pack = PackRequest(
+            theme=theme,  # type: ignore[arg-type]
+            language=language,  # type: ignore[arg-type]
+            count=count,
+            premise=premise or None,
+            shape=shape,  # type: ignore[arg-type]
+        )
+    except ValidationError as error:
+        ctx = await _dashboard_ctx(
+            request, settings, manager, form_error=pack_request_error_message(error)
+        )
+        return templates.TemplateResponse(request, "workshop/dashboard.html", ctx, status_code=422)
     record = await manager.submit(scope.store_token, pack)
     background.add_task(manager.execute, record)
     return RedirectResponse(f"/workshop/runs/{record.id}", status_code=303)
