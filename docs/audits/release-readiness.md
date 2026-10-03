@@ -152,7 +152,7 @@ Compounding this, `CONTENT_DIR` points at `/tmp` with no Render disk, so the con
 
 **Fix**: wire `reap_stale()` and a non-blocking `resume_on_boot()` into a FastAPI `lifespan`. `resume_on_boot` awaits each run sequentially as written, so it must be scheduled as a task rather than awaited during startup, or the health check will fail and Render will roll the deploy back in a loop.
 
-**Fixed in code (AI-477).** A `lifespan` in `src/api/main.py`, gated on R2 being configured, schedules `reap_stale()` then `resume_on_boot()` as a background `asyncio.Task` on startup (`resume_on_boot`'s own `list_runs()` scan is now off the event loop too) and cancels it cleanly on shutdown; `/health` stays responsive throughout. The parent progress poll now also calls `reap_stale()` (M9), so a family self-heals behind a stranded run without an operator. The `CONTENT_DIR` cache-loss cost is a documented, accepted trade-off, not a code fix — see `docs/setup.md`.
+**Fixed in code (AI-477).** A `lifespan` in `src/api/main.py`, gated on R2 being configured, schedules `reap_stale()` then `resume_on_boot()` as a background `asyncio.Task` on startup (`resume_on_boot`'s own `list_runs()` scan is now off the event loop too) and cancels it cleanly on shutdown; `/health` stays responsive throughout. Exceptions inside that task (a store save, `list_runs`, anything not already covered by `execute`'s own try/except) are now logged and reported to Sentry rather than vanishing silently. The `CONTENT_DIR` cache-loss cost and the rolling-deploy double-resume cost are documented, accepted trade-offs, not code fixes — see `docs/setup.md`. The M9 half of the line below (reaping on the parent's own poll) ships separately as AI-483.
 
 ---
 
@@ -449,7 +449,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
 - [ ] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)
-- [x] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
+- [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [ ] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
