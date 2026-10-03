@@ -1,6 +1,6 @@
 """Behavior specs for workshop run records (AI-387, ADR-005).
 
-A run record is the durable trace of one pack request: queued → running →
+A run record is the durable trace of one story request: queued → running →
 staged → approved | rejected, with a retryable failed. Records persist to R2
 under pending/{family-token}/runs/ because Render's disk is ephemeral — moto
 serves all S3 traffic here, zero network.
@@ -20,16 +20,16 @@ from src.pipeline.models import PREMISE_MAX_LENGTH
 from src.workshop import records
 from src.workshop.records import (
     InvalidTransition,
-    PackRequest,
     RunStore,
+    StoryRequest,
     new_run,
-    pack_request_error_message,
+    story_request_error_message,
 )
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
 
-REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+REQUEST = StoryRequest(theme="the_sleepy_sea", language="it")
 
 
 @pytest.fixture
@@ -133,9 +133,20 @@ def test_staged_resolves_to_approved_or_rejected_only() -> None:
         staged.advance("running")
 
 
-def test_pack_request_count_is_capped_at_three() -> None:
-    with pytest.raises(ValueError, match="count"):
-        PackRequest(theme="the_sleepy_sea", language="it", count=4)
+def test_a_story_request_needs_no_count() -> None:
+    """AI-480: one run is one story, so a request has no count at all."""
+    request = StoryRequest(theme="the_sleepy_sea", language="it")
+
+    assert "count" not in request.model_dump()
+
+
+def test_a_legacy_request_with_a_count_loads_and_drops_it() -> None:
+    """Records persisted before AI-480 carry `count`; they still load, and the
+    next save writes no count."""
+    request = StoryRequest.model_validate({"theme": "the_sleepy_sea", "language": "it", "count": 3})
+
+    assert request == StoryRequest(theme="the_sleepy_sea", language="it")
+    assert "count" not in request.model_dump()
 
 
 def test_store_round_trips_a_record_under_the_pending_prefix(s3: S3Client) -> None:
@@ -232,7 +243,7 @@ def test_operator_listing_reads_every_family_but_never_pages_staged_artifacts(
     """The all-families read lists each owner's runs/ folder (AI-465): staged
     artifacts share pending/ and must not be paged through to find records."""
     store = RunStore(_settings(), client=s3)
-    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    request = StoryRequest(theme="the_sleepy_sea", language="it")
     runs = [new_run(token, request) for token in ("a" * 32, "b" * 32, "operator")]
     for run in runs:
         store.save(run)
@@ -264,23 +275,19 @@ def test_premise_over_the_bound_is_rejected() -> None:
     """AI-470: the field bound, not just the form's maxlength, blocks a
     direct POST that skips the DOM entirely."""
     with pytest.raises(ValidationError):
-        PackRequest(
-            theme="the_sleepy_sea", language="it", count=1, premise="x" * (PREMISE_MAX_LENGTH + 1)
-        )
+        StoryRequest(theme="the_sleepy_sea", language="it", premise="x" * (PREMISE_MAX_LENGTH + 1))
 
 
 def test_premise_at_the_bound_is_accepted() -> None:
-    request = PackRequest(
-        theme="the_sleepy_sea", language="it", count=1, premise="x" * PREMISE_MAX_LENGTH
-    )
+    request = StoryRequest(theme="the_sleepy_sea", language="it", premise="x" * PREMISE_MAX_LENGTH)
     assert request.premise == "x" * PREMISE_MAX_LENGTH
 
 
-def test_pack_request_error_message_is_friendly_for_a_too_long_premise() -> None:
+def test_story_request_error_message_is_friendly_for_a_too_long_premise() -> None:
     try:
-        PackRequest(theme="the_sleepy_sea", language="it", count=1, premise="x" * 301)
+        StoryRequest(theme="the_sleepy_sea", language="it", premise="x" * 301)
     except ValidationError as error:
-        message = pack_request_error_message(error)
+        message = story_request_error_message(error)
     else:
         pytest.fail("expected a ValidationError")
     assert "loc" not in message

@@ -10,7 +10,7 @@ import pytest
 
 import src.api.routes.parent as parent_module
 from src.pipeline.publish import PublishedStory
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.test_parent_redesign import (
     VALID_TOKEN,
     _FakeManager,
@@ -23,7 +23,7 @@ OTHER_TOKEN = "ffffffffffffffffffffffffffffffff"  # pragma: allowlist secret
 
 
 def _staged_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
-    run = new_run(family_token, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    run = new_run(family_token, StoryRequest(theme="the_sleepy_sea", language="it"))
     return run.advance("running").advance("staged", story_ids=[story_id])
 
 
@@ -167,7 +167,7 @@ def test_reject_a_run_that_is_not_staged_is_400(monkeypatch: pytest.MonkeyPatch)
 def test_run_row_polls_only_while_live(
     monkeypatch: pytest.MonkeyPatch, s3: _FakeS3, states: tuple[str, ...], polls: bool
 ) -> None:
-    run = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    run = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     for state in states:
         run = run.advance(state, story_ids=[] if state == "staged" else None)  # type: ignore[arg-type]
     monkeypatch.setattr(parent_module, "_checkpointed_steps", lambda record, settings: set())

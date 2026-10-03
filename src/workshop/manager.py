@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from src.config import Settings
-    from src.workshop.records import PackRequest, RunRecord, RunStore
+    from src.workshop.records import RunRecord, RunStore, StoryRequest
 
 from src.workshop.records import new_run
 
@@ -113,25 +113,16 @@ def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None
     return None
 
 
-def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
-    """Default generation seam: one generate_story pass per requested story.
-
-    Identical inputs share a story id via the content-addressed cache, so a
-    count above one dedupes to one story until premise variation arrives with
-    the review queue (AI-389 regenerate-with-cap).
-    """
-    staged: dict[str, str] = {}
-    for _ in range(request.count):
-        prefix = generate_story(
-            request.theme,
-            request.language,
-            settings,
-            shape=request.shape,
-            premise=request.premise,
-        )
-        story_id = prefix.rsplit("/", 1)[-1]
-        staged[story_id] = prefix
-    return list(staged.values())
+def _generate_pack(request: StoryRequest, settings: Settings) -> list[str]:
+    """Default generation seam: one generate_story pass for the one story."""
+    prefix = generate_story(
+        request.theme,
+        request.language,
+        settings,
+        shape=request.shape,
+        premise=request.premise,
+    )
+    return [prefix]
 
 
 class RunManager:
@@ -142,7 +133,7 @@ class RunManager:
         store: RunStore,
         settings: Settings,
         *,
-        generate_pack: Callable[[PackRequest, Settings], list[str]] | None = None,
+        generate_pack: Callable[[StoryRequest, Settings], list[str]] | None = None,
     ) -> None:
         self._store = store
         self._settings = settings
@@ -157,7 +148,7 @@ class RunManager:
     def store(self) -> RunStore:
         return self._store
 
-    async def submit(self, family_token: str, request: PackRequest) -> RunRecord:
+    async def submit(self, family_token: str, request: StoryRequest) -> RunRecord:
         if family_token != OPERATOR_TOKEN:
             self._enforce_caps(family_token)
         record = new_run(family_token, request)

@@ -31,12 +31,12 @@ from src.api.main import create_app
 from src.api.routes.workshop import get_run_manager
 from src.config import Settings, get_settings
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
+from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
 
-REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+REQUEST = StoryRequest(theme="the_sleepy_sea", language="it")
 
 
 @pytest.fixture
@@ -57,12 +57,12 @@ def _aged(record: RunRecord, age: timedelta) -> RunRecord:
 
 
 def _blocking_manager(
-    store: RunStore, settings: Settings, hold: threading.Event, calls: list[PackRequest]
+    store: RunStore, settings: Settings, hold: threading.Event, calls: list[StoryRequest]
 ) -> RunManager:
     """A manager whose generation seam blocks on `hold` — lets a test observe
     that startup returns while the resumed run is still in flight."""
 
-    def generate_pack(request: PackRequest, st: Settings) -> list[str]:
+    def generate_pack(request: StoryRequest, st: Settings) -> list[str]:
         calls.append(request)
         hold.wait(timeout=5)
         story_id = f"{request.theme}-{request.language}-resumed"
@@ -94,7 +94,7 @@ def test_boot_schedules_exactly_one_resume_without_blocking_startup(s3: S3Client
     store.save(running)
 
     hold = threading.Event()
-    calls: list[PackRequest] = []
+    calls: list[StoryRequest] = []
     manager = _blocking_manager(store, settings, hold, calls)
     app = _wired_app(settings, manager)
 
@@ -124,7 +124,7 @@ def test_a_stale_record_is_reaped_at_boot(s3: S3Client) -> None:
 
     hold = threading.Event()
     hold.set()  # nothing should ever call generate_pack for a reaped run
-    calls: list[PackRequest] = []
+    calls: list[StoryRequest] = []
     manager = _blocking_manager(store, settings, hold, calls)
     app = _wired_app(settings, manager)
 
@@ -146,7 +146,7 @@ def test_shutdown_cancels_the_boot_resume_task(s3: S3Client) -> None:
     store.save(running)
 
     hold = threading.Event()  # never set from the test; generate_pack blocks
-    calls: list[PackRequest] = []
+    calls: list[StoryRequest] = []
     manager = _blocking_manager(store, settings, hold, calls)
     app = _wired_app(settings, manager)
 

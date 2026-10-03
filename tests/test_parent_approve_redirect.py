@@ -14,7 +14,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_family_publisher, get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -67,7 +67,7 @@ class _FakeManager:
 
 
 def _make_staged_run() -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(VALID_TOKEN, req)
     run = run.advance("running")
     run = run.advance("staged", story_ids=["story-abc"])

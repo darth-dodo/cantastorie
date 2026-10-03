@@ -43,7 +43,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
 from src.config import get_settings
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunStore, new_run
+from src.workshop.records import RunStore, StoryRequest, new_run
 
 CALL_MS = 30
 HANDSHAKE_MS = 60
@@ -134,7 +134,7 @@ def _seed() -> dict[str, str]:
                 OBJECTS[key] = b"x"
     # 30 families, each with an overlay in 2 languages x 3 stories + 3 runs.
     tokens = [f"{i:032x}" for i in range(1, 30)] + [FAMILY]
-    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    request = StoryRequest(theme="the_sleepy_sea", language="it")
     ids: dict[str, str] = {}
     for token in tokens:
         for lang in ("it", "en"):

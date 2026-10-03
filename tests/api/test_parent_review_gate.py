@@ -19,7 +19,7 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 import src.api.routes.parent as parent_module
-from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
+from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 from tests.api.test_parent_approve import BUCKET, FAMILY, PARENT, PENDING_BUCKET, Harness
 
 
@@ -53,7 +53,7 @@ def _stage_story(s3: S3Client, story_id: str) -> None:
 
 
 def _staged_run(store: RunStore, story_ids: list[str]) -> RunRecord:
-    record = new_run(FAMILY, PackRequest(theme="the_sleepy_sea", language="en", count=1))
+    record = new_run(FAMILY, StoryRequest(theme="the_sleepy_sea", language="en"))
     record = record.advance("running").advance("staged", story_ids=story_ids)
     store.save(record)
     return record

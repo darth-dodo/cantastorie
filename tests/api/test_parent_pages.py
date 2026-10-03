@@ -15,7 +15,7 @@ from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import Settings, get_settings
 from src.workshop.manager import RunCapExceeded
-from src.workshop.records import PackRequest, new_run
+from src.workshop.records import StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -166,7 +166,7 @@ def test_pack_request_submits_under_session_family_token(
     client = _packs_client(monkeypatch, manager)
     response = client.post(
         "/parent/packs",
-        data={"theme": "the_sleepy_sea", "language": "it", "count": "1", "premise": ""},
+        data={"theme": "the_sleepy_sea", "language": "it", "premise": ""},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -185,7 +185,6 @@ def test_form_cannot_override_family_token(monkeypatch: pytest.MonkeyPatch) -> N
         data={
             "theme": "the_sleepy_sea",
             "language": "it",
-            "count": "1",
             "family_token": "f" * 32,
         },
         follow_redirects=False,
@@ -196,7 +195,7 @@ def test_form_cannot_override_family_token(monkeypatch: pytest.MonkeyPatch) -> N
 def test_cap_hit_renders_friendly_message_with_active_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    active = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    active = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     running = active.advance("running")
     manager = _FakeManager(
         raise_cap=RunCapExceeded("a story pack is already being made", active=running)
@@ -204,7 +203,7 @@ def test_cap_hit_renders_friendly_message_with_active_state(
     client = _packs_client(monkeypatch, manager)
     response = client.post(
         "/parent/packs",
-        data={"theme": "the_sleepy_sea", "language": "it", "count": "1"},
+        data={"theme": "the_sleepy_sea", "language": "it"},
     )
     assert response.status_code == 200
     assert "already being made" in response.text
@@ -214,7 +213,7 @@ def test_cap_hit_renders_friendly_message_with_active_state(
 def test_unauthenticated_pack_post_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_app(clerk_settings())
     response = TestClient(app).post(
-        "/parent/packs", data={"theme": "the_sleepy_sea", "language": "it", "count": "1"}
+        "/parent/packs", data={"theme": "the_sleepy_sea", "language": "it"}
     )
     assert response.status_code == 401
 
@@ -234,8 +233,8 @@ def _store_with_runs(manager: _FakeManager, records: list[Any]) -> None:
 
 
 def test_my_packs_lists_only_this_familys_runs(monkeypatch: pytest.MonkeyPatch) -> None:
-    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
-    other = new_run("f" * 32, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
+    other = new_run("f" * 32, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine, other])
     client = _packs_client(monkeypatch, manager)
@@ -251,7 +250,7 @@ def test_packs_page_seeds_the_session_family_token_for_same_device_overlay(
     """The packs page emits the family token so a same-device child player adopts
     it (IndexedDB) and merges the family overlay. The token is the SESSION token,
     never a form value — same tenancy boundary as everything else here."""
-    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
     client = _packs_client(monkeypatch, manager)
@@ -265,7 +264,7 @@ def test_packs_page_seeds_the_session_family_token_for_same_device_overlay(
 
 def test_cross_tenant_progress_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
     """THE tenancy test: family A cannot view family B's run — by URL guessing either."""
-    others = new_run("f" * 32, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    others = new_run("f" * 32, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [others])
     client = _packs_client(monkeypatch, manager)  # session = VALID_TOKEN (family A)
@@ -287,7 +286,7 @@ def test_progress_poll_reaps_stale_runs_so_a_family_can_self_heal(
 
 
 def test_own_progress_fragment_polls_parent_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
     client = _packs_client(monkeypatch, manager)
@@ -302,7 +301,7 @@ def test_progress_fragment_keeps_the_run_title_and_language(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The polled swap must not erase which story is which (AI-460 follow-up)."""
-    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
     client = _packs_client(monkeypatch, manager)
@@ -315,7 +314,7 @@ def test_failed_run_shows_rested_not_the_pipeline_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Parents see a calm 'rested' chip; the raw pipeline error is operator-only."""
-    run = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    run = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     run = run.advance("running").advance("failed", error="Traceback: ElevenLabs 429")
     manager = _FakeManager()
     _store_with_runs(manager, [run])

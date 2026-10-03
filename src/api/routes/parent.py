@@ -50,9 +50,9 @@ from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
 from src.workshop.records import (
     ConcurrentModificationError,
     InvalidTransition,
-    PackRequest,
     RunRecord,
-    pack_request_error_message,
+    StoryRequest,
+    story_request_error_message,
 )
 
 if TYPE_CHECKING:
@@ -340,17 +340,15 @@ async def request_pack(
     language: Annotated[str, Form()],
     premise: Annotated[str, Form()] = "",
 ) -> Response:
-    # One story at a time: the parent surface never batches a pack, so count is
-    # fixed at 1 here rather than read from the form.
     try:
-        pack = PackRequest(theme=theme, language=language, count=1, premise=premise or None)  # type: ignore[arg-type]
+        story_request = StoryRequest(theme=theme, language=language, premise=premise or None)  # type: ignore[arg-type]
     except ValidationError as error:
         ctx_dict = await _make_ctx(
-            ctx.family_token, settings, manager, form_error=pack_request_error_message(error)
+            ctx.family_token, settings, manager, form_error=story_request_error_message(error)
         )
         return templates.TemplateResponse(request, "parent/make.html", ctx_dict, status_code=422)
     try:
-        record = await manager.submit(ctx.family_token, pack)
+        record = await manager.submit(ctx.family_token, story_request)
     except RunCapExceeded as cap:
         view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
         context: dict[str, object] = {

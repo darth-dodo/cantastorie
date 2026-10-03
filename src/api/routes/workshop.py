@@ -48,10 +48,10 @@ from src.pipeline.publish import (
 from src.workshop.manager import RunManager
 from src.workshop.records import (
     InvalidTransition,
-    PackRequest,
     RunRecord,
     RunStore,
-    pack_request_error_message,
+    StoryRequest,
+    story_request_error_message,
 )
 from src.workshop.scope import WorkshopScope, resolve_scope
 
@@ -300,7 +300,6 @@ async def start_run(
     background: BackgroundTasks,
     theme: Annotated[str, Form()],
     language: Annotated[str, Form()],
-    count: Annotated[int, Form()] = 1,
     premise: Annotated[str, Form()] = "",
     shape: Annotated[str, Form()] = "linear",
 ) -> Response:
@@ -312,19 +311,18 @@ async def start_run(
     if shape not in ("linear", "branching"):
         raise HTTPException(status_code=400, detail=f"Unknown shape {shape!r}")
     try:
-        pack = PackRequest(
+        story_request = StoryRequest(
             theme=theme,  # type: ignore[arg-type]
             language=language,  # type: ignore[arg-type]
-            count=count,
             premise=premise or None,
             shape=shape,  # type: ignore[arg-type]
         )
     except ValidationError as error:
         ctx = await _dashboard_ctx(
-            request, settings, manager, form_error=pack_request_error_message(error)
+            request, settings, manager, form_error=story_request_error_message(error)
         )
         return templates.TemplateResponse(request, "workshop/dashboard.html", ctx, status_code=422)
-    record = await manager.submit(scope.store_token, pack)
+    record = await manager.submit(scope.store_token, story_request)
     background.add_task(manager.execute, record)
     return RedirectResponse(f"/workshop/runs/{record.id}", status_code=303)
 

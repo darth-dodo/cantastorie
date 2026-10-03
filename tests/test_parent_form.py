@@ -15,7 +15,7 @@ from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
 from src.workshop.manager import RunCapExceeded
-from src.workshop.records import PackRequest, new_run
+from src.workshop.records import StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -95,7 +95,7 @@ def test_four_minute_note_before_button(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
     """When cap_message is set (via POST to /parent/packs), the packs page shows the cap message."""
-    active = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    active = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     running = active.advance("running")
     manager = _FakeManager(
         raise_cap=RunCapExceeded("a story pack is already being made", active=running)
@@ -104,7 +104,7 @@ def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
     # POST triggers the cap branch which re-renders packs.html with cap_message set
     r = client.post(
         "/parent/packs",
-        data={"theme": "the_sleepy_sea", "language": "it", "count": "1"},
+        data={"theme": "the_sleepy_sea", "language": "it"},
     )
     assert r.status_code == 200
     assert "already being made" in r.text  # cap message shown

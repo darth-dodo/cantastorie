@@ -60,22 +60,23 @@ class ConcurrentModificationError(Exception):
     """A stale run record cannot overwrite a newer persisted version."""
 
 
-class PackRequest(BaseModel):
-    """What a parent (or the operator) asked for: theme + language + count.
+class StoryRequest(BaseModel):
+    """What a parent (or the operator) asked for: one story, by theme + language.
 
     Shape defaults to linear so records persisted before branching arrived
-    deserialize unchanged.
+    deserialize unchanged. Records saved before AI-480 also carry a `count`;
+    pydantic's default extra="ignore" drops it on load, so the next save
+    writes it no more.
     """
 
     theme: Theme
     language: Language
-    count: int = Field(ge=1, le=3)
     premise: str | None = Field(default=None, max_length=PREMISE_MAX_LENGTH)
     shape: Literal["linear", "branching"] = "linear"
 
 
-def pack_request_error_message(error: ValidationError) -> str:
-    """A short, human sentence for a PackRequest validation failure — never the
+def story_request_error_message(error: ValidationError) -> str:
+    """A short, human sentence for a StoryRequest validation failure — never the
     raw pydantic error, which a plain form POST would otherwise render as
     unstyled JSON in the browser."""
     for err in error.errors():
@@ -91,7 +92,7 @@ class RunRecord(BaseModel):
     schema_version: int = 1
     id: str
     family_token: str
-    request: PackRequest
+    request: StoryRequest
     state: RunState = "queued"
     story_ids: list[str] = Field(default_factory=list)
     # The staged stories a parent has opened on the review page, which renders
@@ -138,7 +139,7 @@ class RunRecord(BaseModel):
         return self.model_copy(update={"reviewed_story_ids": [*self.reviewed_story_ids, story_id]})
 
 
-def new_run(family_token: str, request: PackRequest) -> RunRecord:
+def new_run(family_token: str, request: StoryRequest) -> RunRecord:
     now = datetime.now(UTC)
     return RunRecord(
         id=uuid.uuid4().hex,

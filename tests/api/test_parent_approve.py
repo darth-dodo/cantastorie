@@ -27,7 +27,7 @@ from src.api.routes.parent import get_family_publisher
 from src.api.routes.workshop import get_run_manager
 from src.config import get_settings
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
+from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -53,7 +53,7 @@ def s3() -> Iterator[S3Client]:
 
 
 def _staged_run(store: RunStore, family_token: str, story_ids: list[str]) -> RunRecord:
-    record = new_run(family_token, PackRequest(theme="first_snow", language="it", count=1))
+    record = new_run(family_token, StoryRequest(theme="first_snow", language="it"))
     record = record.advance("running").advance("staged", story_ids=story_ids)
     store.save(record)
     return record
@@ -136,7 +136,7 @@ def test_a_family_cannot_approve_another_familys_run(tmp_path: Path, s3: S3Clien
 
 def test_approving_a_non_staged_run_does_not_publish(tmp_path: Path, s3: S3Client) -> None:
     harness = Harness(tmp_path, s3)
-    record = new_run(FAMILY, PackRequest(theme="first_snow", language="it", count=1))
+    record = new_run(FAMILY, StoryRequest(theme="first_snow", language="it"))
     harness.store.save(record.advance("running"))  # still running, not staged
     harness.sign_in(PARENT)
 
