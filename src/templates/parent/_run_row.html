@@ -61,6 +61,9 @@
       <div class="ws-run-row-beads" data-testid="parent-review-missing">
         <span class="ws-run-row-step">we couldn't open this story's pages · nothing was published</span>
       </div>
+      <form method="post" action="{{ base_url }}/{{ record.id }}/reject">
+        <button type="submit" class="ws-pill ws-pill-rest ws-run-row-action" data-testid="parent-reject">Reject</button>
+      </form>
     {% endif %}
   {% endif %}
 </div>

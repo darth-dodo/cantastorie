@@ -178,3 +178,24 @@ def test_the_run_row_shows_an_error_when_nothing_can_be_reviewed(
     assert "/approve" not in row
     assert 'data-testid="parent-approve"' not in row
     assert 'data-testid="parent-review-missing"' in row
+
+
+@pytest.mark.parametrize("story_ids", [[], ["story-missing"]])
+def test_an_unreviewable_run_can_still_be_rejected_from_its_row(
+    tmp_path: Path, s3: S3Client, story_ids: list[str]
+) -> None:
+    """The error state is not a dead end: the parent can clear the run."""
+    harness = Harness(tmp_path, s3)
+    record = _staged_run(harness.store, story_ids)
+    harness.sign_in(PARENT)
+
+    row = harness.client.get(f"/parent/packs/{record.id}/progress").text
+
+    assert f'action="/parent/packs/{record.id}/reject"' in row
+    assert 'data-testid="parent-reject"' in row
+    response = harness.client.post(f"/parent/packs/{record.id}/reject", follow_redirects=False)
+    assert response.status_code == 303
+    reloaded = harness.store.load(FAMILY, record.id)
+    assert reloaded is not None
+    assert reloaded.state == "rejected"
+    assert harness.published == []
