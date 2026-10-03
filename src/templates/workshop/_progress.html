@@ -61,14 +61,11 @@
       <div class="ws-progress-sub">Nothing was published. The full note is below.</div>
     {% endif %}
 
-    {% if is_operator %}
-      {% if staged_stories %}
-        <div class="ws-review-pills">
-          {% for story in staged_stories %}
-            <a href="/workshop/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">{% if record.state == "approved" %}On the shelf — {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}{% else %}Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}{% endif %}</a>
-          {% endfor %}
-        </div>
-      {% endif %}
+    {% if is_operator and staged_story %}
+      {% set pages = staged_story.page_count ~ " page" ~ ("" if staged_story.page_count == 1 else "s") %}
+      <div class="ws-review-pills">
+        <a href="/workshop/staged/{{ staged_story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="review-link">{% if record.state == "approved" %}On the shelf — {{ pages }}{% else %}Review {{ pages }}{% endif %}</a>
+      </div>
     {% endif %}
 
     {% if is_operator and record.state == "failed" and record.error %}

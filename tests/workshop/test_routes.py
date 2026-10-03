@@ -547,7 +547,7 @@ def test_non_operator_is_denied_with_no_side_effects(
     assert harness.published == before_published  # nothing approved/published
 
 
-def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
+def test_approving_a_staged_run_publishes_its_story_and_settles_the_record(
     tmp_path: Path, s3: S3Client
 ) -> None:
     harness = _Harness(tmp_path, s3)
@@ -563,6 +563,24 @@ def test_approving_a_staged_run_publishes_its_stories_and_settles_the_record(
     reloaded = harness.store.load("operator", record.id)
     assert reloaded is not None
     assert reloaded.state == "approved"
+
+
+def test_approving_a_staged_run_with_no_story_is_409(tmp_path: Path, s3: S3Client) -> None:
+    """AI-480: a run whose one story was deleted has nothing to publish — the
+    approve is refused instead of settling an empty run as approved."""
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
+    staged = record.advance("running").advance("staged")
+    harness.store.save(staged)
+
+    response = harness.client.post(f"/workshop/runs/{record.id}/approve", follow_redirects=False)
+
+    assert response.status_code == 409
+    assert harness.published == []
+    reloaded = harness.store.load("operator", record.id)
+    assert reloaded is not None
+    assert reloaded.state == "staged"
 
 
 def test_approving_a_non_staged_run_is_rejected_without_publishing(
@@ -1158,6 +1176,69 @@ def test_run_page_context_includes_staged_story_summaries(tmp_path: Path, s3: S3
 
     assert "La barchetta" in page.text or "Review" in page.text  # title or review button shown
     assert page.status_code == 200
+
+
+# ── One story per run (AI-480) ─────────────────────────────────────────────
+
+
+def test_the_generate_form_has_no_story_count(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+
+    page = harness.client.get("/workshop").text
+
+    assert 'name="count"' not in page
+    assert "data-stepper" not in page
+    assert "ws-stepper" not in page
+
+
+def test_the_stepper_is_gone_from_the_workshop_assets() -> None:
+    static = Path(TEMPLATES_DIR).parent / "static"
+    script = (static / "js" / "workshop.js").read_text()
+    styles = (static / "css" / "workshop.css").read_text()
+
+    assert "stepper" not in script.lower()
+    assert "ws-stepper" not in styles
+
+
+def test_run_meta_lines_carry_no_story_count(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
+
+    dashboard = harness.client.get("/workshop").text
+    run_page = harness.client.get(f"/workshop/runs/{record.id}").text
+
+    metas = re.findall(r'class="ws-run-(?:head-)?meta">([^<]*)<', dashboard + run_page)
+    assert len(metas) == 2
+    for meta in metas:
+        assert "stor" not in meta, meta
+
+
+def test_a_staged_run_card_links_straight_to_its_story(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
+
+    page = harness.client.get("/workshop").text
+
+    assert f'href="/workshop/staged/{story_id}?run={record.id}"' in page
+
+
+def test_the_run_page_shows_one_review_link_for_its_one_story(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    record = new_run("operator", StoryRequest(theme="the_sleepy_sea", language="it"))
+    harness.store.save(record.advance("running").advance("staged", story_id=story_id))
+
+    fragment = harness.client.get(f"/workshop/runs/{record.id}/progress").text
+
+    assert fragment.count('data-testid="review-link"') == 1
 
 
 def test_no_stale_clerk_artifacts_survive() -> None:

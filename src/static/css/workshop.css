@@ -165,39 +165,6 @@ body {
   cursor: pointer;
 }
 
-/* ── Stepper ─────────────────────────────────────────────────────────── */
-.ws-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 6px;
-}
-
-.ws-stepper-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  background: var(--card);
-  box-shadow: 0 1px 4px var(--line-10);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 700 18px var(--font-app);
-  color: var(--ink-soft);
-  cursor: pointer;
-  padding: 0;
-  flex: none;
-}
-
-.ws-stepper-btn:active {
-  transform: scale(0.93);
-}
-
-.ws-stepper-val {
-  font: 700 16px var(--font-app);
-}
-
 /* ── Pills ───────────────────────────────────────────────────────────── */
 .ws-pill {
   display: inline-flex;

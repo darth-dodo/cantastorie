@@ -31,7 +31,7 @@ from src.api.routes._nav import fapi_host, home_path
 from src.api.routes._templates import templates
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
-    _staged_story_summaries,
+    _staged_story_summary,
     get_run_manager,
 )
 from src.config import Settings, get_settings
@@ -383,13 +383,12 @@ async def pack_progress(
     record = await run_in_threadpool(read_record)
     if record is None:
         raise HTTPException(status_code=404)
-    staged_stories = (
-        await run_in_threadpool(
-            _staged_story_summaries, ([record.story_id] if record.story_id else []), settings
-        )
+    staged = (
+        await run_in_threadpool(_staged_story_summary, record.story_id, settings)
         if record.state == "staged"
-        else []
+        else None
     )
+    staged_stories = [staged] if staged else []
     return templates.TemplateResponse(
         request,
         "parent/_run_row.html",
