@@ -2,10 +2,12 @@
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler as _default_http_handler
 from fastapi.responses import FileResponse, Response
@@ -34,9 +36,23 @@ async def _reap_and_resume(manager: RunManager) -> None:
     runs here — inside the scheduled task — rather than before it, so it
     cannot delay startup either. Reap must finish before resume reads the
     store, so a run it just retired to `failed` is never re-entered.
+
+    Nothing awaits this task (it's fire-and-scheduled from `lifespan`), so an
+    unhandled exception here — `reap_stale`'s save, `resume_on_boot`'s
+    `list_runs`, or a save inside `execute` — would otherwise vanish into the
+    task's result with no logger call and no Sentry event (only
+    `execute`'s own generation step is wrapped in its own try/except). Catch,
+    log with a traceback, and report explicitly — the same manual pattern
+    `RunManager.execute` already uses, not the global `AsyncioIntegration`.
+    `asyncio.CancelledError` is a `BaseException`, not caught here, so a
+    shutdown cancellation still propagates to the lifespan's suppress block.
     """
-    await asyncio.to_thread(manager.reap_stale)
-    await manager.resume_on_boot()
+    try:
+        await asyncio.to_thread(manager.reap_stale)
+        await manager.resume_on_boot()
+    except Exception as error:
+        logging.getLogger(__name__).exception("boot resume failed")
+        sentry_sdk.capture_exception(error)
 
 
 @asynccontextmanager

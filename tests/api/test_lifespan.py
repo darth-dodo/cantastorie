@@ -14,6 +14,7 @@ triggers ASGI lifespan startup/shutdown (a bare `TestClient(app)` — no `with`
 other smoke tests exercise this path).
 """
 
+import logging
 import threading
 import time
 from collections.abc import Iterator
@@ -25,6 +26,7 @@ from fastapi.testclient import TestClient
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
+import src.api.main as main_module
 from src.api.main import create_app
 from src.api.routes.workshop import get_run_manager
 from src.config import Settings, get_settings
@@ -160,6 +162,41 @@ def test_shutdown_cancels_the_boot_resume_task(s3: S3Client) -> None:
     assert task.done()
     assert task.cancelled()
     hold.set()  # release the orphaned generator thread (bounded by its own timeout anyway)
+
+
+def test_boot_exception_is_logged_and_reported_without_breaking_health(
+    s3: S3Client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`_generate_pack`'s own try/except (inside RunManager.execute) is not
+    the only way this background task can fail — `reap_stale`'s save,
+    `resume_on_boot`'s `list_runs`, and `execute`'s store saves all sit
+    outside it. Nothing awaits this task, so an unhandled exception there
+    would otherwise vanish with no log line and no Sentry event."""
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    boom = RuntimeError("R2 is unreachable")
+
+    def raise_boom(*args: object, **kwargs: object) -> list[RunRecord]:
+        raise boom
+
+    store.list_runs = raise_boom  # type: ignore[method-assign]
+
+    captured: list[BaseException] = []
+    monkeypatch.setattr(main_module.sentry_sdk, "capture_exception", captured.append)
+
+    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    app = _wired_app(settings, manager)
+
+    with caplog.at_level(logging.ERROR, logger="src.api.main"), TestClient(app) as client:
+        task = app.state.resume_task
+        _wait_until(task.done)
+        assert client.get("/health").status_code == 200  # still serving
+
+    assert captured == [boom]
+    assert any(
+        record.levelname in ("ERROR", "CRITICAL") and record.exc_info is not None
+        for record in caplog.records
+    )
 
 
 def test_no_r2_configuration_means_no_boot_task_at_all() -> None:
