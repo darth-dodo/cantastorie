@@ -427,20 +427,16 @@ async def parent_approve_run(
             status_code=400,
             detail=f"Run is in {record.state} state, must be staged to approve",
         )
-    # No approve without review (B2): every staged story must still exist and
+    # No approve without review (B2): the run's story must still exist and
     # have been opened on the review page, which renders all of its pages.
+    story_id = record.story_id
+    if story_id is None:
+        raise HTTPException(status_code=409, detail="The run has no staged story to publish")
     if not record.fully_reviewed:
-        raise HTTPException(status_code=409, detail="Review every story before approving")
-    present = await run_in_threadpool(
-        lambda: all(
-            _staged_story_exists(settings, s)
-            for s in ([record.story_id] if record.story_id else [])
-        )
-    )
-    if not present:
-        raise HTTPException(status_code=409, detail="A staged story is missing")
-    for story_id in [record.story_id] if record.story_id else []:
-        publisher(story_id, ctx.family_token)
+        raise HTTPException(status_code=409, detail="Review the story before approving")
+    if not await run_in_threadpool(_staged_story_exists, settings, story_id):
+        raise HTTPException(status_code=409, detail="The staged story is missing")
+    publisher(story_id, ctx.family_token)
     manager.store.save(record.advance("approved"))
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
@@ -458,8 +454,9 @@ def _staged_story_exists(settings: Settings, story_id: str) -> bool:
 
 
 def _record_review(manager: RunManager, record: RunRecord, story_id: str) -> RunRecord:
-    """The parent has been served this staged story's review page — every page,
-    picture and sound on one screen — so it counts as reviewed (B2). Blocking."""
+    """The parent has been served the run's staged story on its review page —
+    every page, picture and sound on one screen — so the run counts as
+    reviewed (B2). Blocking."""
     if record.state != "staged" or record.story_id != story_id or record.reviewed:
         return record
     try:

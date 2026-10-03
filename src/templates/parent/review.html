@@ -41,14 +41,12 @@
 
   {% if record and record.state == "staged" %}
     <div class="ws-review-footer">
+      {# Serving this page is the review (B2), so a run's one story is
+         reviewed by the time Approve renders. #}
       {% if record.fully_reviewed %}
         <form method="post" action="{{ base_url }}/{{ record.id }}/approve">
           <button type="submit" class="ws-pill ws-pill-confirm">Approve &amp; publish</button>
         </form>
-      {% else %}
-        {% for other_id in record.unreviewed_story_ids %}
-          <a href="/parent/staged/{{ other_id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm" data-testid="parent-review-next">Review the next story</a>
-        {% endfor %}
       {% endif %}
       <form method="post" action="{{ base_url }}/{{ record.id }}/reject">
         <button type="submit" class="ws-pill ws-pill-rest">Reject</button>
