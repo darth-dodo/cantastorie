@@ -28,6 +28,7 @@ from src.pipeline.publish import MANIFEST_PROMPT_KEYS
 from src.pipeline.steps.utterance_texts import IT_UTTERANCES, UTTERANCE_TEXTS
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"  # B1: always distinct from the public bucket
 PUBLIC_BASE = "https://cdn.example.test/published"
 MANIFEST_KEY = "published/es/manifest.json"
 
@@ -50,6 +51,7 @@ def _settings(tmp_path: Path) -> Settings:
         r2_access_key_id="test-access-key",
         r2_secret_access_key="test-secret-key",
         r2_bucket=BUCKET,
+        r2_pending_bucket=PENDING_BUCKET,
         r2_public_base=PUBLIC_BASE,
     )
 
