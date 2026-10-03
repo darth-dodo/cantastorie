@@ -130,7 +130,7 @@ uv run cantastorie publish-prompts --language all --local --dry-run
 uv run cantastorie publish-prompts --language all --local
 ```
 
-Writing `it` replaces the committed chime stand-ins with spoken lines. Writing `en` gives the English dev shelf prompts; the E2E specs pin the Italian shelf, so they hold either way, but rerun the suite after committing. Until prompts exist for a language, the player stays silent where a prompt would play: no greeting, no start or end line, and a silent sleeping bird. It never blocks or errors (`tests/js/playback.test.js`).
+Writing `it` replaces the committed chime stand-ins with spoken lines. `scripts/generate_dev_story.py` still writes those chimes (`story-start.wav`, `end.wav`, `audio-retry.wav`, `offline.wav` under `src/static/content/it/prompts/`), so rerunning it undoes the Italian `--local` run: run `publish-prompts --language it --local` again afterwards (free from the cache), or restore the four files from version control. Writing `en` gives the English dev shelf prompts; the E2E specs pin the Italian shelf, so they hold either way, but rerun the suite after committing. Until prompts exist for a language, the player stays silent where a prompt would play: no greeting, no start or end line, and a silent sleeping bird. It never blocks or errors (`tests/js/playback.test.js`).
 
 ---
 
