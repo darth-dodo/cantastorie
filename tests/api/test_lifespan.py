@@ -34,6 +34,7 @@ from src.workshop.manager import RunManager
 from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
 
 BUCKET = "cantastorie-published"
+PENDING_BUCKET = "cantastorie-pending"
 
 REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
 
@@ -43,11 +44,12 @@ def s3() -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         yield client
 
 
 def _settings() -> Settings:
-    return Settings(_env_file=None, r2_bucket=BUCKET)
+    return Settings(_env_file=None, r2_bucket=BUCKET, r2_pending_bucket=PENDING_BUCKET)
 
 
 def _aged(record: RunRecord, age: timedelta) -> RunRecord:
