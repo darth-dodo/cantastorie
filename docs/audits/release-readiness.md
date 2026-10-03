@@ -111,6 +111,8 @@ Behind that link the controls are plain submit buttons: create a story, approve 
 
 **Fix**: remove the link from the child shelf, or gate it behind the adult-intent gesture already used for settings. A visible tap target into an authenticated area does not belong on a pre-reader's screen.
 
+Already fixed on `main` (AI-486). The design overhaul (AI-441, #96) removed the shelf's parent corner before this audit merged; the cited `screens.js` lines were stale, and only the dead `.parent-corner` CSS remained. `/parent` is now reachable only through the settings sheet's "The workshop" row, behind the grown-up gate. `tests/e2e/two-tap.spec.js` checks the shelf has no parent link and that the gate is the only way through; `tests/e2e/overhaul-flow.spec.js` checks a wrong answer or Back keeps it shut.
+
 ---
 
 ### B4 — Images are never checked, by a rule that cannot check them
@@ -284,7 +286,7 @@ Render deploys on push to `main` without waiting for CI, so a merge failing lint
 
 **Fix**: `autoDeploy: false` with deployment gated on CI success; install from the lockfile.
 
-Fixed in code (AI-479). Still to do by an operator: set the `RENDER_DEPLOY_HOOK_URL` secret, confirm Auto-Deploy is off in the Render dashboard, and rehearse one rollback ([setup.md](../setup.md#deploys-are-gated-on-ci-ai-479)).
+Fixed in code (AI-479). The `RENDER_DEPLOY_HOOK_URL` secret is set and Auto-Deploy is off; the first CI-triggered deploy ran on 2026-10-03. Still to do by an operator: rehearse one rollback ([setup.md](../setup.md#deploys-are-gated-on-ci-ai-479)).
 
 ### H4 — No global spend ceiling
 
@@ -453,11 +455,11 @@ Stated plainly, because a release decision needs the positives as much as the de
 
 Ordered by risk reduction per unit of effort.
 
-- [ ] `R2_PENDING_BUCKET` set to a separate private bucket, present in `render.yaml`, and enforced by a validator that refuses `pending_bucket == r2_bucket` (B1) — `render.yaml` and validator done (AI-469); setting the bucket in Render is an operator step
-- [ ] Audit extended to sweep `Prefix="pending/"` on the public bucket, with a test; run once against the live bucket (B1) — sweep and test done (AI-469); the live run is an operator step
+- [x] `R2_PENDING_BUCKET` set to a separate private bucket, present in `render.yaml`, and enforced by a validator that refuses `pending_bucket == r2_bucket` (B1) — `render.yaml` and validator done (AI-469); `cantastorie-pending` (EU, no public URL) created and set in Render and as a GitHub Actions secret on 2026-10-03
+- [x] Audit extended to sweep `Prefix="pending/"` on the public bucket, with a test; run once against the live bucket (B1) — sweep and test done (AI-469); the live run on 2026-10-03 found 1,390 `pending/` objects, which were deleted, and the re-run and the `main` R2 Bucket Audit job both report 0 violations
 - [x] `docs/setup.md:51` corrected, or made true by the above (B1)
 - [x] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
-- [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
+- [x] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3) — already true on `main` (AI-486): the design overhaul (AI-441, #96) removed the shelf's parent corner, and `/parent` is reachable only through settings → The workshop → the grown-up gate. `tests/e2e/two-tap.spec.js` and `tests/e2e/overhaul-flow.spec.js` hold this in CI
 - [x] No provider image-safety setting exists (OpenRouter exposes none); `calm_pictures` moved to a post-illustration vision judge (B4)
 - [x] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
   - **Fixed in code (AI-483).** The parent's own `/parent/packs/{id}/progress` poll now calls `reap_stale()` too, mirroring the operator dashboard's poll (`src/api/routes/workshop.py`'s `run_progress()`) — a family self-heals behind a stranded run without needing an operator to notice. The B5 half of this line (the boot-time FastAPI `lifespan`) ships separately under AI-477.
@@ -471,13 +473,13 @@ Ordered by risk reduction per unit of effort.
 - [x] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
 - [x] `premise` capped server-side on `PackRequest` (H2)
-- [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3)
+- [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3) — lockfile install and CI-gated deploys done (AI-479, #112; first CI-triggered deploy on 2026-10-03); the rollback rehearsal is the remaining operator step
 - [ ] Staging keyed by tenant, with a content hash bound to the approval (H1)
 - [x] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
 - [ ] `--workers 1` and `numInstances: 1` made explicit with the reason, or the family cap made a conditional write (M11)
 - [ ] `/health/ready` checking config and R2; `healthCheckPath` repointed (M1)
 - [ ] R2 object versioning or nightly manifest snapshots enabled (M13)
-- [ ] e2e suite added to CI (M2)
+- [x] e2e suite added to CI (M2) — done (AI-462, #95): the `E2E Test` job is required by `CI Success`
 
 ---
 
