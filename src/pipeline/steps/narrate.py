@@ -18,12 +18,13 @@ quality.
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from src.pipeline._parallel import parallel_map
 from src.pipeline.cache import ArtifactCache, cache_key, run_step
 from src.pipeline.models import Language, Page, PageAudio
 from src.pipeline.providers import NarrationClient
+from src.pipeline.steps.utterance_texts import UTTERANCE_TEXTS, UtteranceName
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -40,17 +41,41 @@ CONTENT_HASH_LENGTH = 16
 PAGE_STEP = "narrate"
 UTTERANCE_STEP = "utterances"
 
-UtteranceName = Literal["shelf_greeting", "story_start", "end_prompt", "audio_retry", "offline"]
 
-# Final Italian copy, verbatim from docs/product.md **Spoken Prompts** —
-# the slice-1 set plus the slice-2 failure prompts (AI-367).
-IT_UTTERANCES: Mapping[UtteranceName, str] = {
-    "shelf_greeting": "Ciao! Quale storia ascoltiamo oggi?",
-    "story_start": "Si parte!",
-    "end_prompt": "Fine! Ancora, o un'altra storia?",
-    "audio_retry": "Oh! La storia fa un pisolino. Tocca l'uccellino per svegliarla.",
-    "offline": "Le nuvole hanno preso le storie. Riprova tra poco!",
-}
+def _narration_inputs(
+    text: str,
+    language: Language,
+    settings: Settings,
+    extra_inputs: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """The cache-key inputs for one narration: text + voice + model/settings."""
+    inputs: dict[str, object] = {
+        "text": text,
+        "voice": settings.narration_voices.get(language, "alloy"),
+        "model_id": settings.narration_model,
+        "output_format": settings.narration_response_format,
+    }
+    if extra_inputs:
+        inputs.update(extra_inputs)
+    return inputs
+
+
+def cached_utterance_audio(
+    text: str, language: Language, settings: Settings, cache: ArtifactCache
+) -> bytes | None:
+    """The cached audio for one spoken prompt, or None on a cache miss.
+
+    A pure lookup — never a TTS call — so a dry run can say which prompts a
+    real run would pay for.
+    """
+    key = cache_key(_narration_inputs(text, language, settings))
+    return cache.load(UTTERANCE_STEP, key, AUDIO_SUFFIX)
+
+
+def utterance_filename(name: UtteranceName, audio: bytes) -> str:
+    """The immutable published name of a prompt: {name}.{contenthash}.wav."""
+    content_hash = hashlib.sha256(audio).hexdigest()[:CONTENT_HASH_LENGTH]
+    return f"{name}.{content_hash}{AUDIO_SUFFIX}"
 
 
 def _synthesize_cached(
@@ -68,15 +93,7 @@ def _synthesize_cached(
     `extra_inputs` widens the cache key so distinct kinds of narration (e.g.
     a page vs. a spoken choice label) with identical text never collide.
     """
-    voice = settings.narration_voices.get(language, "alloy")
-    inputs: dict[str, object] = {
-        "text": text,
-        "voice": voice,
-        "model_id": settings.narration_model,
-        "output_format": settings.narration_response_format,
-    }
-    if extra_inputs:
-        inputs.update(extra_inputs)
+    inputs = _narration_inputs(text, language, settings, extra_inputs)
     key = cache_key(inputs)
 
     def synthesize() -> bytes:
@@ -156,13 +173,16 @@ def synthesize_utterances(
     settings: Settings,
     cache: ArtifactCache,
     out_dir: Path,
-    language: Language = "it",
-    utterances: Mapping[UtteranceName, str] = IT_UTTERANCES,
+    language: Language,
+    utterances: Mapping[UtteranceName, str] | None = None,
     client: NarrationClient | None = None,
     *,
     s3_client: S3Client | None = None,
 ) -> dict[UtteranceName, Path]:
     """Produce the spoken-prompt assets: prompts/{lang}/{name}.{hash}.wav.
+
+    ``utterances`` defaults to the language's own lines in UTTERANCE_TEXTS —
+    never another language's.
 
     Filenames embed a hash of the audio content, so published prompt assets
     are immutable and cache-forever (docs/architecture.md "R2 layout").
@@ -171,12 +191,13 @@ def synthesize_utterances(
     pending/staged/prompts/{lang}/ for the workshop to read from anywhere.
     """
     client = client or NarrationClient(settings)
+    if utterances is None:
+        utterances = UTTERANCE_TEXTS[language]
     produced: dict[UtteranceName, Path] = {}
     for name, text in utterances.items():
         audio_path = _synthesize_cached(text, language, settings, client, cache, UTTERANCE_STEP)
         audio = audio_path.read_bytes()
-        content_hash = hashlib.sha256(audio).hexdigest()[:CONTENT_HASH_LENGTH]
-        destination = out_dir / "prompts" / language / f"{name}.{content_hash}{AUDIO_SUFFIX}"
+        destination = out_dir / "prompts" / language / utterance_filename(name, audio)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(audio)
         produced[name] = destination

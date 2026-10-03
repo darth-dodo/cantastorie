@@ -61,7 +61,7 @@ def test_a_choice_point_requires_exactly_two_picture_options() -> None:
 
 
 def test_a_story_in_an_unlocked_language_is_rejected() -> None:
-    """Given the locked language set it/es/en/el/de (product.md **5 languages**),
+    """Given the locked language set it/es/en/el/de/bg/ru/mr (product.md **8 languages**),
     When a story claims language "fr",
     Then validation fails.
     """

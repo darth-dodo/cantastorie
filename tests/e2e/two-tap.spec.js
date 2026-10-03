@@ -2,10 +2,10 @@
 // greeting plays) → tap a cover → the story begins. No cookies, and the
 // only network traffic is the app's own pages and asset fetches.
 //
-// The default child language is English, whose fixture shelf has no prompt
-// audio (so no greeting to wake to). The spec pins the Italian dev fixtures
-// with ?lang=it: a five-cover shelf with a real greeting prompt, whose first
-// cover is "La barchetta e la luna".
+// The default child language is English. The spec pins the Italian dev
+// fixtures with ?lang=it instead, so it never depends on which languages have
+// prompt fixtures committed: a five-cover shelf that always ships a greeting
+// prompt, whose first cover is "La barchetta e la luna".
 
 import { expect, test } from "@playwright/test";
 

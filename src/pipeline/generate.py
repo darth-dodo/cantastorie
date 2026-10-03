@@ -10,9 +10,10 @@ the run fails with ImageSafetyRejectedError past it.
 Every step is a pure cache lookup on a re-run, so a repeated generate re-buys
 nothing.
 
-The gloss step is slice 6 and the audit is AI-378 — neither runs here. Spoken
-prompts are staged only for Italian; the other languages' prompts arrive with
-slice 4.
+The gloss step is slice 6 and the audit is AI-378 — neither runs here. A run
+stages the spoken prompts only for Italian. Every language's prompts are
+published by the operator's ``cantastorie publish-prompts`` (H6, AI-481;
+src/pipeline/prompts.py), which keeps them out of each story's TTS bill.
 
 The provider seams (models, narration client, image transport) are injectable
 so the whole run is exercised with zero network.

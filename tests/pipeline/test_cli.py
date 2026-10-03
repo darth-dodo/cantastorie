@@ -1,19 +1,22 @@
 """Behavior specs for the CLI.
 
 generate runs the whole authoring pass and stages a story; publish uploads a
-staged story to R2. Both validate the locked vocabularies (product.md **5
+staged story to R2. Both validate the locked vocabularies (product.md **8
 languages** and the theme list). The heavy lifting is proven in test_generate
 and test_publish; here we prove the CLI wiring and its guardrails, so the
 provider-driven functions are stubbed.
 """
 
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from typer.testing import CliRunner
 
 from src.pipeline import cli
 from src.pipeline.cli import app
+from src.pipeline.models import Language
+from src.pipeline.prompts import PromptLine, PromptPublishResult
 from src.pipeline.publish import AuditResult, PublishResult
 
 runner = CliRunner()
@@ -275,3 +278,183 @@ def test_audit_reports_violations_and_exits_one(
     assert "2 violations" in result.output
     assert "bad-story" in result.output
     assert "orphan" in result.output
+
+
+# ---------------------------------------------------------------------------
+# publish-prompts (H6, AI-481): the operator's spoken-prompt run
+# ---------------------------------------------------------------------------
+
+
+def _fake_prompt_run(seen: list[tuple[str, bool]]) -> object:
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        seen.append((language, dry_run))
+        line = PromptLine(name="offline", manifest_key="offline", text="t", cached=False, url=None)
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[line],
+            uploaded=[] if dry_run else ["k"],
+            skipped=[],
+            manifest_changed=True,
+        )
+
+    return fake
+
+
+def test_publish_prompts_refuses_the_shared_bucket_without_yes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given no --yes and no --dry-run,
+    When publish-prompts targets R2,
+    Then it refuses before any TTS call or write, and says how to proceed."""
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "es"])
+
+    assert result.exit_code == 1
+    assert seen == []
+    assert "--yes" in result.output
+
+
+def test_publish_prompts_with_yes_publishes_the_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "es", "--yes"])
+
+    assert result.exit_code == 0
+    assert seen == [("es", False)]
+    assert "1 uploaded" in result.output
+
+
+def test_publish_prompts_dry_run_needs_no_yes_and_covers_all_languages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "all", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert seen == [(lang, True) for lang in get_args(Language)]
+    assert "8 TTS call(s)" in result.output
+
+
+def test_publish_prompts_local_writes_dev_fixtures_without_yes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--local never touches the bucket, so it needs no --yes."""
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(cli, "publish_prompts", _fake_prompt_run([]))
+    monkeypatch.setattr(cli, "write_dev_prompts", _fake_prompt_run(seen))
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "de", "--local"])
+
+    assert result.exit_code == 0
+    assert seen == [("de", False)]
+
+
+def test_publish_prompts_rejects_a_language_outside_the_roster() -> None:
+    result = runner.invoke(app, ["publish-prompts", "--language", "fr", "--dry-run"])
+    assert result.exit_code == 1
+    assert "fr" in result.output
+
+
+def test_publish_prompts_reports_a_complete_language_as_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A language whose live manifest already lists every prompt is reported
+    "skipped (complete)", on a dry run too, and costs no TTS."""
+    forced: list[bool] = []
+
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        forced.append(force)
+        line = PromptLine(name="offline", manifest_key="offline", text="t", cached=False, url=None)
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[line],
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="complete",
+        )
+
+    monkeypatch.setattr(cli, "publish_prompts", fake)
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "it", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "it: skipped (complete)" in result.output
+    assert "Would make 0 TTS call(s)" in result.output
+    assert forced == [False]
+
+    runner.invoke(app, ["publish-prompts", "--language", "it", "--yes", "--force"])
+    assert forced == [False, True]
+
+
+def test_publish_prompts_exits_one_when_a_language_has_no_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[],
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="no manifest",
+        )
+
+    monkeypatch.setattr(cli, "publish_prompts", fake)
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "es", "--yes"])
+
+    assert result.exit_code == 1
+    assert "es: refused" in result.output
+    assert "--force" in result.output
+
+
+def test_a_dry_run_reports_a_missing_manifest_and_carries_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given one language with no live manifest,
+    When the operator dry-runs every language,
+    Then that language is reported "would refuse (no manifest; needs --force)",
+    every other language is still planned, and the dry run exits 0."""
+    seen: list[str] = []
+
+    def fake(
+        language: str, settings: object, *, dry_run: bool = False, force: bool = False
+    ) -> PromptPublishResult:
+        seen.append(language)
+        return PromptPublishResult(
+            language=language,
+            dry_run=dry_run,
+            target=f"published/{language}/manifest.json",
+            lines=[],
+            uploaded=[],
+            skipped=[],
+            manifest_changed=False,
+            skip_reason="no manifest" if language == "bg" else None,
+        )
+
+    monkeypatch.setattr(cli, "publish_prompts", fake)
+
+    result = runner.invoke(app, ["publish-prompts", "--language", "all", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert seen == list(get_args(Language))
+    assert "bg: would refuse (no manifest; needs --force)" in result.output
+    assert "Refused" not in result.output
