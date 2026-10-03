@@ -450,7 +450,7 @@ Ordered by risk reduction per unit of effort.
 - [x] `docs/setup.md:51` corrected, or made true by the above (B1)
 - [ ] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
-- [x] Provider safety settings enabled on image generation; `calm_pictures` given something real to judge or removed (B4)
+- [x] No provider image-safety setting exists (OpenRouter exposes none); `calm_pictures` moved to a post-illustration vision judge (B4)
 - [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)

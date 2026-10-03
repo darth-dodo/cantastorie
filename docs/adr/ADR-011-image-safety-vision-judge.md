@@ -12,10 +12,10 @@
 **Calm pictures** leaves the text safety gate and becomes its own pipeline step, run after `illustrate`. The step works like this:
 
 1. **Every image a child sees is judged.** That means each page, each choice card, and the cover. The character sheet is a reference input that never ships, so it is not judged.
-2. **The judge is a vision model on OpenRouter**, reached through Pydantic AI like the other judged steps. It returns a typed pass/fail verdict with a short reason for each of three criteria: `no_text`, `nothing_frightening` and `calm`. Temperature is 0.
-3. **The judge must come from a different model family than the image model.** This is the same cross-family rule the text gate already follows. The default is `openai/gpt-4.1-mini`, judging `google/gemini-3.1-flash-lite-image`. `Settings` refuses a config where the two families match.
+2. **The judge is a vision model on OpenRouter**, reached through Pydantic AI like the other judged steps. It returns a typed pass/fail verdict with a short reason for each of three criteria: `no_text`, `nothing_frightening` and `calm`. Temperature is 0, and it reaches the wire: `build_model` builds every model on Pydantic AI's `OpenRouterProvider`, which keeps `temperature` in the request body. A wire test asserts `temperature == 0` in the outgoing request for both this judge and the text gate.
+3. **The judge must come from a different model family than the image model.** This is the same cross-family rule the text gate already follows. The default is `openai/gpt-4.1-mini`, judging `google/gemini-3.1-flash-lite-image`. `Settings` refuses a config where the two families match. Families are compared lowercased and stripped, and an `openrouter/*` router is refused as either side, since it can route to the same family.
 4. **A failing image is redrawn, but only a bounded number of times.** Each redraw gets its own cache key. After `IMAGE_SAFETY_MAX_REGENERATIONS = 2` redraws that still fail, the story is rejected with `ImageSafetyRejectedError`. The error names the image slot, the criterion and the judge's reason, and the workshop records that text on the failed run.
-5. **Verdicts are cached on the image bytes**, so an unchanged image costs zero judge calls on a re-run.
+5. **Verdicts are cached on the image bytes**, so an unchanged image costs zero judge calls on a re-run. Rejected verdicts and redraws are cached too, so re-running a rejected story with the same inputs rejects again with zero calls.
 
 OpenRouter exposes **no provider safety setting** for the configured image model, so none is enabled (see [Context](#current-state)).
 
@@ -202,7 +202,7 @@ The shown-image counts come from the content rules: 10 pages per heard path (`PA
 
 - Every run makes 11–17 more model calls
 - Judging is sequential, so a run is slower by the sum of the judge latencies. It runs sequentially because Pydantic AI's async client is tied to one event loop, which is unsafe to share across worker threads.
-- The text gate's prompt version moved to 2. Cached text verdicts are re-bought once, since the old nine-rule reports no longer validate.
+- The text gate's prompt version moved to 3: 2 for the eight-rule report (the old nine-rule reports no longer validate), then 3 when temperature 0 started reaching the wire. The image judge's prompt version is 2 for the same temperature reason. Cached verdicts sampled at the provider default are re-bought once.
 
 ### Risks and Mitigation
 
@@ -211,7 +211,7 @@ The shown-image counts come from the content rules: 10 pages per heard path (`PA
 | The judge falsely passes a frightening image | The operator or parent review stays in place wherever it exists. Measure judge accuracy on real renders (see [Validation](#validation)). |
 | The judge falsely fails calm images and the story is rejected | The bound caps the waste at two redraws per image. The rejection reason names the criterion, so a systematic misread is visible. Tune the instructions and bump `PROMPT_VERSION`. |
 | The judge is swapped to the image model's family | `Settings.image_judge_is_a_different_family_than_the_image_model` refuses the config. |
-| The sampling temperature is silently dropped | pydantic-ai 2.5.0 infers a reasoning profile from the `openai/` prefix of `openai/gpt-4.1-mini` and warns that `temperature` is ignored. This affects the text gate (the same model id) as much as this step. It is recorded as a follow-up, not fixed here. |
+| The sampling temperature is silently dropped | With a bare `OpenAIProvider`, pydantic-ai 2.5.0 infers a reasoning profile from the `openai/` prefix of `openai/gpt-4.1-mini` and strips `temperature`. Fixed: every model is built on `OpenRouterProvider`, each judge agent gets a fresh copy of its settings (pydantic-ai pops sampling params in place), and `tests/pipeline/test_judge_temperature.py` asserts `temperature == 0` in the outgoing request body for both judges. |
 
 ---
 

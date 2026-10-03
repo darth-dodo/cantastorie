@@ -108,7 +108,7 @@ src/
 │   ├── cache.py            Content-addressed artifact cache
 │   ├── content_rules.py    The nine content rules, shared by write and safety prompts
 │   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, ImageSafetyVerdict, GlossMap
-│   ├── providers.py        OpenRouter transport (chat, images, TTS)
+│   ├── providers.py        OpenRouter transport (chat, images, TTS); every model via OpenRouterProvider, so judges' temperature 0 reaches the wire
 │   └── publish.py          R2 staging + publish, manifest update, immutable naming
 ├── observability.py        LangSmith tracing + Sentry error monitoring for pipeline and app
 ├── templates/              Jinja2: index.html (player shell) + workshop/ screens

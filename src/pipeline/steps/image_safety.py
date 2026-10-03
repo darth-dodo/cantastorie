@@ -4,14 +4,19 @@
 pictures exist, so it runs here, after illustrate, not in the text gate.
 Every image a child sees — each page, each choice card, the cover — goes to
 a vision model on OpenRouter as a base64 PNG and is verdicted at temperature
-0 on three criteria: no text, nothing frightening, calm. The character sheet
-is a reference input only and never ships, so it is not judged.
+0 on three criteria: no text, nothing frightening, calm. The 0 reaches the
+wire because build_model routes every model through OpenRouterProvider
+(tests/pipeline/test_judge_temperature.py asserts it on the request body).
+The character sheet is a reference input only and never ships, so it is not
+judged.
 
 A failing image is redrawn (a new cache key per redraw) up to
 IMAGE_SAFETY_MAX_REGENERATIONS times; still failing, the story is rejected.
 Verdicts are cached on the image bytes, so an unchanged image costs zero
-judge calls. The vision judge's family must differ from the image model's —
-Settings refuses the config otherwise (docs/architecture.md "Model roles").
+judge calls; rejected verdicts and redraws are cached too, so a re-run of a
+rejected story with the same inputs rejects again with zero calls. The
+vision judge's family must differ from the image model's — Settings refuses
+the config otherwise (docs/architecture.md "Model roles").
 """
 
 import hashlib
