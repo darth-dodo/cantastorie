@@ -130,7 +130,7 @@ uv run cantastorie publish-prompts --language all --local --dry-run
 uv run cantastorie publish-prompts --language all --local
 ```
 
-Writing `it` replaces the committed chime stand-ins with spoken lines. Writing `en` gives the English dev shelf prompts, which `tests/e2e/failure-states.spec.js` currently describes as having none; rerun the E2E suite after committing. Until prompts exist for a language, the player stays silent where a prompt would play: no greeting, no start or end line, and a silent sleeping bird. It never blocks or errors (`tests/js/playback.test.js`).
+Writing `it` replaces the committed chime stand-ins with spoken lines. Writing `en` gives the English dev shelf prompts; the E2E specs pin the Italian shelf, so they hold either way, but rerun the suite after committing. Until prompts exist for a language, the player stays silent where a prompt would play: no greeting, no start or end line, and a silent sleeping bird. It never blocks or errors (`tests/js/playback.test.js`).
 
 ---
 

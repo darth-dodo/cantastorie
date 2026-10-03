@@ -51,8 +51,9 @@ test.describe("When Things Go Wrong (product.md)", () => {
     // Every narration file is dead before the night begins; the prompts live.
     await page.route(STORY_AUDIO, (route) => route.abort());
 
-    // The Italian dev shelf: its fixture narration is .wav and it ships the
-    // audio-retry prompt (the English fixtures are .mp3 with no prompts).
+    // The Italian dev shelf: its fixture narration is .wav and it always
+    // ships the audio-retry prompt, so the spec pins it rather than depend on
+    // which other languages have prompt fixtures committed.
     await page.goto("/play?lang=it&theme=dusk");
     await page.locator(".greeting").click();
     await page.waitForFunction(() => window.__shell?.engine.unlocked === true);
