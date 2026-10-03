@@ -124,6 +124,7 @@ def test_publishing_prompts_uploads_hashed_wavs_and_fills_the_manifest_map(
     assert [entry["id"] for entry in manifest["stories"]] == ["el-barquito"]
     assert result.manifest_changed
     assert len(result.uploaded) == len(keys)
+    assert not (tmp_path / "staging").exists()  # no stray local copies
 
 
 def test_rerunning_the_prompt_publish_is_free_and_writes_nothing(

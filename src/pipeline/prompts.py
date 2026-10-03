@@ -23,6 +23,7 @@ nothing; it reports which lines a real run would pay for.
 from __future__ import annotations
 
 import json
+import tempfile
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -118,6 +119,21 @@ def _merged_prompts(manifest: dict[str, Any], prompt_urls: dict[str, str]) -> di
     return {**manifest.get("prompts", {}), **prompt_urls}
 
 
+def _narrate(
+    language: Language, settings: Settings, client: NarrationClient | None
+) -> dict[UtteranceName, tuple[str, bytes]]:
+    """Each prompt's hashed file name and audio, via the narrate step's cache.
+
+    synthesize_utterances also copies the audio into an output folder; a
+    throwaway one keeps the working tree clean (the cache is the keeper).
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        produced = synthesize_utterances(
+            settings, prompt_cache(settings), Path(scratch), language, client=client
+        )
+        return {name: (path.name, path.read_bytes()) for name, path in produced.items()}
+
+
 def publish_prompts(
     language: Language,
     settings: Settings,
@@ -163,21 +179,19 @@ def publish_prompts(
         )
 
     before = _plan_lines(language, settings, {})
-    produced = synthesize_utterances(
-        settings, prompt_cache(settings), settings.staging_dir, language, client=narration_client
-    )
+    produced = _narrate(language, settings, narration_client)
 
     # Audio first, manifest last: a listed prompt is always fetchable.
     uploaded: list[str] = []
     skipped: list[str] = []
     prompt_urls: dict[str, str] = {}
     published_at: dict[str, str] = {}
-    for name, path in produced.items():
-        key = f"{PUBLISHED_PREFIX}/prompts/{language}/{path.name}"
-        wrote = _upload_if_new(client, bucket, key, path.read_bytes(), "audio/wav", IMMUTABLE)
+    for name, (file_name, audio) in produced.items():
+        key = f"{PUBLISHED_PREFIX}/prompts/{language}/{file_name}"
+        wrote = _upload_if_new(client, bucket, key, audio, "audio/wav", IMMUTABLE)
         (uploaded if wrote else skipped).append(key)
-        published_at[name] = url(path.name)
-        prompt_urls[MANIFEST_PROMPT_KEYS[name]] = url(path.name)
+        published_at[name] = url(file_name)
+        prompt_urls[MANIFEST_PROMPT_KEYS[name]] = url(file_name)
 
     def mutate(manifest: dict[str, Any]) -> None:
         manifest["prompts"] = _merged_prompts(manifest, prompt_urls)
@@ -235,14 +249,11 @@ def write_dev_prompts(
             manifest_changed=changed,
         )
 
-    produced = synthesize_utterances(
-        settings, prompt_cache(settings), settings.staging_dir, language, client=narration_client
-    )
+    produced = _narrate(language, settings, narration_client)
     uploaded: list[str] = []
     skipped: list[str] = []
-    for name, path in produced.items():
+    for name, (_file_name, audio) in produced.items():
         destination = lang_dir / "prompts" / DEV_PROMPT_FILES[name]
-        audio = path.read_bytes()
         if destination.exists() and destination.read_bytes() == audio:
             skipped.append(str(destination))
             continue
