@@ -11,6 +11,8 @@
 [![Cloudflare R2](https://img.shields.io/badge/Cloudflare-R2-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/r2/)
 [![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-cc785c?logo=anthropic&logoColor=white)](https://claude.ai)
 
+**Live**: [cantastorie.onrender.com](https://cantastorie.onrender.com)
+
 The Italian *cantastorie* stood in the piazza, sang a tale, and pointed at painted boards. This app is that craft, revived carefully: one warm narrator voice, soft watercolor pages, and a child's finger choosing the path — with a parent as the piazza's gatekeeper, seeing and hearing every word, picture, and sound before any child meets it.
 
 ![A cantastorie storyteller in a moonlit piazza](docs/assets/cantastorie-hero.png)
