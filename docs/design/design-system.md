@@ -151,8 +151,8 @@ by `workshop.css` with calmed shapes.
 
 The operator face at `/workshop` ([ADR-005](../adr/ADR-005-workshop-area.md)):
 server-rendered Jinja2 + HTMX, with a progress fragment that re-polls every
-2 s while a run is live. Vanilla `workshop.js` handles the stories stepper,
-the armed two-tap delete and the review audio pill.
+2 s while a run is live. Vanilla `workshop.js` handles the armed two-tap delete
+and the review audio pill; each run makes one story (AI-480).
 
 - **Run-state labels.** Operators and parents see friendly labels over the
   internal states: `failed` → **rested**, `staged` → **needs your eyes**,

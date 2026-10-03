@@ -4,6 +4,7 @@
 **Status**: Superseded by [ADR-004](ADR-004-narration-deepgram-voxtral.md) — the Voxtral choice carries forward; ElevenLabs' fallback and timestamp roles pass to Deepgram
 **Context**: Choosing the text-to-speech provider for story narration and spoken prompts
 **Decider(s)**: Project Owner
+**Terminology updated**: 2026-10-03 (AI-480) — "pack" wording now reads "story" / "story request"; one story per request. Decision unchanged.
 
 ---
 
@@ -88,7 +89,7 @@ This ADR changes that starting point. The narration **code** change (config, the
 
 **Risks**:
 
-- **Cost growth**: if the library or per-family packs grow, ElevenLabs' pricing scales the fastest of the options.
+- **Cost growth**: if the library or per-family stories grow, ElevenLabs' pricing scales the fastest of the options.
 
 **Estimated Effort**: Baseline for the original design (provider transport + `with-timestamps` handling already sketched).
 

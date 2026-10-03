@@ -64,7 +64,7 @@ One warm narrator identity across every story and language, pointing at painted 
 
 **Luca, 5.** Italian-German home. Replays branches to hear both paths, narrates along by page 3 of a favorite. Frustration: stories that end scary before sleep.
 
-**Elena, parent.** Reviews packs on her phone after bedtime. Wants total certainty about content, zero accounts, and her data portable. Frustration: black-box "kid safe" claims.
+**Elena, parent.** Reviews new stories on her phone after bedtime. Wants total certainty about content, zero accounts, and her data portable. Frustration: black-box "kid safe" claims.
 
 ### Experience by Age Band
 
@@ -82,7 +82,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published packs |
+| **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published stories |
 | **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, play-pause plus prev/next page buttons, auto page turns, exact-position resume |
 | **Picture choices** | ✅ Shipped | Two picture options with spoken labels at a branch point; a tap follows the chosen arm to its own ending |
 | **Reading mode** | ⏳ Planned | Parent-enabled story text with karaoke word highlighting and tap-word English glosses |
@@ -90,8 +90,8 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **8 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German, Bulgarian, Russian, Marathi alongside — per-language manifests and the settings switch are live; every language has stories; spoken prompts live for it only until the publish-prompts run |
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
 | **Parent dashboard** | 🔄 In progress | Story rows with a single destructive delete of this family's own **private shelf** (the family overlay); language tabs and kill switch planned |
-| **Private family shelf** | ✅ Shipped | A family's approved packs publish to a private overlay (`published/families/{token}/…`) that only that family's child sees; the child player merges it onto the shared shelf. Never promoted to global — private stays private |
-| **Pack requests & review** | 🔄 In progress | Parents request 1–3 stories on a theme, open each staged story's full review page (text, audio, image), and approve the pack to their private shelf — approve is refused until the parent has opened every staged story's full review page; regenerate planned |
+| **Private family shelf** | ✅ Shipped | A family's approved stories publish to a private overlay (`published/families/{token}/…`) that only that family's child sees; the child player merges it onto the shared shelf. Never promoted to global — private stays private |
+| **Story requests & review** | 🔄 In progress | Parents request one story at a time on a theme, open the staged story's full review page (text, audio, image), and approve it to their private shelf — approve is refused until the parent has opened that review page; regenerate planned |
 | **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
 | **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
 | **Authoring pipeline** | 🔄 In progress | Generates story text, narration, watercolor images, word timings, and glosses for approval — all steps ship except word timings (Deepgram pass) and glosses |
@@ -218,11 +218,11 @@ A small low-contrast corner of the shelf leads to everything grown-up.
 
 ### Requesting Stories (Phase 2)
 
-**Pack requests.** A pack takes a theme from the [theme list](#content-rules), a language, and a count of 1–3 stories, and is keyed to the family token.
+**Story requests.** A story request takes a theme from the [theme list](#content-rules) and a language (plus an optional story idea), makes exactly one story, and is keyed to the family token.
 
 ```mermaid
 flowchart LR
-    A["Parent requests pack<br/>(theme + language + count)"] --> B["Pipeline generates<br/>text, audio, images,<br/>timings, glosses"]
+    A["Parent requests a story<br/>(theme + language)"] --> B["Pipeline generates<br/>text, audio, images,<br/>timings, glosses"]
     B --> C["Safety gate verdicts<br/>every story"]
     C --> D["Review queue:<br/>full preview"]
     D -->|approve| E["Published to this<br/>family's shelf ≤ 60 s"]
@@ -313,8 +313,8 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Behavior | Detail |
 |----------|--------|
 | **Local-only progress** | Progress and the family token live only in IndexedDB |
-| **Family token** | A random identifier created on first parent-gate entry. It keys this family's packs and names no one — a capability, not an identity. |
-| **Per-family shelves** | One shared deployment; each family's shelf shows the bundled launch set plus its own approved packs, via a token-keyed manifest overlay |
+| **Family token** | A random identifier created on first parent-gate entry. It keys this family's stories and names no one — a capability, not an identity. |
+| **Per-family shelves** | One shared deployment; each family's shelf shows the bundled launch set plus its own approved stories, via a token-keyed manifest overlay |
 | **Export / import** | The whole family state, token included, round-trips through a file. An invalid import changes nothing and names the failing field. |
 | **No child accounts, ever** | No child accounts means no child data to protect; a parent signs in via Clerk (ADR-003) to request and review stories — the child player stays account-free |
 
@@ -329,7 +329,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | **Choice overlay** | Page dims 30 percent behind two picture cards, each 40 percent of screen width |
 | **Story end** | Final scene, replay and shelf pictures, end prompt; goodnight sign-off after 20 seconds idle |
 | **Parent gate** | Hold circle fills over 3 seconds, then addition on a keypad; lockout shows the teapot |
-| **Your stories** | This family's published packs, each with one confirmed destructive delete |
+| **Your stories** | This family's published stories, each with one confirmed destructive delete |
 | **Review queue** | Full text, per-page audio players, image strip, approve / reject / regenerate with the cap noted |
 | **Settings** | Language multi-select, reading mode toggle |
 | **Export-import** | Inline validation errors |
@@ -343,7 +343,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Audience | Children 2–6, pre-readers | The unserved group; readers have options |
 | Languages | Italian, Spanish (Tier 1); English, Greek, German (Tier 2) | Family need; tiering focuses quality where usage will be |
 | Story models | Linear + branching, picture-tap choices | Agency without reading |
-| Phasing | 1: bundled stories · 2: packs with approval · 3: live behind guardrails | Ship the player before the factory, the factory before autonomy |
+| Phasing | 1: bundled stories · 2: one story per request, with approval · 3: live behind guardrails | Ship the player before the factory, the factory before autonomy |
 | Launch content | 19 stories (see [Languages](#languages--localization)) | Depth where the users are |
 | Visuals | AI watercolor via pipeline, approved, published static | Consistent style, zero live image cost |
 | Persistence | IndexedDB + export/import, no child accounts | No child accounts means no child data to protect; parent identity via Clerk (ADR-003) |
@@ -355,6 +355,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 | Reading mode | Optional text with karaoke highlighting and tap-word glosses; parent-enabled, default off; timings and glosses precomputed at authoring | Serves reading-along parents without breaking the voice-first core |
 | Tenancy | One shared deployment; per-family shelves keyed by a local family token (anchored to a recoverable parent identity via Clerk — [ADR-003](adr/ADR-003-parent-authentication-clerk.md), Accepted) | One instance to run; token recoverable across device loss; the token is a random capability, not an identity |
 | Global vs private stories | **Global** = operator-authored, published to the shared per-language shelf, reaches every child. **Private** = family-approved, published to that family's overlay (`published/families/{token}/…`), reaches only that family's child. **No promotion** — private never becomes global; `publish_target` is one-way and origin-fixed | Keeps a family's content confined to its own child and the shared shelf operator-curated; the family-token prefix is the boundary |
+| Run size | One story per request (2026-10-03, owner) | One request, one review, one approve: the review gate and caps reason about a single story; per-language content stays plain per-language manifests and prompts |
 | Operator moderation of private stories | The operator can **see and delete** any family's private story from `/workshop/library` (safety/moderation); delete is destruction, never promotion | A safety escape hatch without giving the operator authoring power over a family's shelf |
 
 ---
@@ -378,7 +379,7 @@ One FastAPI app on Render with three faces, in the habla-hermano mold:
 - **Parent area**: server-rendered Jinja2 + HTMX behind the gate
 - **Factory**: a plain-Python authoring pipeline (Pydantic AI over OpenRouter for stories, safety verdicts, glosses, images, and narration — default narration on Gemini TTS via OpenRouter, one pinned house voice; voice cloning on Voxtral via the Mistral API; word timings via a Deepgram transcription pass at slice 6; ElevenLabs retired, see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) and [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) — a local CLI in Phase 1, the same functions behind routes in Phase 2
 - **State**: IndexedDB only — no server-side child state, no child accounts; parent signs in via Clerk (ADR-003, Accepted)
-- **Shelves**: a per-language manifest of launch content, plus a token-keyed overlay per family for approved packs
+- **Shelves**: a per-language manifest of launch content, plus a token-keyed overlay per family for approved stories
 
 See the [Architecture Documentation](architecture.md) for the pipeline design, storage layout, caching, and risks.
 
@@ -391,7 +392,7 @@ See the [Architecture Documentation](architecture.md) for the pipeline design, s
 | Phase | Focus | Target | Status |
 |-------|-------|--------|--------|
 | **Phase 1 (MVP)** | The player: shelf, story playback, choices, resume, parent gate, settings, export/import — with the 19 bundled launch stories from a manual pipeline run | **26 July 2026** (passed) | 🔄 In progress — shelf, playback, choices, resume, settings, failure states shipped; library, parent gate, reading mode, export/import outstanding |
-| **Phase 2** | The factory: pack requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing | After MVP | ⏳ Planned — groundwork shipped: operator workshop (ADR-005) and Clerk parent identity with family tokens (ADR-003) |
+| **Phase 2** | The factory: story requests, generation pipeline as a service, review queue, approve/reject/regenerate, per-family publishing | After MVP | ⏳ Planned — groundwork shipped: operator workshop (ADR-005) and Clerk parent identity with family tokens (ADR-003) |
 | **Phase 3** | Autonomy, guarded: the automatic safety gate, unanimous-pass publishing, audit log, kill switch | After Phase 2 | ⏳ Planned |
 
 Phase 1 ships in seven vertical slices — each ends with a child hearing something new, from "one story plays" through "reading mode" and "portability". The slice-by-slice table lives in the [architecture doc](architecture.md#build-slices).
@@ -414,7 +415,7 @@ Phase 1 ships in seven vertical slices — each ends with a child hearing someth
 - **Flagship quality**: Italian and Spanish are deepest in content and first through every quality gate
 - **Provable safety**: zero unapproved assets reachable in child mode, verified by an audit script
 - **Provable privacy**: nothing about the child leaves the browser — no cookies, no server state, logs disabled
-- **Fast factory**: a pack goes request-to-shelf in under 15 minutes, review included
+- **Fast factory**: a requested story goes request-to-shelf in under 15 minutes, review included
 
 ---
 
@@ -442,4 +443,4 @@ Phase 1 ships in seven vertical slices — each ends with a child hearing someth
 
 ## Glossary
 
-**Pack**: a parent-requested batch of 1–3 stories, one language, one theme, keyed to a family token. **Pending**: generated, unapproved, keyed to the requesting family, unreachable from any child mode. **Published**: approved; launch content is listed in the per-language manifest, pack content in the requesting family's overlay. **Manifest**: the per-language JSON of launch content every shelf reads; each family's shelf additionally reads its own token-keyed overlay of approved packs. **Family token**: a random identifier created on first parent-gate entry, stored in the browser and carried in export/import; it keys a family's packs and names no one. **Tier 1**: Italian and Spanish, the flagship languages. **Gloss**: the per-story word-to-English map that powers reading mode.
+**Story request**: a parent's request for one story, in one language, on one theme, keyed to a family token. **Pending**: generated, unapproved, keyed to the requesting family, unreachable from any child mode. **Published**: approved; launch content is listed in the per-language manifest, a family's requested stories in that family's overlay. **Manifest**: the per-language JSON of launch content every shelf reads; each family's shelf additionally reads its own token-keyed overlay of approved stories. **Family token**: a random identifier created on first parent-gate entry, stored in the browser and carried in export/import; it keys a family's stories and names no one. **Tier 1**: Italian and Spanish, the flagship languages. **Gloss**: the per-story word-to-English map that powers reading mode.

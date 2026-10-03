@@ -1,5 +1,7 @@
 # Release-Readiness Audit
 
+> **Rename note (2026-10-03, AI-480):** the "pack" concept has since been removed — each run requests, stages, reviews and approves exactly one story. `PackRequest` is now `StoryRequest`, `story_ids` / `reviewed_story_ids` are now `story_id` / `reviewed`, `/parent/packs*` is now `/parent/runs*`, and `packs.html` is now `being_made.html`. The audit body below keeps its original wording and line references as a dated record.
+
 **Date**: 2026-09-13
 **Branch**: `docs/release-readiness-audit`
 **Base**: `main` @ `722eefc` (post language-roster merge, #91)

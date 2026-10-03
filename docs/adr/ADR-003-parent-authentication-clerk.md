@@ -4,12 +4,13 @@
 **Status**: Accepted (2026-07-12)
 **Context**: Choosing how families are identified and authenticated for Phase 2's parent-side features
 **Decider(s)**: Project Owner
+**Terminology updated**: 2026-10-03 (AI-480) — "pack" wording now reads "story" / "story request"; one story per request, and `/parent/packs` is now `/parent/runs`. Decision unchanged.
 
 ---
 
 ## Summary
 
-Phase 2's parent features (pack requests, the review queue, approve/reject, per-family publishing) require the server to know **which family** it is talking to — something the current design deliberately avoids. This ADR proposes **Clerk as the authentication provider for the parent area only**: parents sign in (magic link or OAuth) to request and review stories, with FastAPI verifying Clerk session JWTs on `/parent` API routes. **The child experience remains account-free and unchanged**: the player page loads no Clerk script, sets no cookies, and child state stays in IndexedDB only.
+Phase 2's parent features (story requests, the review queue, approve/reject, per-family publishing) require the server to know **which family** it is talking to — something the current design deliberately avoids. This ADR proposes **Clerk as the authentication provider for the parent area only**: parents sign in (magic link or OAuth) to request and review stories, with FastAPI verifying Clerk session JWTs on `/parent` API routes. **The child experience remains account-free and unchanged**: the player page loads no Clerk script, sets no cookies, and child state stays in IndexedDB only.
 
 This proposal **revises two settled positions** and says so explicitly: the tenancy decision (a random local family token as the only family identifier) and the absolutism of the "no accounts" privacy pillar. On acceptance, the pillar's wording changes from "no accounts" to "**no child accounts — nothing about the child ever leaves the device; a parent signs in only to request and review stories**." `docs/product.md`, `docs/architecture.md`, the README, and the `settled-architecture` skill are amended together in the acceptance commit; none are touched while this is Proposed.
 
@@ -25,7 +26,7 @@ The following decisions were resolved during the design brainstorm (2026-07-12) 
 
 ### Approve target
 
-Approved packs publish to `published/families/{family_token}/…` plus a **family overlay manifest** (`published/families/{family_token}/{lang}/manifest.json`) — never the shared shelf. The child player merges the overlay anonymously if IndexedDB holds a family token.
+Approved stories publish to `published/families/{family_token}/…` plus a **family overlay manifest** (`published/families/{family_token}/{lang}/manifest.json`) — never the shared shelf. The child player merges the overlay anonymously if IndexedDB holds a family token.
 
 ### Same-device linking
 
@@ -52,7 +53,7 @@ Recorded as confirmed during implementation: EU data residency posture; free-tie
 1. Acceptance commit (docs only — this amendment)
 2. Config + `require_parent` + JWKS verification, with pytest seam tests
 3. Mint-or-link + session-claim template (Clerk dashboard config recorded in `docs/setup.md`)
-4. `/parent` routes: sign-in, request form, my-packs list (run cap enforced)
+4. `/parent` routes: sign-in, request form, Being made list (run cap enforced)
 5. Review queue + approve → family publish + overlay manifest + audit extension
 6. Player overlay merge + connect-this-device + CSP + refined guard test
 7. Playwright end-to-end with Clerk test mode
@@ -101,27 +102,27 @@ Everything green ships exactly as it does today. Clerk appears only inside the o
 
 ### The Challenge
 
-Phase 1 needs no identity at all: the shelf is bundled content plus a token-keyed overlay, and everything personal lives in the child's browser. Phase 2 changes the shape of the system — parents request packs, preview generated stories, approve or reject them, and approved packs publish to *their family's* shelf overlay. Each of those verbs needs a durable, recoverable answer to "which family?", including from the parent's own phone or laptop, which is not the child's iPad.
+Phase 1 needs no identity at all: the shelf is bundled content plus a token-keyed overlay, and everything personal lives in the child's browser. Phase 2 changes the shape of the system — parents request stories, preview generated stories, approve or reject them, and approved stories publish to *their family's* shelf overlay. Each of those verbs needs a durable, recoverable answer to "which family?", including from the parent's own phone or laptop, which is not the child's iPad.
 
 The current answer — a random family token living in IndexedDB — was chosen for Phase 1's shape and has known limits as a sole identifier:
 
-- **Unrecoverable**: clearing browser data or losing the device orphans the family's published packs.
+- **Unrecoverable**: clearing browser data or losing the device orphans the family's published stories.
 - **Single-device**: the token lives where it was minted; the Phase 2 review flow naturally happens on a different device than the child's.
 - **Unrevocable and unaccountable**: generation endpoints (which cost real money per request) would be gated by a bearer token that cannot be rotated, recovered, or attributed.
 
 ### Why This Matters
 
 - **Privacy is a product pillar, not a feature.** "No accounts, no tracking" appears in the README's promise and `docs/product.md`. Any identity mechanism must leave the child's side of that promise fully intact — and the wording of the parent's side must change honestly rather than quietly.
-- **Generation costs money.** Pack requests hit OpenRouter and TTS providers. An unauthenticated or unattributable generation endpoint is an abuse vector aimed at the project's wallet — the per-family kill switch in the product spec presumes families can be told apart reliably.
+- **Generation costs money.** Story requests hit OpenRouter and TTS providers. An unauthenticated or unattributable generation endpoint is an abuse vector aimed at the project's wallet — the per-family kill switch in the product spec presumes families can be told apart reliably.
 - **A solo maintainer should not own password security for a children's product.** Credential storage, reset flows, session fixation, and rate limiting are exactly the code a one-person project should buy, not write.
 
 ### Success Criteria
 
-- [x] Parents can sign in from any device and see their family's packs, requests, and review queue *(design accepted; implementation follows the 7-step plan)*
+- [x] Parents can sign in from any device and see their family's stories, requests, and review queue *(design accepted; implementation follows the 7-step plan)*
 - [x] The child player page ships **zero third-party JavaScript and zero cookies** — verified by an automated test, not by intention *(guard test refined: player loads no Clerk script; story-time fetches carry no credentials; player sets no cookies)*
 - [x] Child progress, settings, lockout, and the shelf overlay key never leave the browser
-- [x] Generation endpoints reject unauthenticated requests; every pack request is attributable to a family
-- [x] Losing a device no longer orphans a family's published packs
+- [x] Generation endpoints reject unauthenticated requests; every story request is attributable to a family
+- [x] Losing a device no longer orphans a family's published stories
 - [x] The only family PII held server-side is the parent's sign-in identifier (email or OAuth subject)
 
 ---
@@ -154,7 +155,7 @@ The current answer — a random family token living in IndexedDB — was chosen 
 
 ### Option A: Family token only (status quo, extended to Phase 2)
 
-**Description**: Keep the random local token as the sole identifier. Pack requests and the review queue are keyed by the token; parents "sign in" by possessing the browser that minted it (or by manually copying the token between devices, export/import style).
+**Description**: Keep the random local token as the sole identifier. Story requests and the review queue are keyed by the token; parents "sign in" by possessing the browser that minted it (or by manually copying the token between devices, export/import style).
 
 **Pros**:
 
@@ -297,12 +298,12 @@ sequenceDiagram
     Clerk-->>Parent: email link
     Parent->>Clerk: taps link
     Clerk-->>PA: session established (JWT)
-    Parent->>PA: requests a pack (theme, language)
-    PA->>API: POST /parent/packs (session JWT)
+    Parent->>PA: requests a story (theme, language)
+    PA->>API: POST /parent/runs (session JWT)
     API->>API: verify JWT against Clerk JWKS (PyJWT, cached keys)
     API->>API: resolve family_id from user metadata
     API->>Pipe: enqueue generation for family_id
-    Pipe-->>API: pack ready for review
+    Pipe-->>API: story ready for review
     Parent->>PA: previews every page, approves
     API->>API: publish to the family's shelf overlay
 
@@ -315,14 +316,14 @@ sequenceDiagram
 
 ### Positive Outcomes
 
-- Families survive device loss; approving a pack on a laptop and playing it on the iPad becomes the natural flow.
+- Families survive device loss; approving a story on a laptop and playing it on the iPad becomes the natural flow.
 - Generation endpoints get attributable, revocable access — the per-family kill switch has something real to switch.
 - Zero auth-security code in this repo.
 
 ### Negative Outcomes
 
 - Privacy copy in README and `docs/product.md` must be reworked (child/parent split), and the tenancy decision-log entry amended — an honest weakening of the headline promise.
-- A Clerk outage blocks pack review (not story playback).
+- A Clerk outage blocks story review (not story playback).
 - One more vendor in the disclosure list; EU residency posture inherited from Clerk.
 
 ### Risks and Mitigation
@@ -351,7 +352,7 @@ Phase 2 work, gated on this ADR flipping to Accepted — **now Accepted (2026-07
        Q -- no --> Q2{"Parent pastes a token from<br/>an existing child device?<br/>(export/import)"}
        Q2 -- yes --> Link["Link that token to the account —<br/>existing shelf adopted, nothing orphaned"]
        Q2 -- no --> Mint["Mint a fresh token,<br/>store as user metadata"]
-       Use & Link & Mint --> Done["Token recoverable via sign-in;<br/>device loss no longer orphans packs"]
+       Use & Link & Mint --> Done["Token recoverable via sign-in;<br/>device loss no longer orphans stories"]
    ```
 5. **Guard test**: the zero-third-party-JS/zero-cookie assertion on the player page enters the Vitest/Playwright suites alongside the feature.
 
@@ -364,7 +365,7 @@ Phase 2 work, gated on this ADR flipping to Accepted — **now Accepted (2026-07
 - [x] EU data-residency posture confirmed and recorded (pre-acceptance)
 - [x] Free-tier limits re-checked against expected family counts (pre-acceptance)
 - [ ] Player page ships zero Clerk JS and zero cookies (automated, post-implementation)
-- [ ] Parent sign-in → pack request → review → publish walked end to end in Playwright
+- [ ] Parent sign-in → story request → review → publish walked end to end in Playwright
 - [ ] JWT verification unit-tested at the transport seam, keyless, like the pipeline's provider tests
 
 ### Findings (verified 2026-07-16)

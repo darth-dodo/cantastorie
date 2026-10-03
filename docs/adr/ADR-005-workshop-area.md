@@ -4,12 +4,13 @@
 **Status**: Accepted
 **Context**: Establishing where the authoring workshop lives, who reaches it, and how pipeline runs execute when triggered from the web
 **Decider(s)**: Project Owner
+**Amended**: 2026-10-03 (AI-480) — one story per request: a run requests, stages, reviews and approves exactly one story, and the former "pack" wording (a batch of 1–3 stories) is rewritten as stories and story requests. Parent routes moved to `/parent/runs`. The decision itself is unchanged.
 
 ---
 
 ## Summary
 
-Cantastorie gets a **workshop area**: a single authoring surface inside the **existing FastAPI app**, with two faces over one backend — an **operator face** at `/workshop` (start runs, watch progress, inspect staged stories, publish) and a **parent face** inside the existing Parent Area (request a pack, review results, approve or reject). Both are server-rendered **Jinja2 + HTMX + Tailwind**, the settled parent-area pattern. Pipeline runs execute **in-process** as a background task wrapping the pipeline's existing step functions, one run at a time; the pipeline's filesystem checkpointing doubles as the progress and resume mechanism. Because Render's disk is ephemeral, **run records and staged artifacts persist to R2** under a pending prefix keyed by family token, and the app resumes incomplete runs on startup. Access needs no accounts: the operator face requires a single env-var secret; the parent face uses the family token that already keys packs. The alternatives — operator-local CLI generation behind a deployed request queue, and a separate worker service — were rejected for human-in-the-loop latency and for infrastructure the volume does not justify, respectively.
+Cantastorie gets a **workshop area**: a single authoring surface inside the **existing FastAPI app**, with two faces over one backend — an **operator face** at `/workshop` (start runs, watch progress, inspect staged stories, publish) and a **parent face** inside the existing Parent Area (request a story, review results, approve or reject). Both are server-rendered **Jinja2 + HTMX + Tailwind**, the settled parent-area pattern. Pipeline runs execute **in-process** as a background task wrapping the pipeline's existing step functions, one run at a time; the pipeline's filesystem checkpointing doubles as the progress and resume mechanism. Because Render's disk is ephemeral, **run records and staged artifacts persist to R2** under a pending prefix keyed by family token, and the app resumes incomplete runs on startup. Access needs no accounts: the operator face requires a single env-var secret; the parent face uses the family token that already keys a family's stories. The alternatives — operator-local CLI generation behind a deployed request queue, and a separate worker service — were rejected for human-in-the-loop latency and for infrastructure the volume does not justify, respectively.
 
 ---
 
@@ -17,7 +18,7 @@ Cantastorie gets a **workshop area**: a single authoring surface inside the **ex
 
 ### The Challenge
 
-Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`), and staged stories are reviewed by opening a local folder. Phase 2 of the product requires **pack requests and review** ([product.md](../product.md)): a parent requests 1–3 stories on a theme from her phone, previews every word, image, and sound, and approves or rejects — with no operator terminal in sight. That forces three connected decisions: **where** the authoring surface lives, **how** long-running generation (LLM + TTS + image calls, minutes per story) executes when triggered from a web request, and **how** operator and parent access are separated in a system that has no accounts by design.
+Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`), and staged stories are reviewed by opening a local folder. Phase 2 of the product requires **story requests and review** ([product.md](../product.md)): a parent requests a story on a theme from her phone, previews every word, image, and sound, and approves or rejects — with no operator terminal in sight. That forces three connected decisions: **where** the authoring surface lives, **how** long-running generation (LLM + TTS + image calls, minutes per story) executes when triggered from a web request, and **how** operator and parent access are separated in a system that has no accounts by design.
 
 ### Why This Matters
 
@@ -28,7 +29,7 @@ Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`
 
 ### Success Criteria
 
-- [ ] A parent can request a pack and review the result entirely from her phone
+- [ ] A parent can request a story and review the result entirely from her phone
 - [ ] The operator can start, watch, and publish a run without a terminal
 - [ ] A mid-run service restart loses no paid work (resume re-buys zero API calls)
 - [ ] No unapproved asset is reachable from child mode (audit script stays green)
@@ -50,7 +51,7 @@ Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`
 
 **Functional Requirements**:
 
-- Parents request packs (theme + language + count) and review/approve/reject results from a browser
+- Parents request stories (theme + language, one story per request) and review/approve/reject results from a browser
 - The operator starts runs, watches step-level progress, inspects staged stories, and publishes
 - Runs survive restarts and resume without repeating completed steps
 
@@ -58,7 +59,7 @@ Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`
 
 - **Settled stack**: one FastAPI app; Jinja2 + HTMX + Tailwind for non-child surfaces; plain-Python pipeline (see `settled-architecture` skill and ADR-001)
 - **Privacy**: no accounts; keys stay in pipeline/service environments; zero unapproved assets child-reachable
-- **Scale honesty**: single-family volume at launch — packs of 1–3 stories, runs measured in minutes, rarely concurrent
+- **Scale honesty**: single-family volume at launch — one story per request, runs measured in minutes, rarely concurrent
 - **Cost**: no standing infrastructure beyond the existing Render service and R2 bucket
 
 ---
@@ -67,7 +68,7 @@ Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`
 
 ### Option A: In-app workshop, in-process background runs
 
-**Description**: Workshop routes live in the existing FastAPI app. A pack request creates a durable run record; a run manager executes the pipeline's step functions as an in-process asyncio background task, one run at a time (pending records form a simple queue — no job framework). HTMX polls a progress fragment that reads the run's checkpoint state. Run records and staged artifacts persist to R2 under a pending prefix keyed by family token; on startup the app scans for incomplete runs and resumes them.
+**Description**: Workshop routes live in the existing FastAPI app. A story request creates a durable run record; a run manager executes the pipeline's step functions as an in-process asyncio background task, one run at a time (pending records form a simple queue — no job framework). HTMX polls a progress fragment that reads the run's checkpoint state. Run records and staged artifacts persist to R2 under a pending prefix keyed by family token; on startup the app scans for incomplete runs and resumes them.
 
 **Pros**:
 
@@ -90,7 +91,7 @@ Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`
 
 ### Option B: Deployed request/review, operator-local generation
 
-**Description**: Parents request and review packs in the deployed app, but generation stays what it is today: a CLI run on the operator's machine that pulls pending requests, runs the pipeline locally, and publishes results for review.
+**Description**: Parents request and review stories in the deployed app, but generation stays what it is today: a CLI run on the operator's machine that pulls pending requests, runs the pipeline locally, and publishes results for review.
 
 **Pros**:
 
@@ -112,7 +113,7 @@ Today the pipeline runs only from the operator's terminal (`src/pipeline/cli.py`
 
 ### Option C: Separate worker service with a queue
 
-**Description**: A dedicated Render background worker consumes pack requests from a queue (hosted Redis or a polled table) and runs the pipeline in isolation from the web service.
+**Description**: A dedicated Render background worker consumes story requests from a queue (hosted Redis or a polled table) and runs the pipeline in isolation from the web service.
 
 **Pros**:
 
@@ -177,14 +178,14 @@ graph TD
 **Key Factors**:
 
 1. **ADR-001's checkpointing turns a liability into the mechanism**: in-process runs are normally fragile; here a restart resumes from the last completed step at zero API cost, and the same checkpoint files are the progress display.
-2. **Volume honesty**: packs of 1–3 stories for one family do not justify a queue, a worker, or a second service.
+2. **Volume honesty**: single-story requests from one family do not justify a queue, a worker, or a second service.
 3. **One backend, two faces**: operator and parent needs differ in access, not machinery — run manager, staging store, and publish step are shared.
 
 ### Run Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> queued: pack request<br/>(parent or operator)
+    [*] --> queued: story request<br/>(parent or operator)
     queued --> running: run manager picks up<br/>(one at a time)
     running --> staged: all steps complete,<br/>artifacts in R2 pending/
     running --> failed: step error after<br/>pipeline's own retries
@@ -225,7 +226,7 @@ sequenceDiagram
 
 ### Positive Outcomes
 
-- Phase 2's pack request and review flow has an architectural home reachable from a parent's phone
+- Phase 2's story request and review flow has an architectural home reachable from a parent's phone
 - The operator retires the terminal-and-folder workflow without the CLI being removed — both call the same step functions
 - No new service, framework, queue, or key location; the deploy story is unchanged
 - Run state, staging, and publish all live behind one module boundary, testable without a browser
@@ -253,7 +254,7 @@ sequenceDiagram
 
 **Phase 2 — Staging and publish from the browser**: staged-story inspection (text, per-page audio, image strip) and the publish action calling the existing publish step.
 
-**Phase 3 — Parent face**: pack request form and review queue in the Parent Area, keyed by family token, approve/reject/regenerate-with-cap in front of the same backend.
+**Phase 3 — Parent face**: story request form and review queue in the Parent Area, keyed by family token, approve/reject/regenerate-with-cap in front of the same backend.
 
 Exact slicing is decided in `docs/plans/` per slice; this ADR fixes the architecture, not the schedule.
 
@@ -276,7 +277,7 @@ Exact slicing is decided in `docs/plans/` per slice; this ADR fixes the architec
 - [ADR-002: Narration Provider](ADR-002-narration-provider.md) — the narrate step the workshop invokes unchanged
 - [ADR-003: Parent Authentication via Clerk](ADR-003-parent-authentication-clerk.md) — a Proposed revision of how the parent face identifies families; if accepted, Clerk session verification replaces the bare family token on parent workshop routes (the operator secret and the run/staging machinery are unaffected)
 - [architecture.md — The Parent Area](../architecture.md#the-parent-area) — the rendering pattern the workshop faces adopt
-- [product.md — Pack requests & review](../product.md) — the Phase 2 behavior this architecture serves
+- [product.md — Story requests & review](../product.md) — the Phase 2 behavior this architecture serves
 
 ---
 
