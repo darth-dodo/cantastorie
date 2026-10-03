@@ -153,6 +153,52 @@ test("choice card images are clamped to their card box (layout regression)", asy
   }
 });
 
+// Replaying a branch in the same session (AI-482): the loaded story is cached
+// per session, and the played path once grew on that cached object, so a
+// reopen after arm A appended arm B *behind* arm A and the turn off the choice
+// landed on a1 again. product.md promises a child "replays branches to hear
+// both paths" — pick A, go home, reopen, pick B, and B's first page plays.
+test("reopening a branched story in the same session follows the other arm", async ({ page }) => {
+  test.setTimeout(90_000);
+  const armStartArt = (art) =>
+    page.waitForFunction(
+      ({ index, art }) => {
+        const node = document.querySelector(`.page-art[data-page="${index}"]`);
+        return !!node && node.style.backgroundImage.includes(art);
+      },
+      { index: ARM_FIRST_PAGE_INDEX, art },
+      { timeout: 20_000 },
+    );
+
+  await wakeAndOpenBranchingStory(page);
+  const options = page.locator(".overlay .option");
+  await expect(options).toHaveCount(2, { timeout: 20_000 });
+  await options.nth(0).click(); // arm A
+  await armStartArt(ARM_A_FIRST_ART);
+  await expect(page.locator(".bead")).toHaveCount(BRANCHED_PATH_LENGTH);
+
+  // Back to the shelf, then the same cover again — no reload, so the story
+  // comes from the session cache.
+  await page.getByRole("button", { name: "back to stories" }).click();
+  await expect(page.locator(".shelf")).toBeVisible();
+  await page.getByRole("button", { name: BRANCHING_COVER_TITLE }).click();
+  await expect(page.locator(".player")).toBeVisible();
+  // A leftover page may offer resume; start over so the choice comes round.
+  const startOver = page.getByRole("button", { name: "Start over" });
+  if (await startOver.isVisible().catch(() => false)) await startOver.click();
+
+  await expect(options).toHaveCount(2, { timeout: 20_000 });
+  await options.nth(1).click(); // arm B this time
+  await expect(page.locator(".overlay")).toHaveCount(0);
+
+  // The turn off the choice lands on b1, and the path is prefix + arm B only.
+  await armStartArt(ARM_B_FIRST_ART);
+  await expect(page.locator(".bead")).toHaveCount(BRANCHED_PATH_LENGTH);
+  const arts = await armArtByIndex(page);
+  expect(arts).toHaveLength(BRANCHED_PATH_LENGTH);
+  expect(arts).not.toContain(ARM_A_FIRST_ART);
+});
+
 // Auto-continue (nudge at 30s, auto-pick the first option at 40s) is specified
 // for the choice overlay but not yet wired in playback.js — the loop simply
 // waits on an open choice (see the file header there: "the overlay, nudge, and
