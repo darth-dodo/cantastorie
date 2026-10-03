@@ -323,7 +323,7 @@ def test_a_record_without_a_review_field_loads_unreviewed(s3: S3Client) -> None:
     legacy = json.loads(record.model_dump_json())
     legacy.pop("reviewed_story_ids", None)
     s3.put_object(
-        Bucket=BUCKET,
+        Bucket=PENDING_BUCKET,
         Key=f"pending/{'a' * 32}/runs/{record.id}.json",
         Body=json.dumps(legacy).encode(),
     )

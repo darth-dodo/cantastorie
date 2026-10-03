@@ -20,7 +20,7 @@ from mypy_boto3_s3 import S3Client
 
 import src.api.routes.parent as parent_module
 from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
-from tests.api.test_parent_approve import BUCKET, FAMILY, PARENT, Harness
+from tests.api.test_parent_approve import BUCKET, FAMILY, PARENT, PENDING_BUCKET, Harness
 
 
 @pytest.fixture
@@ -28,6 +28,7 @@ def s3(monkeypatch: pytest.MonkeyPatch) -> Iterator[S3Client]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
+        client.create_bucket(Bucket=PENDING_BUCKET)
         monkeypatch.setattr(parent_module, "_build_client", lambda settings: client)
         yield client
 
@@ -45,7 +46,7 @@ def _stage_story(s3: S3Client, story_id: str) -> None:
         ],
     }
     s3.put_object(
-        Bucket=BUCKET,
+        Bucket=PENDING_BUCKET,
         Key=f"pending/staged/{story_id}/story.json",
         Body=json.dumps(story).encode(),
     )
@@ -120,7 +121,7 @@ def test_a_reviewed_story_that_is_gone_cannot_be_approved(tmp_path: Path, s3: S3
     record = _staged_run(harness.store, ["story-one"])
     harness.sign_in(PARENT)
     harness.client.get(f"/parent/staged/story-one?run={record.id}")
-    s3.delete_object(Bucket=BUCKET, Key="pending/staged/story-one/story.json")
+    s3.delete_object(Bucket=PENDING_BUCKET, Key="pending/staged/story-one/story.json")
 
     assert _approve(harness, record.id) == 409
     assert harness.published == []
@@ -142,9 +143,9 @@ def test_a_record_saved_before_review_tracking_counts_as_unreviewed(
     _stage_story(s3, "story-one")
     record = _staged_run(harness.store, ["story-one"])
     key = f"pending/{FAMILY}/runs/{record.id}.json"
-    legacy = json.loads(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read())
+    legacy = json.loads(s3.get_object(Bucket=PENDING_BUCKET, Key=key)["Body"].read())
     legacy.pop("reviewed_story_ids", None)
-    s3.put_object(Bucket=BUCKET, Key=key, Body=json.dumps(legacy).encode())
+    s3.put_object(Bucket=PENDING_BUCKET, Key=key, Body=json.dumps(legacy).encode())
     harness.sign_in(PARENT)
 
     assert _approve(harness, record.id) == 409

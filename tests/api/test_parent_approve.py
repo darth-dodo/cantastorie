@@ -104,7 +104,9 @@ def test_approving_a_staged_pack_publishes_to_the_family_overlay(
     harness = Harness(tmp_path, s3)
     # A reviewed pack whose staged story is still in the pending bucket (B2).
     monkeypatch.setattr(parent_module, "_build_client", lambda settings: s3)
-    s3.put_object(Bucket=BUCKET, Key="pending/staged/first_snow-it-fake0001/story.json", Body=b"{}")
+    s3.put_object(
+        Bucket=PENDING_BUCKET, Key="pending/staged/first_snow-it-fake0001/story.json", Body=b"{}"
+    )
     record = _staged_run(harness.store, FAMILY, ["first_snow-it-fake0001"])
     harness.store.save(record.mark_reviewed("first_snow-it-fake0001"))
     harness.sign_in(PARENT)
