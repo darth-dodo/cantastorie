@@ -457,7 +457,8 @@ Ordered by risk reduction per unit of effort.
 - [x] Parent staged-story view added and the approve button gated on it; misleading copy removed until then (B2)
 - [ ] `/parent` link removed from the child shelf or placed behind an adult-intent gesture (B3)
 - [x] No provider image-safety setting exists (OpenRouter exposes none); `calm_pictures` moved to a post-illustration vision judge (B4)
-- [ ] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
+- [x] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
+  - **Fixed in code (AI-483).** The parent's own `/parent/packs/{id}/progress` poll now calls `reap_stale()` too, mirroring the operator dashboard's poll (`src/api/routes/workshop.py`'s `run_progress()`) — a family self-heals behind a stranded run without needing an operator to notice. The B5 half of this line (the boot-time FastAPI `lifespan`) ships separately under AI-477.
 - [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [x] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)

@@ -378,7 +378,12 @@ async def pack_progress(
     manager: Manager,
 ) -> HTMLResponse:
     # Polled every 2 s while a run is live: keep its R2 reads off the event loop.
-    record = await run_in_threadpool(manager.store.load, ctx.family_token, run_id)  # tenancy
+    def read_record() -> RunRecord | None:
+        manager.reap_stale()  # a stale run's own poll heals it, so a family
+        # is never stuck waiting on an operator to notice (AI-417, M9).
+        return manager.store.load(ctx.family_token, run_id)  # tenancy
+
+    record = await run_in_threadpool(read_record)
     if record is None:
         raise HTTPException(status_code=404)
     staged_stories = (

@@ -67,6 +67,9 @@ class _FakeManager:
     async def execute(self, record: RunRecord) -> RunRecord:
         return record
 
+    def reap_stale(self, runs: Any = None) -> list[RunRecord]:
+        return []
+
 
 def _make_queued_run(family_token: str = VALID_TOKEN) -> RunRecord:
     req = PackRequest(theme="the_sleepy_sea", language="it", count=1)

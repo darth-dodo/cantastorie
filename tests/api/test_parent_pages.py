@@ -113,12 +113,17 @@ class _FakeManager:
         self.submits: list[tuple[str, Any]] = []
         self.executed: list[Any] = []
         self.raise_cap = raise_cap
+        self.reap_calls = 0
 
         class _FakeStore:
             def list_runs(self, *, family_token: str | None = None, state: Any = None) -> list[Any]:
                 return []
 
         self.store = _FakeStore()
+
+    def reap_stale(self, runs: Any = None) -> list[Any]:
+        self.reap_calls += 1
+        return []
 
     async def submit(self, family_token: str, request: Any) -> Any:
         if self.raise_cap is not None:
@@ -265,6 +270,20 @@ def test_cross_tenant_progress_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
     _store_with_runs(manager, [others])
     client = _packs_client(monkeypatch, manager)  # session = VALID_TOKEN (family A)
     assert client.get(f"/parent/packs/{others.id}/progress").status_code == 404
+
+
+def test_progress_poll_reaps_stale_runs_so_a_family_can_self_heal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """M9: only an operator's dashboard poll used to call reap_stale(); a
+    family stuck behind a stranded run had no self-service path. The parent
+    progress poll must reap too."""
+    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    manager = _FakeManager()
+    _store_with_runs(manager, [mine])
+    client = _packs_client(monkeypatch, manager)
+    client.get(f"/parent/packs/{mine.id}/progress")
+    assert manager.reap_calls == 1
 
 
 def test_own_progress_fragment_polls_parent_url(monkeypatch: pytest.MonkeyPatch) -> None:
