@@ -22,7 +22,7 @@ from src.api.routes.player import router as player_router
 from src.api.routes.published import router as published_router
 from src.api.routes.workshop import get_run_manager
 from src.api.routes.workshop import router as workshop_router
-from src.api.security import SecurityHeadersMiddleware
+from src.api.security import CrossOriginWriteGuard, SecurityHeadersMiddleware
 from src.config import get_settings
 from src.observability import configure_logging, init_error_monitoring, init_observability
 from src.workshop.manager import RunManager
@@ -100,6 +100,9 @@ def create_app() -> FastAPI:
     init_error_monitoring(settings)
     app = FastAPI(title="Cantastorie", lifespan=lifespan)
     app.add_middleware(TracingMiddleware)
+    # Refuses cross-origin writes to /workshop and /parent before any route
+    # or auth dependency runs (M4).
+    app.add_middleware(CrossOriginWriteGuard)
     # Added last so it is the outermost user middleware: every route and
     # handled-error response (404s included) carries the hardening headers (M16).
     app.add_middleware(SecurityHeadersMiddleware)
