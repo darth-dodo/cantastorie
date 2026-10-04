@@ -222,6 +222,8 @@ export async function init(
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
   let lang = pickLang(params, loadLang());
+  // Screen readers pick voice and pronunciation from <html lang>.
+  root.documentElement.lang = lang;
 
   const store = createStore(load());
   engine ??= createAudioEngine();
@@ -361,6 +363,7 @@ export async function init(
     if (newLang === lang) return;
     lang = newLang;
     saveLang(lang);
+    root.documentElement.lang = lang;
     openSeq += 1; // a cover still loading in the old language is dropped
     storyCache.clear();
     activeStory = null;

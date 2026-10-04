@@ -963,3 +963,15 @@ describe("a network that never answers (B8, AI-473)", () => {
     expect(cover.classList.contains("loading")).toBe(false);
   });
 });
+
+describe("accessibility wiring (AI-498)", () => {
+  it("<html lang> follows the active language on boot and on every switch (M24)", async () => {
+    document.documentElement.lang = "en";
+    localStorage.setItem("cantastorie-lang", "de");
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: manifestFetch, engine: fakeEngine() });
+    expect(document.documentElement.lang).toBe("de");
+    await running.switchLanguage("ru");
+    expect(document.documentElement.lang).toBe("ru");
+  });
+});
