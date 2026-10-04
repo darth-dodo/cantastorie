@@ -280,11 +280,11 @@ def test_progress_poll_reaps_stale_runs_so_a_family_can_self_heal(
     """M9: only an operator's dashboard poll used to call reap_stale(); a
     family stuck behind a stranded run had no self-service path. The parent
     progress poll must reap too."""
-    mine = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    mine = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     manager = _FakeManager()
     _store_with_runs(manager, [mine])
-    client = _packs_client(monkeypatch, manager)
-    client.get(f"/parent/packs/{mine.id}/progress")
+    client = _parent_client(monkeypatch, manager)
+    client.get(f"/parent/runs/{mine.id}/progress")
     assert manager.reap_calls == 1
 
 
