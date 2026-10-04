@@ -218,7 +218,7 @@ A small low-contrast corner of the shelf leads to everything grown-up.
 
 ### Requesting Stories (Phase 2)
 
-**Story requests.** A story request takes a theme from the [theme list](#content-rules) and a language (plus an optional story idea), makes exactly one story, and is keyed to the family token.
+**Story requests.** A story request takes a theme from the [theme list](#content-rules), a language, an optional story idea that steers the theme rather than replacing it, and a shape (one linear story, or a branching story where the child picks the ending). It makes exactly one story and is keyed to the family token. Parents and the operator choose from the same fields.
 
 ```mermaid
 flowchart LR

@@ -1254,3 +1254,41 @@ def test_no_stale_clerk_artifacts_survive() -> None:
         if p.suffix in {".html", ".js", ".py"} and stale.search(p.read_text())
     ]
     assert offenders == []
+
+
+# AI-503: the operator bench offers a theme AND an optional premise, plus a shape.
+
+
+def test_dashboard_offers_premise_alongside_a_real_theme(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    page = harness.client.get("/workshop").text
+    assert 'value="custom"' not in page  # no pseudo-theme that fails validation
+    assert 'name="premise"' in page
+    premise_tag = page[page.index('name="premise"') - 200 : page.index('name="premise"') + 200]
+    assert "disabled" not in premise_tag
+    assert "data-custom-premise" not in page
+    assert 'name="shape"' in page
+
+
+@pytest.mark.parametrize("shape", ["linear", "branching"])
+def test_an_operator_run_carries_theme_premise_and_shape(
+    tmp_path: Path, s3: S3Client, shape: str
+) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    response = harness.client.post(
+        "/workshop/runs",
+        data={
+            "theme": "the_sleepy_sea",
+            "language": "it",
+            "premise": "a small boat wants to see the moon",
+            "shape": shape,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    [run] = harness.store.list_runs()
+    assert run.request.theme == "the_sleepy_sea"
+    assert run.request.premise == "a small boat wants to see the moon"
+    assert run.request.shape == shape
