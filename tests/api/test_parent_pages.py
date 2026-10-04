@@ -431,7 +431,12 @@ def test_the_parent_pages_never_say_pack(monkeypatch: pytest.MonkeyPatch) -> Non
     _store_with_runs(manager, [mine])
     client = _parent_client(monkeypatch, manager)
 
-    for path in ("/parent", "/parent/make", f"/parent/runs/{mine.id}/progress"):
+    for path in (
+        "/parent",
+        "/parent/make",
+        "/parent/stories",
+        f"/parent/runs/{mine.id}/progress",
+    ):
         text = client.get(path).text.lower()
         assert re.search(r"\bpacks?\b", text) is None, path
 

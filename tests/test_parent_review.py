@@ -9,6 +9,7 @@ Tests:
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -145,6 +146,24 @@ def test_parent_review_page_renders(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Once upon a time there was a sleepy fox." in r.text
     assert "Approve" in r.text
     assert "Reject" in r.text
+
+
+def test_the_staged_review_page_never_says_pack(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AI-480 retired the pack concept; the review page must never resurrect it."""
+    run = _make_staged_run()
+    manager = _FakeManager({run.id: run})
+    client = _make_client(monkeypatch, manager)
+
+    fake_body = json.dumps(STORY_DATA).encode()
+    mock_obj = {"Body": MagicMock(read=lambda: fake_body)}
+    mock_client = MagicMock()
+    mock_client.get_object.return_value = mock_obj
+
+    with patch("src.api.routes.parent._build_client", return_value=mock_client):
+        r = client.get(f"/parent/staged/story-abc?run={run.id}")
+
+    assert r.status_code == 200
+    assert re.search(r"\bpacks?\b", r.text.lower()) is None
 
 
 # ── (b) Approve from review redirects to /parent/stories ───────────────────
