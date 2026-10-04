@@ -224,6 +224,34 @@ def test_a_premise_stages_the_story_under_its_own_folder(tmp_path: Path, s3: S3C
     assert plain != premised
 
 
+def test_two_runs_of_the_same_request_stage_side_by_side(tmp_path: Path, s3: S3Client) -> None:
+    """H1: two families asking for the identical story each stage under their
+    own run's id, so neither can overwrite the bytes the other reviewed."""
+    settings = _settings(tmp_path)
+
+    def run(run_nonce: str) -> str:
+        return generate_story(
+            "the_sleepy_sea",
+            "it",
+            settings,
+            write_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            safety_model=TestModel(custom_output_args=_PASSING_REPORT),
+            revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            narration_client=_fake_narration(),
+            image_transport=_fake_images(),
+            image_safety_model=_calm_judge(),
+            run_nonce=run_nonce,
+        )
+
+    first = run("a" * 32)
+    second = run("b" * 32)
+    assert first != second
+    first_story = Story.model_validate_json(_staged_json(s3, first))
+    second_story = Story.model_validate_json(_staged_json(s3, second))
+    assert first.endswith(f"/{first_story.id}")
+    assert second.endswith(f"/{second_story.id}")
+
+
 def test_an_image_that_never_passes_fails_the_run_and_stages_nothing(
     tmp_path: Path, s3: S3Client
 ) -> None:

@@ -20,7 +20,14 @@ from mypy_boto3_s3 import S3Client
 from src.config import Settings
 from src.pipeline.content_rules import check_story
 from src.pipeline.models import Page, PageAudio, Story, Theme, WordTiming
-from src.pipeline.publish import STAGED_PREFIX, publish_story, stage_story, unpublish_story
+from src.pipeline.publish import (
+    STAGED_PREFIX,
+    StagedContentChangedError,
+    publish_story,
+    stage_story,
+    staged_digest,
+    unpublish_story,
+)
 from src.pipeline.steps.assemble import AssembledStory, assemble_story
 from src.pipeline.steps.illustrate import IllustrationSet
 
@@ -260,6 +267,63 @@ def test_publish_rejects_a_staged_story_with_a_different_id(tmp_path: Path, s3: 
         match="Staged story id 'actual-story' does not match requested id 'requested-story'",
     ):
         publish_story("requested-story", settings, client=s3)
+
+
+def test_publish_with_the_reviewed_digest_publishes(tmp_path: Path, s3: S3Client) -> None:
+    """H1: the digest taken at review matches the untouched staged story, so
+    approve publishes it."""
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    stage_story(assembled, settings, client=s3)
+    reviewed = staged_digest(assembled.story.id, settings, client=s3)
+
+    publish_story(assembled.story.id, settings, client=s3, expected_digest=reviewed)
+
+    assert f"published/stories/{assembled.story.id}/story.json" in _keys(s3)
+
+
+def test_publish_refuses_a_story_whose_text_changed_after_review(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """H1: another write landed on the staged key after the parent reviewed
+    it. Approve must not publish bytes nobody reviewed — and publishes nothing."""
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    stage_story(assembled, settings, client=s3)
+    reviewed = staged_digest(assembled.story.id, settings, client=s3)
+    changed = assembled.story.model_copy(update={"title": "Un'altra storia"})
+    s3.put_object(
+        Bucket=PENDING_BUCKET,
+        Key=f"{STAGED_PREFIX}/{assembled.story.id}/story.json",
+        Body=changed.model_dump_json().encode(),
+    )
+
+    with pytest.raises(StagedContentChangedError):
+        publish_story(assembled.story.id, settings, client=s3, expected_digest=reviewed)
+
+    assert _keys(s3, "published/") == []
+
+
+def test_publish_refuses_a_story_whose_asset_was_replaced_after_review(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """H1: the digest covers every staged asset, not just story.json — a
+    swapped picture or sound under the same name is refused too."""
+    settings = _settings(tmp_path)
+    assembled = _assembled(tmp_path)
+    stage_story(assembled, settings, client=s3)
+    reviewed = staged_digest(assembled.story.id, settings, client=s3)
+    asset = next(iter(assembled.assets))
+    s3.put_object(
+        Bucket=PENDING_BUCKET,
+        Key=f"{STAGED_PREFIX}/{assembled.story.id}/{asset}",
+        Body=b"not the reviewed bytes",
+    )
+
+    with pytest.raises(StagedContentChangedError):
+        publish_story(assembled.story.id, settings, client=s3, expected_digest=reviewed)
+
+    assert _keys(s3, "published/") == []
 
 
 def test_publish_sets_cache_control_for_manifests_and_immutable_assets(

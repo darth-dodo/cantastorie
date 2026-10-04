@@ -305,21 +305,39 @@ def test_a_staged_run_starts_unreviewed_until_its_story_is_marked() -> None:
     record = _staged("s1")
     assert record.reviewed is False
     assert not record.fully_reviewed
-    record = record.mark_reviewed()
+    record = record.mark_reviewed("digest-1")
     assert record.reviewed is True
+    assert record.reviewed_digest == "digest-1"
     assert record.fully_reviewed
-    assert record.mark_reviewed() == record  # idempotent
+    assert record.mark_reviewed("digest-1") == record  # idempotent
+
+
+def test_reviewing_changed_bytes_records_the_new_digest() -> None:
+    """H1: the review binds to the bytes last shown, so re-opening a story
+    whose staged bytes changed moves the binding to what was just seen."""
+    record = _staged("s1").mark_reviewed("digest-1").mark_reviewed("digest-2")
+    assert record.reviewed_digest == "digest-2"
+
+
+def test_a_review_without_a_digest_does_not_count() -> None:
+    """H1: a record reviewed before digests existed must be reviewed again —
+    nothing ties its review to the bytes that would be published."""
+    legacy = _staged("s1").model_copy(update={"reviewed": True})
+    assert legacy.reviewed_digest is None
+    assert not legacy.fully_reviewed
 
 
 def test_a_run_with_no_story_is_never_fully_reviewed() -> None:
-    assert not _staged(None).mark_reviewed().fully_reviewed
+    assert not _staged(None).mark_reviewed("digest-1").fully_reviewed
 
 
 def test_restaging_a_run_clears_its_review() -> None:
-    reviewed = _staged("s1").mark_reviewed()
+    reviewed = _staged("s1").mark_reviewed("digest-1")
     assert reviewed.advance("approved").reviewed is True
     rerun = reviewed.model_copy(update={"state": "running"})
-    assert rerun.advance("staged", story_id="s9").reviewed is False
+    restaged = rerun.advance("staged", story_id="s9")
+    assert restaged.reviewed is False
+    assert restaged.reviewed_digest is None
 
 
 def _put_raw(s3: S3Client, record: records.RunRecord, body: dict[str, object]) -> None:

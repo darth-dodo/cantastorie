@@ -86,7 +86,9 @@ def _make_client(
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_run_manager] = lambda: manager
     # no-op publisher: just records approval without touching R2
-    app.dependency_overrides[get_family_publisher] = lambda: lambda story_id, family_token: None
+    app.dependency_overrides[get_family_publisher] = lambda: (
+        lambda story_id, family_token, expected_digest: None
+    )
     token = mint_token(private_key, valid_payload(family_token=VALID_TOKEN, iss=ISSUER))
     client = TestClient(app)
     client.cookies.set(SESSION_COOKIE, token)
@@ -95,8 +97,10 @@ def _make_client(
 
 def test_approve_lands_on_your_stories(monkeypatch: pytest.MonkeyPatch) -> None:
     """Approving a staged story must redirect to /parent/stories, not /parent."""
-    run = _make_staged_run().mark_reviewed()  # approve follows review (B2)
-    monkeypatch.setattr(parent_module, "_staged_story_exists", lambda settings, story_id: True)
+    run = _make_staged_run().mark_reviewed("digest-1")  # approve follows review (B2)
+    monkeypatch.setattr(
+        parent_module, "_current_staged_digest", lambda settings, story_id: "digest-1"
+    )
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
     r = client.post(f"/parent/runs/{run.id}/approve", follow_redirects=False)

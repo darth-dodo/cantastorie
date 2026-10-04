@@ -133,7 +133,7 @@ class _Harness:
         self.s3 = s3
         self.published: list[str] = []
 
-        def fake_generate(request: StoryRequest, settings: Settings) -> str:
+        def fake_generate(request: StoryRequest, settings: Settings, run_id: str) -> str:
             story_id = f"{request.theme}-{request.language}-fake0001"
             _stage_fake_story(settings, s3, story_id)
             return f"pending/staged/{story_id}"

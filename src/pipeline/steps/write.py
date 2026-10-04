@@ -173,15 +173,29 @@ def _write_inputs(
 
 
 def derive_story_id(
-    theme: Theme, language: Language, settings: Settings, premise: str | None = None
+    theme: Theme,
+    language: Language,
+    settings: Settings,
+    premise: str | None = None,
+    *,
+    shape: Literal["linear", "branching"] = "linear",
+    run_nonce: str | None = None,
 ) -> str:
-    """The story's stable id — a slug plus a hash of the write inputs.
+    """The story's id — a slug plus a hash of the write inputs.
 
     Deterministic from theme + language + writer model (+ premise when given),
     so the CLI can name the working folder content/{story-id}/ before the story
-    is written.
+    is written. A branching shape and a workshop run's nonce (its run id) join
+    the hash (H1): staging is keyed by story id, so two runs that would derive
+    the same id would stage over each other's reviewed bytes. A linear,
+    nonce-free id is unchanged, so existing CLI caches still hit.
     """
-    return f"{theme.replace('_', '-')}-{language}-{cache_key(_write_inputs(theme, language, settings, premise))[:8]}"
+    inputs = _write_inputs(theme, language, settings, premise)
+    if shape != "linear":
+        inputs["shape"] = shape
+    if run_nonce is not None:
+        inputs["run_nonce"] = run_nonce
+    return f"{theme.replace('_', '-')}-{language}-{cache_key(inputs)[:8]}"
 
 
 def write_story(
@@ -193,6 +207,7 @@ def write_story(
     model: Model | None = None,
     premise: str | None = None,
     shape: Literal["linear", "branching"] = "linear",
+    run_nonce: str | None = None,
 ) -> Story:
     """Author a native-language story; unchanged inputs cost zero API calls.
 
@@ -203,7 +218,7 @@ def write_story(
     """
     llm = model if model is not None else build_model(settings.write_model, settings)
     inputs = {**_write_inputs(theme, language, settings, premise), "shape": shape}
-    story_id = derive_story_id(theme, language, settings, premise)
+    story_id = derive_story_id(theme, language, settings, premise, shape=shape, run_nonce=run_nonce)
 
     def produce() -> bytes:
         prompt = (

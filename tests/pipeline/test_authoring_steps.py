@@ -206,6 +206,33 @@ def test_no_premise_leaves_the_story_id_unchanged() -> None:
     )
 
 
+def test_a_branching_shape_changes_the_story_id_but_linear_keeps_it() -> None:
+    """Given the same theme and language,
+    When one run is branching and one linear (the default),
+    Then their ids differ (H1: they no longer stage over each other), and an
+    explicit linear shape keeps the pre-H1 id so existing caches still hit."""
+    settings = _settings()
+    plain = derive_story_id("the_sleepy_sea", "it", settings)
+    assert derive_story_id("the_sleepy_sea", "it", settings, shape="linear") == plain
+    assert derive_story_id("the_sleepy_sea", "it", settings, shape="branching") != plain
+
+
+def test_a_run_nonce_gives_each_run_its_own_story_id() -> None:
+    """Given two runs asking for the identical story (same theme, language,
+    premise, shape),
+    When each passes its own run nonce,
+    Then each gets its own id (H1: one family's run can never stage over
+    another's), the same nonce is stable (a resumed run keeps its id), and no
+    nonce keeps the deterministic CLI id."""
+    settings = _settings()
+    family_a = derive_story_id("the_sleepy_sea", "it", settings, run_nonce="a" * 32)
+    family_b = derive_story_id("the_sleepy_sea", "it", settings, run_nonce="b" * 32)
+    assert family_a != family_b
+    assert derive_story_id("the_sleepy_sea", "it", settings, run_nonce="a" * 32) == family_a
+    assert derive_story_id("the_sleepy_sea", "it", settings) not in {family_a, family_b}
+    assert family_a.startswith("the-sleepy-sea-it-")
+
+
 def test_rerunning_write_with_the_same_premise_makes_zero_model_calls(
     tmp_path: Path,
 ) -> None:

@@ -113,15 +113,20 @@ def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None
     return None
 
 
-def _generate_staged_story(request: StoryRequest, settings: Settings) -> str:
+def _generate_staged_story(request: StoryRequest, settings: Settings, run_id: str) -> str:
     """Default generation seam: one generate_story pass for the run's one
-    story. Returns its staged R2 prefix (pending/staged/{story-id})."""
+    story. Returns its staged R2 prefix (pending/staged/{story-id}).
+
+    The run id is the story id's nonce (H1): no other run, in this family or
+    any other, can derive the same id and stage over this run's story. A
+    resumed run passes the same id, so it finds its own cache again."""
     return generate_story(
         request.theme,
         request.language,
         settings,
         shape=request.shape,
         premise=request.premise,
+        run_nonce=run_id,
     )
 
 
@@ -133,7 +138,7 @@ class RunManager:
         store: RunStore,
         settings: Settings,
         *,
-        generate: Callable[[StoryRequest, Settings], str] | None = None,
+        generate: Callable[[StoryRequest, Settings, str], str] | None = None,
     ) -> None:
         self._store = store
         self._settings = settings
@@ -193,7 +198,9 @@ class RunManager:
             started = time.perf_counter()
             try:
                 with run_context(record.id):
-                    prefix = await asyncio.to_thread(self._generate, record.request, self._settings)
+                    prefix = await asyncio.to_thread(
+                        self._generate, record.request, self._settings, record.id
+                    )
                 record = record.advance("staged", story_id=prefix.rsplit("/", 1)[-1])
                 logger.info(
                     "run_staged",

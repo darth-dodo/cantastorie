@@ -62,7 +62,7 @@ def _blocking_manager(
     """A manager whose generation seam blocks on `hold` — lets a test observe
     that startup returns while the resumed run is still in flight."""
 
-    def generate(request: StoryRequest, st: Settings) -> str:
+    def generate(request: StoryRequest, st: Settings, run_id: str) -> str:
         calls.append(request)
         hold.wait(timeout=5)
         story_id = f"{request.theme}-{request.language}-resumed"
@@ -186,7 +186,7 @@ def test_boot_exception_is_logged_and_reported_without_breaking_health(
     captured: list[BaseException] = []
     monkeypatch.setattr(main_module.sentry_sdk, "capture_exception", captured.append)
 
-    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
+    manager = RunManager(store, settings, generate=lambda req, st, run_id: "pending/staged/stub")
     app = _wired_app(settings, manager)
 
     with caplog.at_level(logging.ERROR, logger="src.api.main"), TestClient(app) as client:

@@ -119,6 +119,10 @@ class RunRecord(BaseModel):
     # The parent opened the staged story's review page, which renders every
     # page (B2). Records saved before review tracking load unreviewed.
     reviewed: bool = False
+    # staged_digest of the bytes the review page showed (H1). Approve publishes
+    # only while the staged story still matches it. A review recorded before
+    # digests existed has none, so it does not count until reviewed again.
+    reviewed_digest: str | None = None
     error: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -168,19 +172,22 @@ class RunRecord(BaseModel):
                 "story_id": self.story_id if story_id is None else story_id,
                 # A freshly staged story has not been seen yet.
                 "reviewed": False if state == "staged" else self.reviewed,
+                "reviewed_digest": None if state == "staged" else self.reviewed_digest,
                 "updated_at": datetime.now(UTC),
             }
         )
 
     @property
     def fully_reviewed(self) -> bool:
-        """The run's story was opened for review — and there is a story."""
-        return self.story_id is not None and self.reviewed
+        """The run's story was opened for review, there is a story, and the
+        review is bound to the bytes it showed (H1)."""
+        return self.story_id is not None and self.reviewed and self.reviewed_digest is not None
 
-    def mark_reviewed(self) -> RunRecord:
-        if self.reviewed:
+    def mark_reviewed(self, digest: str) -> RunRecord:
+        """Record that the review page showed the staged bytes with this digest."""
+        if self.reviewed and self.reviewed_digest == digest:
             return self
-        return self.model_copy(update={"reviewed": True})
+        return self.model_copy(update={"reviewed": True, "reviewed_digest": digest})
 
 
 def new_run(family_token: str, request: StoryRequest) -> RunRecord:

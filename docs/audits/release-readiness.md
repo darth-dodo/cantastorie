@@ -41,7 +41,7 @@ Every Blocker and High finding has been re-checked against `origin/main` as of t
 | B7 | Closing the tab mid-story boots the child into a story that does not exist | Fixed in code (#103, AI-468) |
 | B8 | No timeout on any player fetch | Fixed in code (#113, AI-473) |
 | B9 | Narration dies permanently when the device sleeps | Fixed in code (#102, AI-461). Operator step pending: the real-device checklist. |
-| H1 | Staged content is keyed globally; approved bytes need not be reviewed bytes | Open |
+| H1 | Staged content is keyed globally; approved bytes need not be reviewed bytes | Fixed in code (AI-493): each run stages under its own story id, and a parent approve publishes only the bytes the review page showed |
 | H2 | `premise` is unbounded server-side | Fixed in code (#108, AI-470) |
 | H3 | Deploy pipeline is not gated, and production dependencies are unpinned | Fixed in code (#112, AI-479); the deploy hook secret is set and Auto-Deploy is off (#116, AI-486), and the first CI-triggered deploy ran 2026-10-03. Operator step pending: rehearse one rollback. |
 | H4 | No global spend ceiling | Open |
@@ -56,7 +56,7 @@ Every Blocker and High finding has been re-checked against `origin/main` as of t
 - **H3**: rehearse one rollback (the deploy hook secret and Auto-Deploy-off are already done).
 - **H6**: get native review on the machine-drafted el/de/bg/ru/mr prompt lines (production publish and the `--local` fixtures are already done).
 
-**Updated verdict: Go pending B6 and the remaining operator steps.** All four of the original no-go grounds (B1, B2, B4, and the B7/B8/B9/H6 group) are fixed in code, and B1, B3, and H3 are now also closed operationally. B6 (no logging) is the one blocker still outstanding, in review as AI-485. H1 and H4 remain open — both are real gaps worth tracking — but this audit places them under **High**, not **Blocker**; by the audit's own severity categorization neither reopens the no-go verdict on its own.
+**Updated verdict: Go pending B6 and the remaining operator steps.** All four of the original no-go grounds (B1, B2, B4, and the B7/B8/B9/H6 group) are fixed in code, and B1, B3, and H3 are now also closed operationally. B6 (no logging) is the one blocker still outstanding, in review as AI-485. H1 is now fixed in code (AI-493). H4 remains open — a real gap worth tracking — but this audit places it under **High**, not **Blocker**; by the audit's own severity categorization it does not reopen the no-go verdict on its own.
 
 ---
 
@@ -293,6 +293,8 @@ A warm cache hides this in testing. After a deploy, with `/tmp` cleared, the wri
 
 **Fix**: scope staging by tenant, include `shape` and a per-run nonce in `derive_story_id`, and record the staged content hash on `RunRecord` to verify at approve time.
 
+Fixed in code (AI-493). `derive_story_id` now folds in a branching shape and, for a workshop run, the run id as a nonce, so every run stages under an id no other run can derive, in its own family or any other. This scopes staging per run, which is narrower than per tenant, so no separate tenant path segment was added; a linear CLI id with no nonce is unchanged. The review page records `staged_digest` (story.json bytes plus every staged asset's name and ETag) on `RunRecord.reviewed_digest`. A parent approve answers 409 unless the staged story still matches, and `publish_story(expected_digest=…)` checks again before copying anything, so a write landing in between is refused too. A record reviewed before digests existed counts as unreviewed until reviewed again. Operator approves have no review tracking, so they are not digest-bound; the per-run id still keeps their staged stories from colliding.
+
 ### H2 — `premise` is unbounded server-side
 
 ```
@@ -513,7 +515,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
 - [x] `premise` capped server-side on `PackRequest` (H2)
 - [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3) — lockfile install and CI-gated deploys done (AI-479, #112; first CI-triggered deploy on 2026-10-03); the rollback rehearsal is the remaining operator step
-- [ ] Staging keyed by tenant, with a content hash bound to the approval (H1)
+- [x] Staging keyed by tenant, with a content hash bound to the approval (H1) — staging is keyed per run and a parent approve is bound to the reviewed digest (AI-493)
 - [x] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
 - [ ] `--workers 1` and `numInstances: 1` made explicit with the reason, or the family cap made a conditional write (M11)
 - [ ] `/health/ready` checking config and R2; `healthCheckPath` repointed (M1)

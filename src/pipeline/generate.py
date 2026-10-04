@@ -59,13 +59,15 @@ def generate_story(
     image_transport: httpx.BaseTransport | None = None,
     image_safety_model: Model | None = None,
     premise: str | None = None,
+    run_nonce: str | None = None,
 ) -> str:
     """Author, narrate, illustrate (image-safety judged), assemble, and stage one story.
 
     Returns the R2 key prefix for the staged story. Publishing is a separate,
-    operator-gated step.
+    operator-gated step. A workshop run passes its run id as ``run_nonce`` so
+    its story stages under an id no other run can derive (H1).
     """
-    story_id = derive_story_id(theme, language, settings, premise)
+    story_id = derive_story_id(theme, language, settings, premise, shape=shape, run_nonce=run_nonce)
     cache = ArtifactCache(settings.content_dir / story_id)
 
     story, _report = author_story(
@@ -78,6 +80,7 @@ def generate_story(
         safety_model=safety_model,
         revise_model=revise_model,
         premise=premise,
+        run_nonce=run_nonce,
     )
     with timed_step("narrate", story_id=story_id, pages=len(story.pages)):
         narrated = narrate_pages(story.pages, language, settings, cache, narration_client)

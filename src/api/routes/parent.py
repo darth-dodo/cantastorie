@@ -43,10 +43,12 @@ from src.pipeline.publish import (
     STAGED_PREFIX,
     STORY_FILE,
     PublishedStory,
+    StagedContentChangedError,
     _build_client,
     _content_type,
     list_family_shelf,
     publish_story,
+    staged_digest,
     unpublish_story,
 )
 from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
@@ -114,7 +116,7 @@ Manager = Annotated[RunManager, Depends(get_run_manager)]
 
 
 class FamilyPublisher(Protocol):
-    def __call__(self, story_id: str, family_token: str) -> None: ...
+    def __call__(self, story_id: str, family_token: str, expected_digest: str) -> None: ...
 
 
 def get_family_publisher() -> FamilyPublisher:
@@ -122,11 +124,15 @@ def get_family_publisher() -> FamilyPublisher:
 
     The family_token is the tenancy boundary and the R2 prefix: publish_story
     validates it before it becomes a key (src/pipeline/publish.py). Overridable
-    in tests, mirroring workshop.get_publisher.
+    in tests, mirroring workshop.get_publisher. ``expected_digest`` is the
+    reviewed digest: the publish refuses staged bytes that no longer match it
+    (H1).
     """
 
-    def publish(story_id: str, family_token: str) -> None:
-        publish_story(story_id, get_settings(), family_token=family_token)
+    def publish(story_id: str, family_token: str, expected_digest: str) -> None:
+        publish_story(
+            story_id, get_settings(), family_token=family_token, expected_digest=expected_digest
+        )
 
     return publish
 
@@ -432,42 +438,54 @@ async def parent_approve_run(
     story_id = record.story_id
     if story_id is None:
         raise HTTPException(status_code=409, detail="The run has no staged story to publish")
-    if not record.fully_reviewed:
+    if not record.fully_reviewed or record.reviewed_digest is None:
         raise HTTPException(status_code=409, detail="Review the story before approving")
-    if not await run_in_threadpool(_staged_story_exists, settings, story_id):
+    # The reviewed bytes, and only those, may be published (H1): the staged
+    # story is checked here for a clear answer, and again inside the publish
+    # for a write that lands in between.
+    current = await run_in_threadpool(_current_staged_digest, settings, story_id)
+    if current is None:
         raise HTTPException(status_code=409, detail="The staged story is missing")
-    publisher(story_id, ctx.family_token)
+    if current != record.reviewed_digest:
+        raise HTTPException(status_code=409, detail=_CHANGED_SINCE_REVIEW)
+    try:
+        publisher(story_id, ctx.family_token, record.reviewed_digest)
+    except StagedContentChangedError:
+        raise HTTPException(status_code=409, detail=_CHANGED_SINCE_REVIEW) from None
     manager.store.save(record.advance("approved"))
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent/stories", status_code=303)
 
 
-def _staged_story_exists(settings: Settings, story_id: str) -> bool:
+_CHANGED_SINCE_REVIEW = "The story changed since you reviewed it. Open it again to review it."
+
+
+def _current_staged_digest(settings: Settings, story_id: str) -> str | None:
+    """The staged story's digest now, or None when it is gone."""
     try:
-        _build_client(settings).head_object(
-            Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}"
-        )
+        return staged_digest(story_id, settings, client=_build_client(settings))
     except ClientError:
-        return False
-    return True
+        return None
 
 
-def _record_review(manager: RunManager, record: RunRecord, story_id: str) -> RunRecord:
+def _record_review(manager: RunManager, record: RunRecord, story_id: str, digest: str) -> RunRecord:
     """The parent has been served the run's staged story on its review page —
     every page, picture and sound on one screen — so the run counts as
-    reviewed (B2). Blocking."""
-    if record.state != "staged" or record.story_id != story_id or record.reviewed:
+    reviewed (B2), bound to the digest of exactly those bytes (H1). Blocking."""
+    if record.state != "staged" or record.story_id != story_id:
+        return record
+    if record.reviewed and record.reviewed_digest == digest:
         return record
     try:
-        reviewed = record.mark_reviewed()
+        reviewed = record.mark_reviewed(digest)
         manager.store.save(reviewed)
     except ConcurrentModificationError:
         # A concurrent write (another tab's review) moved the record on: redo it once.
         fresh = manager.store.load(record.family_token, record.id)
         if fresh is None or fresh.state != "staged":
             return fresh or record
-        reviewed = fresh.mark_reviewed()
+        reviewed = fresh.mark_reviewed(digest)
         manager.store.save(reviewed)
     return reviewed
 
@@ -503,14 +521,18 @@ async def parent_staged_story(
         if record is None:
             return None
         # Load the staged story from the pending bucket.
+        client = _build_client(settings)
         try:
-            obj = _build_client(settings).get_object(
+            obj = client.get_object(
                 Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}"
             )
         except Exception:
             return None
-        story = Story.model_validate_json(obj["Body"].read())
-        return _record_review(manager, record, story_id), story
+        story_bytes = obj["Body"].read()
+        story = Story.model_validate_json(story_bytes)
+        # The digest of exactly the bytes this page renders (H1).
+        digest = staged_digest(story_id, settings, client=client, story_bytes=story_bytes)
+        return _record_review(manager, record, story_id, digest), story
 
     found = await run_in_threadpool(read_owned_story)
     if found is None:
