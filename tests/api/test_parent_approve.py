@@ -26,6 +26,7 @@ from src.api.main import create_app
 from src.api.routes.parent import get_family_publisher
 from src.api.routes.workshop import get_run_manager
 from src.config import get_settings
+from src.pipeline.publish import staged_digest
 from src.workshop.manager import RunManager
 from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 from tests.api.clerk_jwt import (
@@ -76,15 +77,19 @@ class Harness:
         self.manager = RunManager(
             self.store, self.settings, generate=lambda request, s: "pending/staged/stub"
         )
-        # Capture (story_id, family_token) pairs instead of touching R2.
+        # Capture (story_id, family_token) pairs instead of touching R2, and
+        # the reviewed digest each publish was bound to (H1).
         self.published: list[tuple[str, str | None]] = []
+        self.digests: list[str] = []
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager
-        app.dependency_overrides[get_family_publisher] = lambda: (
-            lambda story_id, family_token: self.published.append((story_id, family_token))
-        )
+        app.dependency_overrides[get_family_publisher] = lambda: self.publish
         self.client = TestClient(app, base_url="https://testserver")
+
+    def publish(self, story_id: str, family_token: str, expected_digest: str) -> None:
+        self.published.append((story_id, family_token))
+        self.digests.append(expected_digest)
 
     def sign_in(self, claims: dict[str, Any]) -> None:
         payload = {
@@ -110,7 +115,9 @@ def test_approving_a_staged_story_publishes_to_the_family_overlay(
         Bucket=PENDING_BUCKET, Key="pending/staged/first_snow-it-fake0001/story.json", Body=b"{}"
     )
     record = _staged_run(harness.store, FAMILY, "first_snow-it-fake0001")
-    harness.store.save(record.mark_reviewed())
+    harness.store.save(
+        record.mark_reviewed(staged_digest("first_snow-it-fake0001", harness.settings, client=s3))
+    )
     harness.sign_in(PARENT)
 
     response = harness.client.post(f"/parent/runs/{record.id}/approve", follow_redirects=False)

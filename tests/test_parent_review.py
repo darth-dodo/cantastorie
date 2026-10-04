@@ -118,7 +118,9 @@ def _make_client(
     app.include_router(parent_router)
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_run_manager] = lambda: manager
-    app.dependency_overrides[get_family_publisher] = lambda: lambda story_id, family_token: None
+    app.dependency_overrides[get_family_publisher] = lambda: (
+        lambda story_id, family_token, expected_digest: None
+    )
     token = mint_token(private_key, valid_payload(family_token=family_token, iss=ISSUER))
     client = TestClient(app)
     client.cookies.set(SESSION_COOKIE, token)

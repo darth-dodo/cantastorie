@@ -20,6 +20,7 @@ from mypy_boto3_s3 import S3Client
 
 import src.api.routes.parent as parent_module
 from src.api.routes._templates import TEMPLATES_DIR
+from src.pipeline.publish import StagedContentChangedError, staged_digest
 from src.workshop.records import V1_STORY_IDS_KEY, RunRecord, RunStore, StoryRequest, new_run
 from tests.api.test_parent_approve import BUCKET, FAMILY, PARENT, PENDING_BUCKET, Harness
 
@@ -94,6 +95,90 @@ def test_reviewing_the_story_then_approving_publishes(tmp_path: Path, s3: S3Clie
 
     assert _approve(harness, record.id) == 303
     assert harness.published == [("story-one", FAMILY)]
+
+
+def test_approve_binds_the_publish_to_the_reviewed_bytes(tmp_path: Path, s3: S3Client) -> None:
+    """H1: approve hands the publisher the digest of the bytes the review page
+    showed, so the publish itself refuses anything else."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+
+    assert _approve(harness, record.id) == 303
+    assert harness.digests == [staged_digest("story-one", harness.settings, client=s3)]
+
+
+def test_a_story_changed_after_review_is_409_until_reviewed_again(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """H1: the staged bytes moved after the parent reviewed them. Approve
+    refuses and publishes nothing; opening the review page again re-binds the
+    review to what is there now, and approve then goes through."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+    s3.put_object(
+        Bucket=PENDING_BUCKET,
+        Key="pending/staged/story-one/assets-swapped.webp",
+        Body=b"a picture nobody reviewed",
+    )
+
+    assert _approve_detail(harness, record.id) == (
+        409,
+        "The story changed since you reviewed it. Open it again to review it.",
+    )
+    assert harness.published == []
+    reloaded = harness.store.load(FAMILY, record.id)
+    assert reloaded is not None
+    assert reloaded.state == "staged"
+
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+    assert _approve(harness, record.id) == 303
+    assert harness.published == [("story-one", FAMILY)]
+
+
+def test_a_review_recorded_before_digests_must_be_reviewed_again(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """H1: a record marked reviewed before digests existed has nothing tying
+    the review to the bytes, so it counts as unreviewed until opened again."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.store.save(record.model_copy(update={"reviewed": True}))
+    harness.sign_in(PARENT)
+
+    assert _approve_detail(harness, record.id) == (409, "Review the story before approving")
+
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+    assert _approve(harness, record.id) == 303
+
+
+def test_a_change_racing_the_publish_is_409(tmp_path: Path, s3: S3Client) -> None:
+    """H1: bytes that change between approve's check and the publish are
+    caught by the publish's own digest check, and the run stays staged."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+
+    def racing_publish(story_id: str, family_token: str, expected_digest: str) -> None:
+        raise StagedContentChangedError(story_id)
+
+    harness.publish = racing_publish  # type: ignore[method-assign]
+
+    assert _approve_detail(harness, record.id) == (
+        409,
+        "The story changed since you reviewed it. Open it again to review it.",
+    )
+    reloaded = harness.store.load(FAMILY, record.id)
+    assert reloaded is not None
+    assert reloaded.state == "staged"
 
 
 def test_a_reviewed_story_that_is_gone_cannot_be_approved(tmp_path: Path, s3: S3Client) -> None:

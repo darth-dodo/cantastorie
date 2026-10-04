@@ -134,6 +134,54 @@ class PublishResult(BaseModel):
     manifest_story_ids: list[str]
 
 
+class StagedContentChangedError(Exception):
+    """The staged story no longer matches the bytes its reviewer saw (H1)."""
+
+
+def _staged_digest(story_bytes: bytes, assets: Iterable[tuple[str, str]]) -> str:
+    """Fingerprint of a staged story: its story.json bytes plus every staged
+    asset's name and ETag, in name order. Any changed text, swapped picture or
+    swapped sound changes it."""
+    digest = hashlib.sha256(story_bytes)
+    for name, etag in sorted(assets):
+        digest.update(f"\n{name}\0{etag}".encode())
+    return digest.hexdigest()
+
+
+def _staged_assets(client: S3Client, bucket: str, story_id: str) -> list[tuple[str, str, str]]:
+    """Every staged object of a story except story.json, as (key, name, etag)."""
+    prefix = f"{STAGED_PREFIX}/{story_id}/"
+    assets: list[tuple[str, str, str]] = []
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            name = obj["Key"].removeprefix(prefix)
+            if name != STORY_FILE:
+                assets.append((obj["Key"], name, obj.get("ETag", "")))
+    return assets
+
+
+def staged_digest(
+    story_id: str,
+    settings: Settings,
+    *,
+    client: S3Client | None = None,
+    story_bytes: bytes | None = None,
+) -> str:
+    """The digest a reviewer saw, recorded at review and checked at approve.
+
+    Pass ``story_bytes`` when the caller already read story.json to render it,
+    so the digest is of exactly the bytes shown.
+    """
+    client = client or _build_client(settings)
+    bucket = settings.pending_bucket
+    if story_bytes is None:
+        story_bytes = client.get_object(
+            Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}"
+        )["Body"].read()
+    assets = _staged_assets(client, bucket, story_id)
+    return _staged_digest(story_bytes, ((name, etag) for _, name, etag in assets))
+
+
 def _story_json_bytes(story: Story) -> bytes:
     return story.model_dump_json(indent=2).encode("utf-8")
 
@@ -444,6 +492,7 @@ def publish_story(
     *,
     client: S3Client | None = None,
     family_token: str | None = None,
+    expected_digest: str | None = None,
 ) -> PublishResult:
     """Publish a staged story to R2 and update its language manifest.
 
@@ -455,6 +504,11 @@ def publish_story(
     ``family_token`` selects the lane: ``None`` writes the shared shelf
     (operator, global), a canonical token writes that family's private overlay
     under ``published/families/{token}/…``. The two lanes never cross.
+
+    ``expected_digest`` is the staged_digest recorded when the story was
+    reviewed. When given, the staged bytes are checked against it before
+    anything is copied, and a mismatch raises StagedContentChangedError with
+    nothing published (H1).
     """
     root = _publish_root(family_token)
     client = client or _build_client(settings)
@@ -476,6 +530,11 @@ def publish_story(
     if story.id != story_id:
         raise ValueError(f"Staged story id {story.id!r} does not match requested id {story_id!r}")
     language = story.language
+    staged_assets = _staged_assets(client, pending_bucket, story_id)
+    if expected_digest is not None and expected_digest != _staged_digest(
+        story_bytes, ((name, etag) for _, name, etag in staged_assets)
+    ):
+        raise StagedContentChangedError(f"Staged story {story_id!r} changed after review")
 
     uploaded: list[str] = []
     skipped: list[str] = []
@@ -512,18 +571,13 @@ def publish_story(
         )
         target.append(dest_key)
 
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=pending_bucket, Prefix=f"{staged_prefix}/"):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            name = key.removeprefix(f"{staged_prefix}/")
-            if name == STORY_FILE:
-                continue
-            copy(key, obj.get("ETag", ""), f"{root}/stories/{story_id}/{name}", _content_type(name))
+    for key, name, etag in staged_assets:
+        copy(key, etag, f"{root}/stories/{story_id}/{name}", _content_type(name))
     send(f"{root}/stories/{story_id}/{STORY_FILE}", story_bytes, "application/json")
 
     prompt_prefix = f"{STAGED_PREFIX}/prompts/{language}"
     prompt_urls: dict[str, str] = {}
+    paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=pending_bucket, Prefix=f"{prompt_prefix}/"):
         for obj in page.get("Contents", []):
             key = obj["Key"]
