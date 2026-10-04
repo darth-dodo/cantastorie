@@ -15,7 +15,7 @@ import io
 import wave
 
 import httpx
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from pydantic import BaseModel
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -23,6 +23,7 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 from src.config import Settings
 from src.observability import build_traced_openai_client, typed_traceable
 from src.pipeline.models import Language
+from src.pipeline.retry import AsyncRetryTransport, with_retries
 
 
 def build_model(
@@ -35,14 +36,22 @@ def build_model(
     silently strips ``temperature`` — both safety judges would then sample at
     the provider default instead of 0. The client is built here (traced or
     plain) so ``openrouter_base_url`` stays configurable.
+
+    Retries live in the HTTP transport (``src.pipeline.retry``), the same
+    policy as images and narration, so the OpenAI SDK's own retries are off —
+    two layers would multiply into nine sends. An injected ``http_client``
+    (tests) is used as given.
     """
+    if http_client is None:
+        http_client = DefaultAsyncHttpxClient(transport=AsyncRetryTransport())
     if settings.langsmith_tracing:
-        client = build_traced_openai_client(settings, http_client=http_client)
+        client = build_traced_openai_client(settings, http_client=http_client, max_retries=0)
     else:
         client = AsyncOpenAI(
             base_url=settings.openrouter_base_url,
             api_key=settings.openrouter_api_key.get_secret_value(),
             http_client=http_client,
+            max_retries=0,
         )
     return OpenAIChatModel(model_id, provider=OpenRouterProvider(openai_client=client))
 
@@ -76,10 +85,11 @@ def _wrap_pcm_as_wav(pcm: bytes, content_type: str) -> bytes:
 class NarrationClient:
     def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None) -> None:
         self._settings = settings
+        # An injected transport (tests) is wrapped too, so it sees the retries.
         self._client = httpx.Client(
             base_url=settings.openrouter_base_url,
             headers={"Authorization": f"Bearer {settings.openrouter_api_key.get_secret_value()}"},
-            transport=transport,
+            transport=with_retries(transport),
             timeout=120.0,
         )
 
