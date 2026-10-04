@@ -183,7 +183,8 @@ function saveLang(lang, storage = globalThis.localStorage) {
 // page still ahead on the path and append the chosen arm — mirroring
 // playback.extendPath's "first choice at or after the arm's start" walk, so a
 // story that branches again is followed correctly. Mutating loaded.pages here
-// (before it becomes playback's story) is what extendPath does mid-run; the
+// (before it becomes playback's story) is what extendPath does mid-run — safe
+// because openCover hands in a per-open copy, never the cached story; the
 // unfinished check then sees the full rebuilt length. Returns false when a pick
 // no longer fits the graph (choice page gone, option index out of range, or a
 // dangling next_page) so the caller can discard the save.
@@ -319,7 +320,14 @@ export async function init(
           storyCache.set(entry.story, pending);
           pending.catch(() => storyCache.delete(entry.story));
         }
-        loaded = await pending;
+        // The cache holds the pristine story; every open plays its own copy.
+        // replayResume and playback.extendPath grow `pages` on the played
+        // path, and that must never leak into the next open — a child who
+        // picked arm a, went home and reopened would otherwise get arm b
+        // appended after arm a (AI-482). allPages and pagesFrom are read-only
+        // and shared.
+        const pristine = await pending;
+        loaded = { ...pristine, pages: [...pristine.pages] };
       } catch (err) {
         if (superseded()) return;
         console.warn("story unavailable, showing the clouds", err);

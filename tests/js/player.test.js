@@ -329,6 +329,90 @@ describe("resume across a branch (AI-428)", () => {
   });
 });
 
+describe("replaying a branch in the same session (AI-482)", () => {
+  const branchingStory = JSON.parse(
+    readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),
+  );
+  const branchingFetch = async (url) => {
+    const path = String(url);
+    if (path.endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+    if (path.includes("dev-branching")) return { ok: true, json: async () => branchingStory };
+    if (path.endsWith("story.json")) return { ok: true, json: async () => storyFixture };
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+  };
+  const branchingCover = () => [...document.querySelectorAll(".shelf .cover")].at(-1);
+
+  // dev-branching: shared p1..p6 (choice on p6 = index 5), arm a = a1..a4
+  // (a1's art is p7.*), arm b = b1..b4 (b1's art is p3.*). A branched path is
+  // 6 + 4 = 10 pages and the arm's first page sits at index 6.
+  const PREFIX_LENGTH = 6;
+  const ARM_START = 6;
+  const BRANCHED_LENGTH = 10;
+  const artAt = (i) => document.querySelector(`.page-art[data-page="${i}"]`)?.style.backgroundImage;
+
+  // Open the dev-branching cover from the shelf and start from page 0
+  // (a leftover page from an earlier visit may offer resume — restart it).
+  async function openFresh() {
+    branchingCover().click();
+    await vi.waitFor(() => expect(running.store.state.screen).toBe("player"));
+    if (running.store.state.resumeOpen) running.store.resumeRestart();
+    expect(running.store.state.page).toBe(0);
+  }
+
+  // Turn pages up to the choice and tap option i.
+  async function pick(i) {
+    while (!running.store.state.choiceOpen) running.store.nextPage();
+    await vi.waitFor(() => expect(document.querySelectorAll(".overlay .option")).toHaveLength(2));
+    document.querySelectorAll(".overlay .option")[i].click();
+    await vi.waitFor(() => expect(running.store.state.choiceOpen).toBe(false));
+  }
+
+  it("picking the other arm on a reopen plays the shared prefix plus that arm only", async () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: branchingFetch, engine: fakeEngine() });
+
+    await openFresh();
+    await pick(0);
+    expect(running.store.state.pageCount).toBe(BRANCHED_LENGTH);
+    await vi.waitFor(() => expect(artAt(ARM_START)).toContain("p7.")); // a1
+
+    running.store.exitStory(); // back to the shelf, same session (cached story)
+    await openFresh();
+    expect(running.store.state.pageCount).toBe(PREFIX_LENGTH); // pristine, not arm a
+    await pick(1);
+
+    expect(running.store.state.pageCount).toBe(BRANCHED_LENGTH);
+    expect(running.store.state.page).toBe(ARM_START);
+    await vi.waitFor(() => expect(artAt(ARM_START)).toContain("p3.")); // b1, not a1
+    expect(document.querySelectorAll(".page-art")).toHaveLength(BRANCHED_LENGTH);
+  });
+
+  it("a resumed branched save, reopened again, never appends its arm twice", async () => {
+    localStorage.setItem(
+      "cantastorie-shell",
+      JSON.stringify({ screen: "shelf", page: 7, choices: [1] }),
+    );
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: branchingFetch, engine: fakeEngine() });
+
+    branchingCover().click();
+    await vi.waitFor(() => expect(running.store.state.resumeOpen).toBe(true));
+    running.store.resumeContinue();
+    expect(running.store.state.pageCount).toBe(BRANCHED_LENGTH);
+
+    // Two more visits in the same session: each opens on the pristine story.
+    for (const option of [1, 0]) {
+      running.store.exitStory();
+      await openFresh();
+      expect(running.store.state.pageCount).toBe(PREFIX_LENGTH);
+      await pick(option);
+      expect(running.store.state.pageCount).toBe(BRANCHED_LENGTH);
+      expect(running.store.state.page).toBe(ARM_START);
+      await vi.waitFor(() => expect(artAt(ARM_START)).toContain(option === 1 ? "p3." : "p7."));
+    }
+  });
+});
+
 describe("published shelf: cross-origin R2 manifest", () => {
   const r2Manifest = {
     language: "en",
