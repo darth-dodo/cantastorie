@@ -14,7 +14,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
-from src.workshop.manager import RunCapExceeded
+from src.workshop.manager import GLOBAL_CAP_MESSAGE, RunCapExceeded
 from src.workshop.records import StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
@@ -37,8 +37,13 @@ def reset_jwks_cache(monkeypatch: pytest.MonkeyPatch) -> None:
 class _FakeManager:
     """Minimal fake manager for rendering tests."""
 
-    def __init__(self, raise_cap: RunCapExceeded | None = None) -> None:
+    def __init__(
+        self,
+        raise_cap: RunCapExceeded | None = None,
+        service_cap: RunCapExceeded | None = None,
+    ) -> None:
         self.raise_cap = raise_cap
+        self.service_cap = service_cap
         self.submits: list[tuple[str, Any]] = []
 
         class _FakeStore:
@@ -55,6 +60,9 @@ class _FakeManager:
 
     async def execute(self, record: Any) -> Any:
         return record
+
+    def global_cap(self) -> RunCapExceeded | None:
+        return self.service_cap
 
 
 def _make_client(
@@ -110,6 +118,20 @@ def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert r.status_code == 200
     assert "already being made" in r.text  # cap message shown
+
+
+def test_the_make_screen_shows_the_service_wide_cap_up_front(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """H4: once the whole service has used up the day, the make screen says so
+    before the parent fills in the form, as it does for the family's own cap."""
+    manager = _FakeManager(service_cap=RunCapExceeded(GLOBAL_CAP_MESSAGE, service_wide=True))
+    client = _make_client(monkeypatch, manager)
+
+    r = client.get("/parent/make")
+
+    assert r.status_code == 200
+    assert "the story workshop is resting for today" in r.text
 
 
 def test_premise_over_the_bound_is_rejected_with_a_clear_message(
