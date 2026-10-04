@@ -185,22 +185,27 @@ function saveLang(lang, storage = globalThis.localStorage) {
 // story that branches again is followed correctly. Mutating loaded.pages here
 // (before it becomes playback's story) is what extendPath does mid-run — safe
 // because openCover hands in a per-open copy, never the cached story; the
-// unfinished check then sees the full rebuilt length. Returns false when a pick
-// no longer fits the graph (choice page gone, option index out of range, or a
-// dangling next_page) so the caller can discard the save.
+// unfinished check then sees the full rebuilt length. Returns where the last
+// replayed arm starts (0 with no picks): playback looks for the next branch
+// from there, as extendPath would have (M28). Returns null, leaving the path
+// untouched, when a pick no longer fits the graph (choice page gone, option
+// index out of range, or a dangling next_page) so the caller can discard the
+// save.
 function replayResume(loaded, choices) {
+  let pages = loaded.pages;
   let searchFrom = 0;
   for (const optionIndex of choices) {
-    const choicePageIndex = loaded.pages.findIndex((page, i) => i >= searchFrom && page.choice);
-    if (choicePageIndex === -1) return false;
-    const option = loaded.pages[choicePageIndex].choice.options?.[optionIndex];
-    if (!option) return false;
+    const choicePageIndex = pages.findIndex((page, i) => i >= searchFrom && page.choice);
+    if (choicePageIndex === -1) return null;
+    const option = pages[choicePageIndex].choice.options?.[optionIndex];
+    if (!option) return null;
     const arm = loaded.pagesFrom(option.next_page);
-    if (arm.length === 0) return false;
-    searchFrom = loaded.pages.length; // the next branch must be inside the new arm
-    loaded.pages = [...loaded.pages, ...arm];
+    if (arm.length === 0) return null;
+    searchFrom = pages.length; // the next branch must be inside the new arm
+    pages = [...pages, ...arm];
   }
-  return true;
+  loaded.pages = pages;
+  return searchFrom;
 }
 
 export async function init(
@@ -344,10 +349,9 @@ export async function init(
       // pageCount) must see the rebuilt path, and the restored page index must
       // point into it. A pick that no longer fits the graph (republished
       // story) discards the save and starts fresh; never a crash.
-      const savedChoices = store.state.choices ?? [];
-      const replayed = savedChoices.length === 0 || replayResume(loaded, savedChoices);
-      await playback.openStory(loaded);
-      if (!replayed) store.resumeRestart();
+      const armStart = replayResume(loaded, store.state.choices ?? []);
+      await playback.openStory(loaded, { choiceSearchFrom: armStart ?? 0 });
+      if (armStart === null) store.resumeRestart();
       return;
     }
     // Only a cover with no story.json at all (the dev/mock shelf) runs on
@@ -368,6 +372,10 @@ export async function init(
     manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
     prefetcher = createPrefetcher({ engine, fetchFn });
+    // Retire the old instance before its replacement subscribes: left
+    // subscribed, it would still react to the store and speak the old
+    // language's prompts (M23).
+    playback.dispose();
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
     store.toShelf();
     shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen };

@@ -329,6 +329,81 @@ describe("resume across a branch (AI-428)", () => {
   });
 });
 
+describe("resume across two branch points (M28, AI-494)", () => {
+  // A story that branches twice: p1, p2 (choice: a1 | b1); arm a = a1, a2
+  // (choice: c1 | d1); arm b = b1, b2; the second branch's arms are c1, c2
+  // and d1, d2. No audio: the specs turn pages by hand.
+  const page = (id, next_page, choice = null) => ({
+    id,
+    text: id,
+    image: `${id}.webp`,
+    next_page,
+    choice,
+  });
+  const choice = (first, second) => ({
+    prompt: "which way?",
+    options: [
+      { label: first, card_image: null, audio: null, next_page: first },
+      { label: second, card_image: null, audio: null, next_page: second },
+    ],
+  });
+  const twoBranchStory = {
+    schema_version: 1,
+    id: "dev-branching",
+    language: "it",
+    title: "Two branches",
+    shape: "branching",
+    pages: [
+      page("p1", "p2"),
+      page("p2", null, choice("a1", "b1")),
+      page("a1", "a2"),
+      page("a2", null, choice("c1", "d1")),
+      page("b1", "b2"),
+      page("b2", null),
+      page("c1", "c2"),
+      page("c2", null),
+      page("d1", "d2"),
+      page("d2", null),
+    ],
+  };
+  const twoBranchFetch = async (url) => {
+    const path = String(url);
+    if (path.endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+    if (path.includes("dev-branching")) return { ok: true, json: async () => twoBranchStory };
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+  };
+  const branchingCover = () => [...document.querySelectorAll(".shelf .cover")].at(-1);
+
+  it("a save left mid-arm reaches the arm's own branch instead of cutting to the end", async () => {
+    // Left on a1 (index 2 of p1, p2, a1, a2) after picking arm a.
+    localStorage.setItem(
+      "cantastorie-shell",
+      JSON.stringify({ screen: "shelf", page: 2, choices: [0] }),
+    );
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: twoBranchFetch, engine: fakeEngine() });
+
+    branchingCover().click();
+    await vi.waitFor(() => expect(running.store.state.resumeOpen).toBe(true));
+    running.store.resumeContinue();
+    expect(running.store.state.pageCount).toBe(4);
+    // The next branch is a2's (index 3), not p2's — already behind the child.
+    expect(running.store.state.choicePage).toBe(3);
+
+    running.store.nextPage(); // a1 -> a2
+    running.store.nextPage(); // a2's end opens the second branch
+    expect(running.store.state.screen).toBe("player");
+    expect(running.store.state.choiceOpen).toBe(true);
+
+    await vi.waitFor(() => expect(document.querySelectorAll(".overlay .option")).toHaveLength(2));
+    document.querySelectorAll(".overlay .option")[1].click(); // arm d
+    await vi.waitFor(() => expect(running.store.state.choiceOpen).toBe(false));
+    expect(running.store.state.page).toBe(4);
+    expect(running.store.state.pageCount).toBe(6);
+    expect(running.store.state.choices).toEqual([0, 1]);
+  });
+});
+
 describe("replaying a branch in the same session (AI-482)", () => {
   const branchingStory = JSON.parse(
     readFileSync("src/static/content/it/stories/dev-branching/story.json", "utf-8"),

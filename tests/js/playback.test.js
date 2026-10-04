@@ -613,6 +613,53 @@ describe("Stories the pipeline hasn't produced yet", () => {
   });
 });
 
+describe("A language switch retires the old playback (M23, AI-494)", () => {
+  const SPANISH = {
+    story_start: "/es/story-start.wav",
+    end: "/es/end.wav",
+    audio_retry: "/es/audio-retry.wav",
+  };
+
+  // What main.js does on a switch: retire the old instance, then build the
+  // new language's on the same store and engine.
+  function switchLanguage() {
+    playback.clearStory();
+    playback.dispose();
+    store.toShelf();
+    playback = createPlayback({ store, engine, prefetcher, prompts: SPANISH, isHidden });
+  }
+
+  it("a disposed instance never speaks the old language's end prompt", async () => {
+    await openFresh();
+    engine.endPrompt();
+    switchLanguage();
+
+    await openFresh();
+    engine.endPrompt();
+    for (let i = 0; i < 8; i++) engine.endNarration();
+    await flush();
+
+    expect(store.state.screen).toBe("end");
+    expect(promptsSpoken()).toContain(SPANISH.end);
+    expect(promptsSpoken()).not.toContain(PROMPTS.end);
+  });
+
+  it("a start prompt still loading when the instance is disposed never releases the story", async () => {
+    const release = engine.stallLoad(PROMPTS.story_start);
+    const opening = playback.openStory(fixtureStory());
+    await flush();
+    const retired = playback;
+    retired.dispose();
+
+    release();
+    await opening;
+    // Nothing spoke for the retired instance: no fanfare, no page 1.
+    expect(promptsSpoken()).toEqual([]);
+    expect(narrations()).toEqual([]);
+    expect(retired.hasStory()).toBe(false);
+  });
+});
+
 describe("Audio won't load (AI-367) — the bird speaks, a tap wakes the story", () => {
   // The file's fakeEngine never fails; wrap it so the first `failures`
   // narrations reject the way a dead network makes the real engine reject.
