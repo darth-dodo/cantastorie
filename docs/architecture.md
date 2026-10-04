@@ -24,19 +24,20 @@
 
 ## System Overview
 
-Cantastorie is one FastAPI application with three faces:
+Cantastorie is one FastAPI application with three faces, plus a public landing page:
 
-- **The child player** — served by FastAPI as a lean full-screen page; at story time it talks only to Cloudflare R2 (manifests, audio, images) and IndexedDB. No cookies, no server calls carrying child data, ever. The server is a static-file waiter here.
+- **The landing page** — a static, server-rendered home at `/` (`src/api/routes/landing.py`, `templates/landing.html`) that explains the product and links to the player and the parent area. Public, Clerk-free, no child data, no server calls.
+- **The child player** — served by FastAPI at `/play` as a lean full-screen page; at story time it talks only to Cloudflare R2 (manifests, audio, images) and the browser's own storage (progress and settings in localStorage, the family token in IndexedDB). No cookies, no server calls carrying child data, ever. The server is a static-file waiter here.
 - **The parent area** — server-rendered Jinja2 + HTMX behind the parent gate. Small in Phase 1 (settings, export/import); the dashboard and review queue arrive in Phase 2.
 - **The factory** — a plain-Python authoring pipeline in the same codebase, run as a local CLI in Phase 1. Phase 2 puts FastAPI routes in front of the same step functions.
 
 ```mermaid
 graph LR
-    B["Browser (child)<br/>ES modules + Web Audio + IndexedDB"]
+    B["Browser (child)<br/>ES modules + Web Audio +<br/>localStorage + IndexedDB"]
     R2["Cloudflare R2<br/>audio · images · manifests"]
     F["FastAPI on Render<br/>player page · parent area"]
     P["Pipeline CLI<br/>plain Python + Pydantic AI"]
-    OR["OpenRouter<br/>story · safety · glosses · images · image safety · narration"]
+    OR["OpenRouter<br/>story · safety · images · image safety · narration"]
 
     B -- "bucket-direct fetch" --> R2
     B -- "page load, parent HTMX" --> F
@@ -50,8 +51,8 @@ graph LR
 - **Bucket-direct playback** — story bytes never pass through the app server; the player fetches immutable assets straight from R2
 - **Plain Python pipeline** — the filesystem working folder is the checkpoint store; no graph framework (see [The Authoring Pipeline](#the-authoring-pipeline))
 - **Web Audio, not `<audio>` tags** — iOS makes media-element volume read-only, which would kill the mandated gentle crossfades; decoded buffers + gain nodes work everywhere
-- **Everything precomputed** — narration, images, and glosses are generated at authoring time; a played story costs zero API calls
-- **One key, one gateway (default path)** — default narration runs through OpenRouter too (Gemini TTS — see [Narration / Audio](#narration--audio), [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md), and [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), so the default pipeline needs only the OpenRouter key end to end; the word-timing pass (Deepgram STT) and the voice-cloning path (Voxtral via the Mistral API) are the two bounded, flagged exceptions
+- **Everything precomputed** — narration and images are generated at authoring time (glosses will be too, once the planned gloss step ships with reading mode); a played story costs zero API calls
+- **One key, one gateway (default path)** — default narration runs through OpenRouter too (Gemini TTS — see [Narration / Audio](#narration--audio), [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md), and [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), so the default pipeline needs only the OpenRouter key end to end; the planned word-timing pass (Deepgram STT) and voice-cloning path (Voxtral via the Mistral API) will be the two bounded, flagged exceptions — neither is built yet, so nothing reads their keys today
 
 ---
 
@@ -68,11 +69,11 @@ graph LR
 | Asset storage | Cloudflare R2 | Zero egress fees, access logs off, public bucket for published content |
 | App hosting | Render | Hermano's render.yaml precedent |
 | Parent authentication | Clerk (parent area only; [ADR-003](adr/ADR-003-parent-authentication-clerk.md)) | Magic-link / OAuth sign-in; JWT verified via JWKS (PyJWT, no vendor SDK); the child player stays account-free |
-| Child persistence | IndexedDB | Progress, settings, lockout, family token — nothing server-side |
+| Child persistence | localStorage + IndexedDB | Progress, language and display settings in localStorage; the family token in IndexedDB — nothing server-side |
 | Observability | LangSmith tracing ([ADR-007](adr/ADR-007-langsmith-observability.md)); Sentry errors, server-side only ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)) | Traces for LLM/narration/image calls; grouped, release-tagged exceptions for the app, workshop runs, and CLI — inert when unconfigured, no browser SDK |
 | Testing | pytest + Vitest + Playwright | Providers mocked in unit tests; child flows verified in a real browser |
 
-**One key to run the default pipeline: `OPENROUTER_API_KEY`.** With default narration on Gemini TTS via OpenRouter ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the whole default pipeline — story, safety, glosses, images, and narration — runs on the single OpenRouter key. ElevenLabs is retired ([ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)). Two bounded, flagged exceptions exist: the word-timing pass uses a pipeline-only `DEEPGRAM_API_KEY` (OpenRouter does not carry the Deepgram models — verified at AI-391), and voice cloning ([ADR-006](adr/ADR-006-family-voice-narration.md)) uses `MISTRAL_API_KEY` for Voxtral voice profiles — that single capability and no other code path. Keys live only in the pipeline environment (and later the Phase 2 service) — never in the browser, never needed at story time.
+**One key to run the default pipeline: `OPENROUTER_API_KEY`.** With default narration on Gemini TTS via OpenRouter ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the whole default pipeline — story, safety, images, image safety, and narration — runs on the single OpenRouter key. ElevenLabs is retired ([ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)). Two bounded, flagged exceptions are planned but not built, and nothing in `src/` reads their keys today: the word-timing pass will use a pipeline-only `DEEPGRAM_API_KEY` (OpenRouter does not carry the Deepgram models — verified at AI-391), and voice cloning ([ADR-006](adr/ADR-006-family-voice-narration.md)) will use `MISTRAL_API_KEY` for Voxtral voice profiles — that single capability and no other code path. Because parent and operator runs generate in-process, the web service holds the OpenRouter key alongside the R2 and Clerk credentials (list in [setup.md](setup.md)). Keys never reach the browser and are never needed at story time.
 
 ---
 
@@ -86,7 +87,8 @@ src/
 │   ├── auth.py             require_parent — Clerk JWT verification via JWKS
 │   ├── clerk.py            Clerk REST client: family-token mint-or-link
 │   └── routes/
-│       ├── player.py       GET / — the child player shell
+│       ├── landing.py      GET / — the public landing page
+│       ├── player.py       GET /play — the child player shell
 │       ├── parent.py       /parent/api/provision — family token mint-or-link (parent pages arrive in Phase 2)
 │       ├── published.py    /published — R2 content proxy for dev/prod parity
 │       └── workshop.py     /workshop — operator screens: runs, staging, review, publish
@@ -104,14 +106,14 @@ src/
 │   │   ├── illustrate.py   Character sheet first, then pages against it
 │   │   ├── image_safety.py Vision judge over every shown image, bounded redraws (ADR-011)
 │   │   ├── assemble.py     story.json assembly + validation
-    │   │   └── gloss.py        Word-to-English gloss maps (cheap model)
+    │   │   └── (gloss.py)      Planned, not built: word-to-English gloss maps (cheap model), with reading mode
 │   ├── cache.py            Content-addressed artifact cache
 │   ├── content_rules.py    The nine content rules, shared by write and safety prompts
 │   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, ImageSafetyVerdict, GlossMap
 │   ├── providers.py        OpenRouter transport (chat, images, TTS); every model via OpenRouterProvider, so judges' temperature 0 reaches the wire
 │   └── publish.py          R2 staging + publish, manifest update, immutable naming
 ├── observability.py        LangSmith tracing + Sentry error monitoring for pipeline and app
-├── templates/              Jinja2: index.html (player shell) + workshop/ screens
+├── templates/              Jinja2: landing.html, index.html (player shell), parent/ and workshop/ screens
 └── static/
     ├── js/
     │   ├── fsm.js          Finite state machine (ported from hermano)
@@ -125,7 +127,8 @@ src/
     │   ├── prefetch.js     Whole-story prefetch on cover tap
     │   ├── palette-resolve.js  Theme + palette resolution (pure, shared with tests)
     │   ├── workshop.js     Operator-screen behaviors (HTMX companion)
-    │   └── storage.js      Progress persistence: localStorage now, IndexedDB when real stories land
+    │   ├── family-adopt.js Writes the family token to IndexedDB
+    │   └── storage.js      Progress persistence in localStorage (page + branch choices)
     └── css/                Player: hand-crafted watercolor CSS; workshop: Tailwind
 
 content/                    Pipeline working folders (gitignored)
@@ -143,12 +146,12 @@ A batch job, not an agent: linear steps, one bounded loop, artifacts on disk. Ea
 graph TD
     O["outline<br/>theme + language + shape"] --> W["write<br/>native-language authoring"]
     W --> S{"safety gate<br/>8 text rules, temperature 0,<br/>different model family"}
-    S -- "all pass" --> G["gloss<br/>word-to-English map"]
+    S -- "all pass" --> N
     S -- "any fail" --> RV["revise<br/>targeted rewrite"]
     RV --> S2{"safety gate again"}
-    S2 -- "pass" --> G
+    S2 -- "pass" --> N
     S2 -- "second fail" --> X["reject story"]
-    G --> N["narrate<br/>Gemini TTS via OpenRouter,<br/>one pinned voice (no timestamps)"]
+    N["narrate<br/>Gemini TTS via OpenRouter,<br/>one pinned voice (no timestamps)"]
     N --> I["illustrate<br/>character sheet, then pages"]
     I --> IS{"image safety<br/>every page, card, cover:<br/>no text · nothing frightening · calm"}
     IS -- "any fail" --> RD["redraw that image<br/>(at most 2 times)"]
@@ -158,6 +161,8 @@ graph TD
     A --> ST["stage<br/>local review folder"]
     ST -- "operator approves" --> PB["publish<br/>R2 + manifest"]
 ```
+
+A **gloss** step (word-to-English maps from a cheap model, between the safety gate and narration) is planned for reading mode (slice 6) and is not in the code yet: there is no `steps/gloss.py`, and `generate.py` does not run one. `story.json` already carries an optional `gloss` field, which the dev fixtures fill by hand.
 
 ### Why no framework
 
@@ -174,7 +179,7 @@ Every generated artifact is keyed by a hash of its inputs:
 | Character sheet | story summary + style prompt + model |
 | Choice card image | option label + character sheet hash + card prompt + model |
 | Choice label audio | option label + voice ID + model/settings |
-| Gloss map | story text + model |
+| Gloss map (planned, with the gloss step) | story text + model |
 | Image safety verdict | image bytes (SHA-256) + judge model + temperature + prompt version |
 
 A safety-driven redraw adds a `regeneration` count to that one image's inputs, so it gets a fresh key while every other image stays a cache hit.
@@ -188,7 +193,7 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 | Write / revise | Strong authoring model | Content rules embedded in the prompt; authored natively per language, never translated |
 | Safety gate | **Different family** than the writer, temperature 0 | A shared writer/judge blind spot is the failure mode that matters; cross-family judging is one config line |
 | Image safety | Vision model, **different family** than the image model, temperature 0 | **Calm pictures** judged on the rendered images, not the text ([ADR-011](adr/ADR-011-image-safety-vision-judge.md)); verdicts no text / nothing frightening / calm per page, card and cover; a failure is redrawn at most twice, then the story is rejected. Refused at config load if the families match |
-| Glosses | Cheap fast model | Mechanical contextual mapping |
+| Glosses (planned) | Cheap fast model | Mechanical contextual mapping; `GLOSS_MODEL` is configured but no step reads it yet |
 | Narrate | TTS model (Gemini 3.1 Flash TTS via OpenRouter, `google/gemini-3.1-flash-tts-preview`) | One house voice across all languages, pinned at the AI-366 bake-off; `pcm` output wrapped to WAV (Gemini rejects `mp3`); no timestamps (see [Narration / Audio](#narration--audio)) |
 | Illustrate | Image-capable model | Character sheet fed as reference to every page — chaining page-to-page compounds drift |
 
@@ -237,14 +242,17 @@ A `pending/` prefix in its **own private bucket** (`R2_PENDING_BUCKET`, never li
 
 The player fetches published assets bucket-direct: the web service injects `ASSET_BASE` (the bucket's public URL plus the `/published` prefix) into the shell, and the player appends `/{lang}/manifest.json`. When a `family_token` is present in the child's IndexedDB, the player additionally fetches `/{ASSET_BASE}/families/{token}/{lang}/manifest.json` and merges its stories onto the shared shelf (dedupe by id, shared wins; overlay fetch failure falls back to the shared shelf and never blocks playback). No token → zero overlay requests. The overlay fetch is anonymous and bucket-direct — the child loads no auth SDK and sets no cookies. The bucket has **public read, access logs off, and CORS scoped to the player origin** (`deploy/r2-cors.json`) — nothing about the child ever leaves the browser, so there is nothing to log. Deploy steps and verification live in [`docs/setup.md`](setup.md).
 
-### IndexedDB (the child's side)
+### Browser storage (the child's side)
 
-| Store | Contents |
-|-------|----------|
-| `progress` | Per story: current page, audio position, finished flag |
-| `settings` | Enabled languages, active language, reading mode |
-| `gate` | Failure count, lockout-until timestamp (survives reloads) |
-| `family` | The family token (created at first parent-gate entry; meaningful from slice 7) |
+Progress and settings live in localStorage; only the family token lives in IndexedDB.
+
+| Where | Key / store | Contents |
+|-------|-------------|----------|
+| localStorage | `cantastorie-shell` | Progress: the current page and the recorded branch choices (`storage.js`; everything else is rebuilt on load) |
+| localStorage | `cantastorie-lang`, `cantastorie-theme`, `cantastorie-palette`, `cantastorie-read-with-me` | Active language, light/dusk choice, palette, the read-with-me toggle |
+| IndexedDB | database `cantastorie`, store `family` | The family token, seeded by `family-adopt.js` from the signed-in parent page on the same device, and read by `main.js` for the overlay fetch |
+
+The design moves progress, settings and the gate's lockout into IndexedDB beside the token; until then localStorage is the stand-in ([system-overview.md → Current Stand-ins](system-overview.md#current-stand-ins-deliberate-tracked)). The gate's failure count and lockout are not stored anywhere yet because the gate is not built.
 
 ---
 
@@ -266,7 +274,7 @@ One module owns a single `AudioContext`. Everything else asks it to play things.
 
 - **Unlock on every activation, and on return to view.** Browsers block sound before a user gesture, and mobile browsers can drop a running context back to suspended or (Safari) `interrupted` with no event at all when the tab backgrounds or the device sleeps. `wake.js` re-arms unlock on every activation-triggering event (no `once`) and on a visible `visibilitychange`, so the shelf greeting fires once on the first successful unlock and playback recovers without a reload — the two-tap budget absorbs it (first tap wakes and greets, cover tap starts the story). A narration stall watchdog turns a frozen voice into the sleeping-bird audio-error state instead of dead air. See [ADR-010](adr/ADR-010-audio-wake-and-stall-recovery.md).
 - **Crossfades via gain nodes.** Two sources overlapping with gain ramps — works on iOS where media-element volume is read-only.
-- **Exact-position resume** from buffer offsets, persisted locally on pause and page turn (localStorage now, IndexedDB when real stories land).
+- **Exact-position resume** from buffer offsets within a session. Across a reload, the page and branch choices persist in localStorage, and the resume offer reopens the story on that page.
 - **Priority ducking**: prompt playback (nudges, confirmations) and narration never overlap.
 
 ### Whole-story prefetch
@@ -343,7 +351,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | No child accounts | The child player is account-free; a parent signs in via Clerk (ADR-003) only to request and review stories — the child path carries no Clerk script or cookie |
 | Zero unapproved assets reachable | Only the publish step writes to `published/`; the audit script (slice 5, then CI) verifies every manifest entry resolves to approved content and nothing else is listed |
 | Error reports carry no child data | Sentry is server-side only (no browser SDK); events omit request bodies, stack-frame locals, IPs, and auth/cookie headers ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)) |
-| Keys never reach the browser | The OpenRouter key (and the pipeline-only Deepgram and Mistral keys — timing pass and voice cloning respectively) exist only in pipeline/service environments |
+| Keys never reach the browser | The OpenRouter, R2 and Clerk secret keys exist only in the web service and pipeline environments (the planned Deepgram and Mistral keys will follow the same rule) |
 
 ---
 
@@ -368,7 +376,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | Slice | Player gains | Pipeline gains |
 |-------|--------------|----------------|
 | 1 — One story plays | Shelf (one cover), playback, auto page turns, end screen | CLI core: write → safety → narrate → illustrate → publish; one Italian story (no timings — slice 1 does not use them) |
-| 2 — Survives real life | Retry & offline states, IndexedDB progress, resume, goodnight sign-off | — |
+| 2 — Survives real life | Retry & offline states, local progress (localStorage), resume, goodnight sign-off | — |
 | 3 — The story branches | Choice overlay, nudge, auto-continue, branch-following (`pagesFrom`/`extendPath`), resume across branches | Branching writer (`shape`), choice-card images, spoken labels |
 | 4 — Grown-ups arrive | Gate, settings, first-run rule, language chip | Second language (Spanish); all ten prompts per enabled language |
 | 5 — The full shelf | Empty-shelf state | Batch runs; 19 stories × 5 languages; audit script |
@@ -381,7 +389,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 
 | Item | Status |
 |------|--------|
-| **Safari storage eviction** — ~7 days of non-use can wipe IndexedDB for non-installed sites (progress, settings, eventually the token) | Accepted; export/import is the designed backstop; "add to home screen" guidance is a cheap future mitigation |
+| **Safari storage eviction** — ~7 days of non-use can wipe script-writable storage (localStorage and IndexedDB) for non-installed sites: progress, settings, and the family token | Accepted; export/import is the designed backstop; "add to home screen" guidance is a cheap future mitigation |
 | **Render cold starts** — can eat the 4-second budget on first open | **Decided (slice 1): paid always-on.** A bedtime app is opened fresh daily, so the free tier's 15-min idle spin-down makes nearly every first open a ~50s cold boot. Render Starter (always-on, ~$7/mo) is set in `render.yaml`. Story assets are bucket-direct from R2, so only the static shell depends on the instance staying warm. |
 | **Kill-switch scope** (family vs. operator-global) | Deferred to Phase 2 design |
 | **Pending-bucket auth & story-request rate limiting** | Deferred to Phase 2 design |

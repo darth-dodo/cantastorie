@@ -4,7 +4,7 @@
 
 ## What This Project Is
 
-Cantastorie is one FastAPI application with three faces: a child player (vanilla ES modules + Web Audio API), a parent area (Jinja2 + HTMX + Tailwind), and a plain-Python authoring pipeline (Pydantic AI + OpenRouter). Stories are precomputed — narration, images, and glosses generated at authoring time; a played story costs zero API calls.
+Cantastorie is one FastAPI application with three faces: a child player at `/play` (vanilla ES modules + Web Audio API), a parent area and operator workshop (Jinja2 + HTMX + Tailwind), and a plain-Python authoring pipeline (Pydantic AI + OpenRouter). A static landing page sits at `/`. Stories are precomputed — narration and images generated at authoring time (a gloss step is planned for reading mode); a played story costs zero API calls.
 
 ## Commands
 
@@ -66,7 +66,7 @@ The stack is **settled** in `docs/architecture.md` and ADRs in `docs/adr/`. Read
 - **OpenRouter** — one gateway for all LLM/image/narration. No direct provider SDKs.
 - **Gemini 3.1 Flash TTS** via OpenRouter (ADR-008) for narration. Voxtral on the Mistral API is reserved for family-voice cloning (Phase 4). ElevenLabs is retired.
 - **Render hosting** via Docker (`render.yaml`).
-- **IndexedDB** for child state. No cookies, no server-side child state.
+- **Browser storage** for child state: progress and settings in localStorage, the family token in IndexedDB. No cookies, no server-side child state.
 
 Proposing a framework, bundler, direct provider SDK, or a second narration key contradicts settled decisions. To change one, edit `docs/architecture.md` and add/supersede an ADR — never install around it.
 

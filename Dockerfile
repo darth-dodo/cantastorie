@@ -8,9 +8,10 @@
 # Build:   docker build -t cantastorie .
 # Run:     docker run -p 8000:8000 cantastorie
 #
-# The app serves the player page and parent area only; it needs no API keys.
-# The pipeline's keys belong to the pipeline environment, not this container
-# (see .env.example and docs/setup.md).
+# The app serves the landing page, the child player, the parent area and the
+# workshop, and runs story generation in-process. It needs OPENROUTER_API_KEY,
+# the R2_* credentials and the Clerk settings at runtime (see .env.example and
+# docs/setup.md). The child player itself makes no keyed calls.
 
 FROM node:22-slim AS css
 
