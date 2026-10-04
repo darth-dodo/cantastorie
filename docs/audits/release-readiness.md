@@ -24,6 +24,40 @@ The engineering core is sound. The release surface is not.
 
 ---
 
+## Resolution (2026-10-03)
+
+Every Blocker and High finding has been re-checked against `origin/main` as of this date. The table below maps each to its fix; items without a PR are still open, as this audit's own per-finding notes and pre-launch checklist already record.
+
+| ID | Finding | Status |
+|----|---------|--------|
+| B1 | `pending/` falls back to the public bucket | Fixed in code (#107, AI-469); closed operationally (#116, AI-486) — `cantastorie-pending` (EU, no public URL) is created and configured in Render and GitHub Actions, and the 2026-10-03 live sweep found and deleted 1,390 public `pending/` objects; the re-run and the `main` R2 Bucket Audit job both report 0. |
+| B2 | Parents approve without ever seeing the story | Fixed in code (#111, AI-475) |
+| B3 | A live `/parent` link sits on the child's shelf | Fixed by #96 (AI-441 design overhaul); closed in the audit by #116 (AI-486) — the shelf's parent corner was removed, and `/parent` is reachable only through the settings sheet's grown-up gate, held in CI by `tests/e2e/two-tap.spec.js` and `tests/e2e/overhaul-flow.spec.js`. |
+| B4 | Images are never checked, by a rule that cannot check them | Fixed in code (#110, AI-476) |
+| B5 | `resume_on_boot()` is dead code | Fixed in code (#109, AI-477) |
+| B6 | The application has no logging | Open — in review (AI-485), not merged yet |
+| B7 | Closing the tab mid-story boots the child into a story that does not exist | Fixed in code (#103, AI-468) |
+| B8 | No timeout on any player fetch | Fixed in code (#113, AI-473) |
+| B9 | Narration dies permanently when the device sleeps | Fixed in code (#102, AI-461). Operator step pending: the real-device checklist. |
+| H1 | Staged content is keyed globally; approved bytes need not be reviewed bytes | Open |
+| H2 | `premise` is unbounded server-side | Fixed in code (#108, AI-470) |
+| H3 | Deploy pipeline is not gated, and production dependencies are unpinned | Fixed in code (#112, AI-479); the deploy hook secret is set and Auto-Deploy is off (#116, AI-486), and the first CI-triggered deploy ran 2026-10-03. Operator step pending: rehearse one rollback. |
+| H4 | No global spend ceiling | Open |
+| H5 | Manifest deletes bypass the concurrency and cache-control discipline | Fixed in code (#106, AI-474) |
+| H6 | The default language ships zero spoken prompts | Fixed in code (#115, AI-481); production prompts were published 2026-10-03 for all 8 languages (35 TTS calls), and the `--local` WAV fixtures landed in #117. Operator step pending: native review of the machine-drafted el/de/bg/ru/mr lines. |
+| H7 | The unauthenticated content proxy has no path validation and no tests | Fixed in code (#105, AI-471) |
+| H8 | Authorization denials are untested on six destructive or paid workshop routes | Fixed in code (#104, AI-472) |
+
+**Pending operator steps** (code side is done; these require a human with deploy/dashboard access):
+
+- **B9**: run the real-device checklist ([`docs/plans/2026-09-27-audio-wake.md`](../plans/2026-09-27-audio-wake.md)).
+- **H3**: rehearse one rollback (the deploy hook secret and Auto-Deploy-off are already done).
+- **H6**: get native review on the machine-drafted el/de/bg/ru/mr prompt lines (production publish and the `--local` fixtures are already done).
+
+**Updated verdict: Go pending B6 and the remaining operator steps.** All four of the original no-go grounds (B1, B2, B4, and the B7/B8/B9/H6 group) are fixed in code, and B1, B3, and H3 are now also closed operationally. B6 (no logging) is the one blocker still outstanding, in review as AI-485. H1 and H4 remain open — both are real gaps worth tracking — but this audit places them under **High**, not **Blocker**; by the audit's own severity categorization neither reopens the no-go verdict on its own.
+
+---
+
 ## Baseline health
 
 Measured directly on `722eefc`, not reported second-hand:
