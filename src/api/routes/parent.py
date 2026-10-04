@@ -347,9 +347,19 @@ async def parent_request_story(
     theme: Annotated[str, Form()],
     language: Annotated[str, Form()],
     premise: Annotated[str, Form()] = "",
+    shape: Annotated[str, Form()] = "linear",
 ) -> Response:
+    # A theme AND an optional premise, plus a shape (AI-503): the same request
+    # the operator bench makes. Shape is checked like the workshop route does.
+    if shape not in ("linear", "branching"):
+        raise HTTPException(status_code=400, detail=f"Unknown shape {shape!r}")
     try:
-        story_request = StoryRequest(theme=theme, language=language, premise=premise or None)  # type: ignore[arg-type]
+        story_request = StoryRequest(
+            theme=theme,  # type: ignore[arg-type]
+            language=language,  # type: ignore[arg-type]
+            premise=premise or None,
+            shape=shape,  # type: ignore[arg-type]
+        )
     except ValidationError as error:
         ctx_dict = await _make_ctx(
             ctx.family_token, settings, manager, form_error=story_request_error_message(error)
