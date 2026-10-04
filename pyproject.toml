@@ -1,6 +1,6 @@
 [project]
 name = "cantastorie"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bedtime stories a child steers, told aloud in the languages the family speaks; authored offline, approved by a parent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -159,3 +159,10 @@ exclude_lines = [
 ]
 fail_under = 70
 show_missing = true
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "uv"
+tag_format = "v$version"
+update_changelog_on_bump = true
+major_version_zero = true
