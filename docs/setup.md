@@ -42,7 +42,7 @@ This returns a `https://pub-<hash>.r2.dev` URL — the live bucket's is `https:/
 
 ### The private pending bucket (workshop, ADR-005)
 
-Workshop run records and staged pack artifacts live under a `pending/` prefix — and the public bucket exposes **everything** under its public URL, with no prefix scoping. Pending content therefore gets its **own private bucket** (no public URL, no custom domain, no CORS):
+Workshop run records and staged story artifacts live under a `pending/` prefix — and the public bucket exposes **everything** under its public URL, with no prefix scoping. Pending content therefore gets its **own private bucket** (no public URL, no custom domain, no CORS):
 
 ```
 wrangler r2 bucket create cantastorie-pending -J eu
@@ -62,7 +62,7 @@ Do these in order, before merging the change that enforces the separate bucket (
 
 1. Create the bucket: `wrangler r2 bucket create cantastorie-pending -J eu`.
 2. Scope the R2 API token used by Render and CI to Object Read & Write on both `cantastorie` and `cantastorie-pending`.
-3. Inventory `pending/` in the **public** bucket. To list it, run `uv run python -m src.pipeline.cli audit` locally from the enforcing branch, with the live R2 vars and `R2_PENDING_BUCKET=cantastorie-pending` in `.env`. Every `pending/` key is reported. Copy in-flight run records and staged packs to `cantastorie-pending`, then delete them from the public bucket. Use `wrangler r2 object get` / `put` / `delete … -J eu` for single keys. Treat every family token found under `pending/{token}/` as leaked, and rotate or re-provision it.
+3. Inventory `pending/` in the **public** bucket. To list it, run `uv run python -m src.pipeline.cli audit` locally from the enforcing branch, with the live R2 vars and `R2_PENDING_BUCKET=cantastorie-pending` in `.env`. Every `pending/` key is reported. Copy in-flight run records and staged stories to `cantastorie-pending`, then delete them from the public bucket. Use `wrangler r2 object get` / `put` / `delete … -J eu` for single keys. Treat every family token found under `pending/{token}/` as leaked, and rotate or re-provision it.
 4. Set `R2_PENDING_BUCKET=cantastorie-pending` in the Render dashboard.
 5. Add the GitHub Actions secret `R2_PENDING_BUCKET=cantastorie-pending`.
 6. Merge.
@@ -153,7 +153,7 @@ Without `ASSET_BASE`, the player falls back to the app's own `/static/content` m
 
 - It only affects a run genuinely interrupted mid-generation, not staged/approved/rejected work (that's durable in R2 either way).
 - H3 gates `autoDeploy` on CI passing, so most deploys stop landing mid-generation by accident — the remaining trigger is a real crash or a deliberate redeploy while a run happens to be live.
-- The product's volume is household-scale (ADR-005) — packs of 1–3 stories, runs measured in minutes, rarely concurrent — so the worst case is re-buying a handful of provider calls for one run, not a fleet of them.
+- The product's volume is household-scale (ADR-005) — one story per run (AI-480), runs measured in minutes, rarely concurrent — so the worst case is re-buying a handful of provider calls for one run, not a fleet of them.
 - A persistent disk is cheap in isolation, but it's still standing infrastructure (provisioning, attaching to the Starter instance, and — because Render disks pin a service to one instance — a constraint the app already accepts implicitly, not one this decision should be the reason to make explicit) for a cost that's already small and self-bounding.
 
 Revisit this if run volume grows enough that repeated deploys start re-buying real money, or once H3's CI-gated deploys still land mid-run often enough to be a pattern worth measuring — at that point a small disk mounted at `CONTENT_DIR` is the straightforward fix, not an architecture change.
@@ -262,7 +262,7 @@ no allow-list and no env flag — the role claim is the whole operator model.
 ### 3. Bot protection
 
 Dashboard → **Attack protection** → enable **Bot sign-up protection**.
-Sign-up now guards a wallet (pack generation costs money), so this is
+Sign-up now guards a wallet (story generation costs money), so this is
 required, not optional. Suspected bots get an interactive challenge; if we
 later build a custom sign-up form it must include the
 `<div id="clerk-captcha">` placeholder element.

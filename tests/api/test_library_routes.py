@@ -1,7 +1,7 @@
 """Behavior specs for published-story CRUD routes (operator library + parent deletes).
 
 The operator sees everything live on R2 and can delete any story, bundled
-launch content included. Parents see only their own family's approved packs
+launch content included. Parents see only their own family's approved stories
 and get the same single destructive action. All S3 traffic runs on moto;
 Clerk sessions are minted locally against a mock JWKS.
 """
@@ -23,7 +23,7 @@ from src.api.main import create_app
 from src.api.routes.workshop import get_run_manager
 from src.config import get_settings
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
+from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -113,9 +113,9 @@ def _overlay_manifest(s3: S3Client, family_token: str, language: str) -> dict[st
     return dict(json.loads(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()))
 
 
-def _approved_run(store: RunStore, family_token: str, story_ids: list[str]) -> RunRecord:
-    record = new_run(family_token, PackRequest(theme="first_snow", language="it", count=1))
-    record = record.advance("running").advance("staged").advance("approved", story_ids=story_ids)
+def _approved_run(store: RunStore, family_token: str, story_id: str) -> RunRecord:
+    record = new_run(family_token, StoryRequest(theme="first_snow", language="it"))
+    record = record.advance("running").advance("staged", story_id=story_id).advance("approved")
     store.save(record)
     return record
 
@@ -134,7 +134,9 @@ class Harness:
             }
         )
         self.store = RunStore(self.settings, client=s3)
-        self.manager = RunManager(self.store, self.settings, generate_pack=lambda request, s: [])
+        self.manager = RunManager(
+            self.store, self.settings, generate=lambda request, s: "pending/staged/stub"
+        )
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: self.settings
         app.dependency_overrides[get_run_manager] = lambda: self.manager
@@ -224,7 +226,7 @@ def test_a_parent_sees_only_own_approved_packs(tmp_path: Path, s3: S3Client) -> 
     _put_overlay_manifest(s3, FAMILY, "it", [("sea-it-1", "La barchetta")])
     _put_overlay_manifest(s3, "c" * 32, "it", [("neve-it-1", "Prima neve")])
     harness = Harness(tmp_path, s3)
-    _approved_run(harness.store, FAMILY, ["sea-it-1"])
+    _approved_run(harness.store, FAMILY, "sea-it-1")
     harness.sign_in(PARENT)
 
     page = harness.client.get("/parent/stories")
@@ -247,7 +249,7 @@ def test_a_parent_deletes_own_story_forever(tmp_path: Path, s3: S3Client) -> Non
     _put_overlay_manifest(s3, FAMILY, "it", [("sea-it-1", "La barchetta")])
     _put_overlay_assets(s3, FAMILY, "sea-it-1")
     harness = Harness(tmp_path, s3)
-    _approved_run(harness.store, FAMILY, ["sea-it-1"])
+    _approved_run(harness.store, FAMILY, "sea-it-1")
     harness.sign_in(PARENT)
 
     response = harness.client.post(

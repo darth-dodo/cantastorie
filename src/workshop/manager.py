@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from src.config import Settings
-    from src.workshop.records import PackRequest, RunRecord, RunStore
+    from src.workshop.records import RunRecord, RunStore, StoryRequest
 
 from src.workshop.records import new_run
 
@@ -97,7 +97,7 @@ def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None
     for run in runs:
         if run.state in ("queued", "running"):
             return RunCapExceeded(
-                "a story pack is already being made for this family",
+                "a story is already being made for this family",
                 active=run,
             )
     today = datetime.now(UTC).date()
@@ -109,29 +109,20 @@ def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None
         if created.date() == today:
             started_today += 1
     if started_today >= daily_cap:
-        return RunCapExceeded("that's all the story packs for today — tomorrow brings more")
+        return RunCapExceeded("that's all the stories for today — tomorrow brings more")
     return None
 
 
-def _generate_pack(request: PackRequest, settings: Settings) -> list[str]:
-    """Default generation seam: one generate_story pass per requested story.
-
-    Identical inputs share a story id via the content-addressed cache, so a
-    count above one dedupes to one story until premise variation arrives with
-    the review queue (AI-389 regenerate-with-cap).
-    """
-    staged: dict[str, str] = {}
-    for _ in range(request.count):
-        prefix = generate_story(
-            request.theme,
-            request.language,
-            settings,
-            shape=request.shape,
-            premise=request.premise,
-        )
-        story_id = prefix.rsplit("/", 1)[-1]
-        staged[story_id] = prefix
-    return list(staged.values())
+def _generate_staged_story(request: StoryRequest, settings: Settings) -> str:
+    """Default generation seam: one generate_story pass for the run's one
+    story. Returns its staged R2 prefix (pending/staged/{story-id})."""
+    return generate_story(
+        request.theme,
+        request.language,
+        settings,
+        shape=request.shape,
+        premise=request.premise,
+    )
 
 
 class RunManager:
@@ -142,11 +133,11 @@ class RunManager:
         store: RunStore,
         settings: Settings,
         *,
-        generate_pack: Callable[[PackRequest, Settings], list[str]] | None = None,
+        generate: Callable[[StoryRequest, Settings], str] | None = None,
     ) -> None:
         self._store = store
         self._settings = settings
-        self._generate_pack = generate_pack or _generate_pack
+        self._generate = generate or _generate_staged_story
         self._lock = asyncio.Lock()
         # Throttle state for reap_stale: the progress poll calls it every ~2s,
         # but a sweep only matters relative to run_stale_after_seconds. None means
@@ -157,7 +148,7 @@ class RunManager:
     def store(self) -> RunStore:
         return self._store
 
-    async def submit(self, family_token: str, request: PackRequest) -> RunRecord:
+    async def submit(self, family_token: str, request: StoryRequest) -> RunRecord:
         if family_token != OPERATOR_TOKEN:
             self._enforce_caps(family_token)
         record = new_run(family_token, request)
@@ -171,7 +162,6 @@ class RunManager:
                 "theme": request.theme,
                 "language": request.language,
                 "shape": request.shape,
-                "count": request.count,
                 "has_premise": request.premise is not None,
             },
         )
@@ -203,17 +193,15 @@ class RunManager:
             started = time.perf_counter()
             try:
                 with run_context(record.id):
-                    staged = await asyncio.to_thread(
-                        self._generate_pack, record.request, self._settings
-                    )
-                record = record.advance("staged", story_ids=[p.rsplit("/", 1)[-1] for p in staged])
+                    prefix = await asyncio.to_thread(self._generate, record.request, self._settings)
+                record = record.advance("staged", story_id=prefix.rsplit("/", 1)[-1])
                 logger.info(
                     "run_staged",
                     extra={
                         "event": "run_staged",
                         **fields,
                         "duration_ms": int((time.perf_counter() - started) * 1000),
-                        "story_ids": ",".join(record.story_ids),
+                        "story_id": record.story_id,
                     },
                 )
             except Exception as error:

@@ -43,15 +43,6 @@
             </select>
           </div>
         </div>
-        <div class="ws-field-block">
-          <span class="ws-field-label">Stories</span>
-          <div class="ws-stepper ws-field">
-            <button type="button" class="ws-stepper-btn" data-stepper-dec>−</button>
-            <span class="ws-stepper-val" data-stepper-val>1</span>
-            <button type="button" class="ws-stepper-btn" data-stepper-inc>+</button>
-            <input type="hidden" name="count" value="1" data-stepper-input />
-          </div>
-        </div>
       </div>
       <button type="submit" class="ws-pill ws-pill-primary">Generate</button>
     </form>
@@ -67,8 +58,8 @@
       {% for run in runs %}
         {% set extras = run_extras[run.id] %}
         {% set title = run.request.premise if run.request.premise else run.request.theme.replace("_", " ") %}
-        {% if run.state == "staged" and run.story_ids | length == 1 %}
-          {% set href = "/workshop/staged/" ~ run.story_ids[0] ~ "?run=" ~ run.id %}
+        {% if run.state == "staged" and run.story_id %}
+          {% set href = "/workshop/staged/" ~ run.story_id ~ "?run=" ~ run.id %}
         {% else %}
           {% set href = "/workshop/runs/" ~ run.id %}
         {% endif %}
@@ -76,7 +67,7 @@
           <a href="{{ href }}" class="ws-run-card-link">
             <div class="ws-run-card-body">
               <div class="ws-run-title">{{ title }}</div>
-              <div class="ws-run-meta">{{ run.request.language | language_name }} · {{ run.request.count }} stor{{ "y" if run.request.count == 1 else "ies" }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
+              <div class="ws-run-meta">{{ run.request.language | language_name }} · {{ extras.rel_time_str }}{% if run.state == "failed" and extras.fail_step %} · stopped at {{ extras.fail_step }}{% endif %}</div>
             </div>
             <div class="ws-chip ws-state-{{ run.state }}">{{ chip_labels.get(run.state, run.state) }}</div>
           </a>

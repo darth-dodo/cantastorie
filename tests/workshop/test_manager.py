@@ -21,12 +21,12 @@ from mypy_boto3_s3 import S3Client
 from src.config import Settings
 from src.workshop import manager as manager_module
 from src.workshop.manager import OPERATOR_TOKEN, RunCapExceeded, RunManager
-from src.workshop.records import PackRequest, RunRecord, RunStore, new_run
+from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
 
-REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+REQUEST = StoryRequest(theme="the_sleepy_sea", language="it")
 
 
 @pytest.fixture
@@ -42,19 +42,15 @@ def _settings() -> Settings:
     return Settings(_env_file=None, r2_bucket=BUCKET, r2_pending_bucket=PENDING_BUCKET)
 
 
-def _staged_pack(request: PackRequest, settings: Settings) -> list[str]:
-    """A stand-in generate seam: 'stages' one prefix per requested story."""
-    staged = []
-    for n in range(request.count):
-        story_id = f"{request.theme}-{request.language}-{n}"
-        staged.append(f"pending/staged/{story_id}")
-    return staged
+def _staged_story(request: StoryRequest, settings: Settings) -> str:
+    """A stand-in generate seam: 'stages' the one requested story."""
+    return f"pending/staged/{request.theme}-{request.language}-0"
 
 
 def test_submit_persists_a_queued_record(s3: S3Client) -> None:
     settings = _settings()
     store = RunStore(settings, client=s3)
-    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
 
     record = asyncio.run(manager.submit("family-abc", REQUEST))
 
@@ -63,31 +59,56 @@ def test_submit_persists_a_queued_record(s3: S3Client) -> None:
     assert loaded.state == "queued"
 
 
-def test_execute_lands_staged_with_the_pack_story_ids(s3: S3Client) -> None:
+def test_execute_generates_exactly_one_story_and_lands_staged_with_its_id(
+    s3: S3Client,
+) -> None:
+    """AI-480: one run is one story — the seam is called once and its prefix
+    becomes the record's story_id."""
     settings = _settings()
     store = RunStore(settings, client=s3)
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
-    request = PackRequest(theme="the_sleepy_sea", language="it", count=2)
+    calls: list[StoryRequest] = []
+
+    def generate(request: StoryRequest, st: Settings) -> str:
+        calls.append(request)
+        return f"pending/staged/{request.theme}-{request.language}-0"
+
+    manager = RunManager(store, settings, generate=generate)
 
     async def run() -> None:
-        record = await manager.submit("family-abc", request)
+        record = await manager.submit("family-abc", REQUEST)
         await manager.execute(record)
 
     asyncio.run(run())
 
+    assert calls == [REQUEST]
     [record] = store.list_runs(family_token="family-abc")
     assert record.state == "staged"
-    assert record.story_ids == ["the_sleepy_sea-it-0", "the_sleepy_sea-it-1"]
+    assert record.story_id == "the_sleepy_sea-it-0"
+
+
+def test_the_default_seam_runs_generate_story_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def fake_generate_story(theme: str, language: str, settings: Settings, **_: object) -> str:
+        calls.append((theme, language))
+        return f"pending/staged/{theme}-{language}-x"
+
+    monkeypatch.setattr(manager_module, "generate_story", fake_generate_story)
+
+    prefix = manager_module._generate_staged_story(REQUEST, _settings())
+
+    assert prefix == "pending/staged/the_sleepy_sea-it-x"
+    assert calls == [("the_sleepy_sea", "it")]
 
 
 def test_a_generation_error_lands_failed_with_the_reason(s3: S3Client) -> None:
     settings = _settings()
     store = RunStore(settings, client=s3)
 
-    def explode(req: PackRequest, st: Settings) -> list[str]:
+    def explode(req: StoryRequest, st: Settings) -> str:
         raise RuntimeError("narration provider unreachable")
 
-    manager = RunManager(store, settings, generate_pack=explode)
+    manager = RunManager(store, settings, generate=explode)
 
     async def run() -> None:
         record = await manager.submit("family-abc", REQUEST)
@@ -111,10 +132,10 @@ def test_a_generation_error_is_reported_to_sentry(
     store = RunStore(settings, client=s3)
     boom = RuntimeError("narration provider unreachable")
 
-    def explode(req: PackRequest, st: Settings) -> list[str]:
+    def explode(req: StoryRequest, st: Settings) -> str:
         raise boom
 
-    manager = RunManager(store, settings, generate_pack=explode)
+    manager = RunManager(store, settings, generate=explode)
 
     async def run() -> None:
         record = await manager.submit("family-abc", REQUEST)
@@ -130,12 +151,12 @@ def test_the_running_state_is_persisted_before_generation_starts(s3: S3Client) -
     store = RunStore(settings, client=s3)
     seen: list[str] = []
 
-    def observe(req: PackRequest, st: Settings) -> list[str]:
+    def observe(req: StoryRequest, st: Settings) -> str:
         [record] = store.list_runs(family_token="family-abc")
         seen.append(record.state)
-        return []
+        return "pending/staged/observed"
 
-    manager = RunManager(store, settings, generate_pack=observe)
+    manager = RunManager(store, settings, generate=observe)
 
     async def run() -> None:
         record = await manager.submit("family-abc", REQUEST)
@@ -153,7 +174,7 @@ def test_runs_execute_one_at_a_time(s3: S3Client) -> None:
     peak = 0
     guard = threading.Lock()
 
-    def slow_generate(req: PackRequest, st: Settings) -> list[str]:
+    def slow_generate(req: StoryRequest, st: Settings) -> str:
         nonlocal active, peak
         with guard:
             active += 1
@@ -161,9 +182,9 @@ def test_runs_execute_one_at_a_time(s3: S3Client) -> None:
         time.sleep(0.05)
         with guard:
             active -= 1
-        return []
+        return "pending/staged/slow"
 
-    manager = RunManager(store, settings, generate_pack=slow_generate)
+    manager = RunManager(store, settings, generate=slow_generate)
 
     async def run() -> None:
         # The operator is cap-exempt, so it can hold two runs at once — exactly
@@ -192,7 +213,7 @@ def test_reap_stale_fails_a_running_run_with_no_recent_heartbeat(s3: S3Client) -
     live = new_run("family-abc", REQUEST).advance("running")  # fresh — genuinely running
     store.save(zombie)
     store.save(live)
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
 
     reaped = manager.reap_stale()
 
@@ -211,7 +232,7 @@ def test_reap_stale_retires_a_queued_run_that_never_started(s3: S3Client) -> Non
     store = RunStore(settings, client=s3)
     zombie = _aged(new_run("family-abc", REQUEST), timedelta(hours=2))  # stuck in queued
     store.save(zombie)
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
 
     reaped = manager.reap_stale()
 
@@ -244,7 +265,7 @@ def test_reap_stale_sweeps_the_store_only_once_per_call(s3: S3Client) -> None:
     settings = _settings()
     store, calls = _counting_store(RunStore(settings, client=s3))
     store.save(_aged(new_run("family-abc", REQUEST).advance("running"), timedelta(hours=2)))
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
 
     manager.reap_stale()
 
@@ -257,7 +278,7 @@ def test_reap_stale_is_throttled_within_the_min_interval(s3: S3Client) -> None:
     settings = _settings()
     store, calls = _counting_store(RunStore(settings, client=s3))
     store.save(new_run("family-abc", REQUEST).advance("running"))  # fresh, not stale
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
 
     manager.reap_stale()
     manager.reap_stale()
@@ -276,7 +297,7 @@ def test_reap_stale_sweeps_again_after_the_min_interval_elapses(s3: S3Client) ->
     )
     store, calls = _counting_store(RunStore(settings, client=s3))
     store.save(new_run("family-abc", REQUEST).advance("running"))
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
 
     manager.reap_stale()
     manager.reap_stale()
@@ -293,7 +314,7 @@ def test_reap_stale_leaves_an_old_staged_run_awaiting_review(s3: S3Client) -> No
         new_run("family-xyz", REQUEST).advance("running").advance("staged"), timedelta(hours=2)
     )
     store.save(settled)
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
 
     reaped = manager.reap_stale()
 
@@ -312,7 +333,7 @@ def test_resume_on_boot_reenters_queued_and_running_runs_only(s3: S3Client) -> N
     for record in (interrupted, never_started, settled):
         store.save(record)
 
-    manager = RunManager(store, settings, generate_pack=_staged_pack)
+    manager = RunManager(store, settings, generate=_staged_story)
     resumed = asyncio.run(manager.resume_on_boot())
 
     assert {r.id for r in resumed} == {interrupted.id, never_started.id}
@@ -330,7 +351,7 @@ def test_resume_on_boot_reenters_queued_and_running_runs_only(s3: S3Client) -> N
 def test_second_active_run_is_rejected(s3: S3Client) -> None:
     settings = _settings()
     store = RunStore(settings, client=s3)
-    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
 
     first = asyncio.run(manager.submit("a" * 32, REQUEST))
     assert first.state == "queued"
@@ -338,12 +359,13 @@ def test_second_active_run_is_rejected(s3: S3Client) -> None:
         asyncio.run(manager.submit("a" * 32, REQUEST))
     assert excinfo.value.active is not None
     assert excinfo.value.active.id == first.id
+    assert str(excinfo.value) == "a story is already being made for this family"
 
 
 def test_daily_cap_rejects_fourth_submit(s3: S3Client) -> None:
     settings = _settings()  # default parent_daily_run_cap = 3
     store = RunStore(settings, client=s3)
-    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
     token = "b" * 32
     for _ in range(3):
         record = asyncio.run(manager.submit(token, REQUEST))
@@ -352,12 +374,13 @@ def test_daily_cap_rejects_fourth_submit(s3: S3Client) -> None:
     with pytest.raises(RunCapExceeded) as excinfo:
         asyncio.run(manager.submit(token, REQUEST))
     assert excinfo.value.active is None  # daily cap, not active-run
+    assert str(excinfo.value) == "that's all the stories for today — tomorrow brings more"
 
 
 def test_operator_is_exempt_from_caps(s3: S3Client) -> None:
     settings = _settings()
     store = RunStore(settings, client=s3)
-    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
     for _ in range(5):
         asyncio.run(manager.submit(OPERATOR_TOKEN, REQUEST))
     # five concurrent queued operator runs, no exception
@@ -366,7 +389,7 @@ def test_operator_is_exempt_from_caps(s3: S3Client) -> None:
 def test_other_family_runs_do_not_count(s3: S3Client) -> None:
     settings = _settings()
     store = RunStore(settings, client=s3)
-    manager = RunManager(store, settings, generate_pack=lambda req, st: [])
+    manager = RunManager(store, settings, generate=lambda req, st: "pending/staged/stub")
     asyncio.run(manager.submit("a" * 32, REQUEST))
     record = asyncio.run(manager.submit("c" * 32, REQUEST))
     assert record.state == "queued"

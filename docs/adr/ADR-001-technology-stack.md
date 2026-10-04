@@ -4,6 +4,7 @@
 **Status**: Accepted
 **Context**: Phase 1 foundation — choosing the stack for the player, the parent area, and the authoring pipeline
 **Decider(s)**: Project Owner
+**Terminology updated**: 2026-10-03 (AI-480) — "pack" wording now reads "story" / "story request"; one story per request. Decision unchanged.
 
 ---
 
@@ -49,7 +50,7 @@ Cantastorie is greenfield. There is no legacy stack to migrate; the decision is 
 
 - Full-screen, audio-driven player with crossfades, auto page turns, and picture-tap choices
 - Server-rendered parent area (gate, settings, export/import) behind a parent gate
-- An authoring pipeline that generates and validates story packs for human approval
+- An authoring pipeline that generates and validates stories for human approval
 - Per-language shelves assembled from static manifests
 
 **Non-Functional Requirements**:
@@ -244,7 +245,7 @@ The product's two defining constraints — iOS-correct gentle audio and a hard p
 ### Phase 2: Parent area and factory routes
 
 - [ ] Server-rendered parent area (gate, settings, export/import)
-- [ ] Pipeline step functions exposed behind FastAPI routes (pack requests, review queue)
+- [ ] Pipeline step functions exposed behind FastAPI routes (story requests, review queue)
 
 ### Rollback Plan
 

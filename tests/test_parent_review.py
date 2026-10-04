@@ -2,13 +2,14 @@
 
 Tests:
 (a) GET /parent/staged/{story_id} for a family's own staged run → 200 + page text + Approve/Reject
-(b) POST /parent/packs/{run_id}/approve from review redirects to /parent/stories
+(b) POST /parent/runs/{run_id}/approve from review redirects to /parent/stories
 (c) A parent cannot review another family's staged run → 404
 """
 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -21,7 +22,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_family_publisher, get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -97,10 +98,10 @@ class _FakeManager:
 
 
 def _make_staged_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="en", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="en")
     run = new_run(family_token, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=[story_id])
+    run = run.advance("staged", story_id=story_id)
     return run
 
 
@@ -147,11 +148,29 @@ def test_parent_review_page_renders(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Reject" in r.text
 
 
+def test_the_staged_review_page_never_says_pack(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AI-480 retired the pack concept; the review page must never resurrect it."""
+    run = _make_staged_run()
+    manager = _FakeManager({run.id: run})
+    client = _make_client(monkeypatch, manager)
+
+    fake_body = json.dumps(STORY_DATA).encode()
+    mock_obj = {"Body": MagicMock(read=lambda: fake_body)}
+    mock_client = MagicMock()
+    mock_client.get_object.return_value = mock_obj
+
+    with patch("src.api.routes.parent._build_client", return_value=mock_client):
+        r = client.get(f"/parent/staged/story-abc?run={run.id}")
+
+    assert r.status_code == 200
+    assert re.search(r"\bpacks?\b", r.text.lower()) is None
+
+
 # ── (b) Approve from review redirects to /parent/stories ───────────────────
 
 
 def test_parent_review_approve_redirects(monkeypatch: pytest.MonkeyPatch) -> None:
-    """POST /parent/packs/{run_id}/approve from review page redirects to /parent/stories."""
+    """POST /parent/runs/{run_id}/approve from review page redirects to /parent/stories."""
     run = _make_staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
@@ -162,7 +181,7 @@ def test_parent_review_approve_redirects(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with patch("src.api.routes.parent._build_client", return_value=mock_client):
         client.get(f"/parent/staged/story-abc?run={run.id}")  # the review (B2)
-        r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)
+        r = client.post(f"/parent/runs/{run.id}/approve", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/parent/stories"
 

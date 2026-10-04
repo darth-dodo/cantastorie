@@ -15,7 +15,7 @@ from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
 from src.workshop.manager import RunCapExceeded
-from src.workshop.records import PackRequest, new_run
+from src.workshop.records import StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -94,17 +94,17 @@ def test_four_minute_note_before_button(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_cap_state_dims_form(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When cap_message is set (via POST to /parent/packs), the packs page shows the cap message."""
-    active = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    """When cap_message is set (via POST to /parent/runs), the Being made page shows the cap message."""
+    active = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     running = active.advance("running")
     manager = _FakeManager(
-        raise_cap=RunCapExceeded("a story pack is already being made", active=running)
+        raise_cap=RunCapExceeded("a story is already being made", active=running)
     )
     client = _make_client(monkeypatch, manager)
-    # POST triggers the cap branch which re-renders packs.html with cap_message set
+    # POST triggers the cap branch which re-renders being_made.html with cap_message set
     r = client.post(
-        "/parent/packs",
-        data={"theme": "the_sleepy_sea", "language": "it", "count": "1"},
+        "/parent/runs",
+        data={"theme": "the_sleepy_sea", "language": "it"},
     )
     assert r.status_code == 200
     assert "already being made" in r.text  # cap message shown
@@ -119,7 +119,7 @@ def test_premise_over_the_bound_is_rejected_with_a_clear_message(
     client = _make_client(monkeypatch, manager)
 
     r = client.post(
-        "/parent/packs",
+        "/parent/runs",
         data={"theme": "the_sleepy_sea", "language": "it", "premise": "x" * 301},
     )
 
@@ -133,7 +133,7 @@ def test_premise_at_the_bound_is_accepted(monkeypatch: pytest.MonkeyPatch) -> No
     client = _make_client(monkeypatch, manager)
 
     r = client.post(
-        "/parent/packs",
+        "/parent/runs",
         data={"theme": "the_sleepy_sea", "language": "it", "premise": "x" * 300},
         follow_redirects=False,
     )

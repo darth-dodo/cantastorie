@@ -2,33 +2,6 @@
 (function () {
   "use strict";
 
-  // ── Stepper ─────────────────────────────────────────────────────────
-  function initStepper(el) {
-    var dec = el.querySelector("[data-stepper-dec]");
-    var inc = el.querySelector("[data-stepper-inc]");
-    var val = el.querySelector("[data-stepper-val]");
-    var inp = el.querySelector("[data-stepper-input]");
-    if (!dec || !inc || !val || !inp) return;
-    var count = parseInt(inp.value, 10) || 1;
-
-    function update() {
-      val.textContent = count;
-      inp.value = count;
-      dec.style.opacity = count <= 1 ? "0.35" : "1";
-      inc.style.opacity = count >= 3 ? "0.35" : "1";
-    }
-    update();
-
-    dec.addEventListener("click", function (e) {
-      e.preventDefault();
-      if (count > 1) { count--; update(); }
-    });
-    inc.addEventListener("click", function (e) {
-      e.preventDefault();
-      if (count < 3) { count++; update(); }
-    });
-  }
-
   // ── Armed delete ──────────────────────────────────────────────────────
   // First tap arms; second tap fires the HTMX request.
   // Outside tap or 3s timeout disarms.
@@ -116,9 +89,6 @@
   // ── Init ───────────────────────────────────────────────────────────────
   function initAll(root) {
     root = root || document;
-    root.querySelectorAll(".ws-stepper").forEach(function (el) {
-      initStepper(el);
-    });
     root.querySelectorAll("[data-audio-pill]").forEach(initAudioPill);
   }
 

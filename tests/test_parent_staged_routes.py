@@ -10,7 +10,7 @@ import pytest
 
 import src.api.routes.parent as parent_module
 from src.pipeline.publish import PublishedStory
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.test_parent_redesign import (
     VALID_TOKEN,
     _FakeManager,
@@ -23,8 +23,8 @@ OTHER_TOKEN = "ffffffffffffffffffffffffffffffff"  # pragma: allowlist secret
 
 
 def _staged_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
-    run = new_run(family_token, PackRequest(theme="the_sleepy_sea", language="it", count=1))
-    return run.advance("running").advance("staged", story_ids=[story_id])
+    run = new_run(family_token, StoryRequest(theme="the_sleepy_sea", language="it"))
+    return run.advance("running").advance("staged", story_id=story_id)
 
 
 class _FakeS3:
@@ -132,7 +132,7 @@ def test_reject_own_staged_run(monkeypatch: pytest.MonkeyPatch) -> None:
     run = _staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
-    r = client.post(f"/parent/packs/{run.id}/reject", follow_redirects=False)
+    r = client.post(f"/parent/runs/{run.id}/reject", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/parent"
     assert manager.store.load(VALID_TOKEN, run.id).state == "rejected"
@@ -142,14 +142,14 @@ def test_reject_another_familys_run_is_404(monkeypatch: pytest.MonkeyPatch) -> N
     theirs = _staged_run(family_token=OTHER_TOKEN)
     manager = _FakeManager({theirs.id: theirs})
     client = _make_client(monkeypatch, manager)
-    assert client.post(f"/parent/packs/{theirs.id}/reject").status_code == 404
+    assert client.post(f"/parent/runs/{theirs.id}/reject").status_code == 404
     assert manager.store._runs[theirs.id].state == "staged"
 
 
 def test_reject_a_run_that_is_not_staged_is_400(monkeypatch: pytest.MonkeyPatch) -> None:
     run = _make_queued_run()
     client = _make_client(monkeypatch, _FakeManager({run.id: run}))
-    assert client.post(f"/parent/packs/{run.id}/reject").status_code == 400
+    assert client.post(f"/parent/runs/{run.id}/reject").status_code == 400
 
 
 # ── Being-made row: polls while live, stops once settled ─────────────────────
@@ -167,12 +167,12 @@ def test_reject_a_run_that_is_not_staged_is_400(monkeypatch: pytest.MonkeyPatch)
 def test_run_row_polls_only_while_live(
     monkeypatch: pytest.MonkeyPatch, s3: _FakeS3, states: tuple[str, ...], polls: bool
 ) -> None:
-    run = new_run(VALID_TOKEN, PackRequest(theme="the_sleepy_sea", language="it", count=1))
+    run = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
     for state in states:
-        run = run.advance(state, story_ids=[] if state == "staged" else None)  # type: ignore[arg-type]
+        run = run.advance(state)  # type: ignore[arg-type]
     monkeypatch.setattr(parent_module, "_checkpointed_steps", lambda record, settings: set())
     client = _make_client(monkeypatch, _FakeManager({run.id: run}))
-    text = client.get(f"/parent/packs/{run.id}/progress").text
+    text = client.get(f"/parent/runs/{run.id}/progress").text
     assert ('hx-trigger="every 2s"' in text) is polls
 
 

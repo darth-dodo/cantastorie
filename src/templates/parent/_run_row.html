@@ -53,11 +53,9 @@
   {% if record.state == "staged" %}
     {# Approving happens only on the review page, after every page is seen (B2).
        A story whose pages can't be read offers nothing to approve. #}
-    {% set readable = staged_stories | selectattr("page_count") | list %}
-    {% for story in readable %}
-      <a href="/parent/staged/{{ story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm ws-run-row-action" data-testid="parent-review-link">Review {{ story.page_count }} page{{ "" if story.page_count == 1 else "s" }}</a>
-    {% endfor %}
-    {% if not staged_stories or readable | length < staged_stories | length %}
+    {% if staged_story and staged_story.page_count %}
+      <a href="/parent/staged/{{ staged_story.id }}?run={{ record.id }}" class="ws-pill ws-pill-confirm ws-run-row-action" data-testid="parent-review-link">Review {{ staged_story.page_count }} page{{ "" if staged_story.page_count == 1 else "s" }}</a>
+    {% else %}
       <div class="ws-run-row-beads" data-testid="parent-review-missing">
         <span class="ws-run-row-step">we couldn't open this story's pages · nothing was published</span>
       </div>

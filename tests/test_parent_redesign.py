@@ -15,7 +15,7 @@ from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
 from src.pipeline.publish import PublishedStory
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -72,15 +72,15 @@ class _FakeManager:
 
 
 def _make_queued_run(family_token: str = VALID_TOKEN) -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="it")
     return new_run(family_token, req)
 
 
 def _make_approved_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(family_token, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=[story_id])
+    run = run.advance("staged", story_id=story_id)
     run = run.advance("approved")
     return run
 
@@ -177,14 +177,14 @@ def test_make_route_has_four_minute_note(monkeypatch: pytest.MonkeyPatch) -> Non
 # ── Being made tab no longer contains the form ────────────────────────────────
 
 
-def test_packs_tab_does_not_have_make_form(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_being_made_tab_does_not_have_make_form(monkeypatch: pytest.MonkeyPatch) -> None:
     """GET /parent (Being made tab) does NOT contain the make-a-story form."""
     manager = _FakeManager({})
     client = _make_client(monkeypatch, manager)
     r = client.get("/parent")
     assert r.status_code == 200
     # The form's action target must NOT appear in the Being Made tab
-    assert 'action="/parent/packs"' not in r.text
+    assert 'action="/parent/runs"' not in r.text
     # The custom premise field must NOT appear here
     assert "data-custom-premise" not in r.text
 

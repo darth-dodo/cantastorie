@@ -43,7 +43,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
 from src.config import get_settings
 from src.workshop.manager import RunManager
-from src.workshop.records import PackRequest, RunStore, new_run
+from src.workshop.records import RunStore, StoryRequest, new_run
 
 CALL_MS = 30
 HANDSHAKE_MS = 60
@@ -134,20 +134,20 @@ def _seed() -> dict[str, str]:
                 OBJECTS[key] = b"x"
     # 30 families, each with an overlay in 2 languages x 3 stories + 3 runs.
     tokens = [f"{i:032x}" for i in range(1, 30)] + [FAMILY]
-    request = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    request = StoryRequest(theme="the_sleepy_sea", language="it")
     ids: dict[str, str] = {}
     for token in tokens:
         for lang in ("it", "en"):
-            story_ids = [f"{token[:6]}-{lang}-{i}" for i in range(3)]
+            shelf_ids = [f"{token[:6]}-{lang}-{i}" for i in range(3)]
             root = f"published/families/{token}/{lang}"
-            OBJECTS[f"{root}/manifest.json"] = manifest(story_ids)
-            for s in story_ids:
+            OBJECTS[f"{root}/manifest.json"] = manifest(shelf_ids)
+            for s in shelf_ids:
                 for key in story_files(root, s):
                     OBJECTS[key] = b"x"
         for n in range(3):
             run = new_run(token, request)
             if n == 0:
-                run = run.advance("running").advance("staged", story_ids=[f"staged-{token[:6]}"])
+                run = run.advance("running").advance("staged", story_id=f"staged-{token[:6]}")
                 for key in story_files("pending/staged", f"staged-{token[:6]}"):
                     OBJECTS[key] = b"x"
                 OBJECTS[f"pending/staged/staged-{token[:6]}/story.json"] = json.dumps(
@@ -156,7 +156,7 @@ def _seed() -> dict[str, str]:
                 if token == FAMILY:
                     ids["staged_run"] = run.id
             elif n == 1:
-                run = run.advance("running").advance("staged", story_ids=[]).advance("approved")
+                run = run.advance("running").advance("staged").advance("approved")
             OBJECTS[f"pending/{token}/runs/{run.id}.json"] = run.model_dump_json().encode()
     return ids
 
@@ -192,7 +192,7 @@ def main() -> None:
         ("parent", parent, "/parent"),
         ("parent", parent, "/parent/stories"),
         ("parent", parent, "/parent/make"),
-        ("parent", parent, f"/parent/packs/{ids['staged_run']}/progress"),
+        ("parent", parent, f"/parent/runs/{ids['staged_run']}/progress"),
         ("operator", operator, "/workshop"),
         ("operator", operator, "/workshop/library"),
     ]

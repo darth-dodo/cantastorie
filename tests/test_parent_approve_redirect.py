@@ -1,4 +1,4 @@
-"""Test that approving a pack redirects to /parent/stories (AI-445)."""
+"""Test that approving a story redirects to /parent/stories (AI-445)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.routes.parent import get_family_publisher, get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -67,10 +67,10 @@ class _FakeManager:
 
 
 def _make_staged_run() -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(VALID_TOKEN, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=["story-abc"])
+    run = run.advance("staged", story_id="story-abc")
     return run
 
 
@@ -94,10 +94,10 @@ def _make_client(
 
 
 def test_approve_lands_on_your_stories(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Approving a staged pack must redirect to /parent/stories, not /parent."""
-    run = _make_staged_run().mark_reviewed("story-abc")  # approve follows review (B2)
+    """Approving a staged story must redirect to /parent/stories, not /parent."""
+    run = _make_staged_run().mark_reviewed()  # approve follows review (B2)
     monkeypatch.setattr(parent_module, "_staged_story_exists", lambda settings, story_id: True)
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)
-    r = client.post(f"/parent/packs/{run.id}/approve", follow_redirects=False)
+    r = client.post(f"/parent/runs/{run.id}/approve", follow_redirects=False)
     assert r.headers["location"] == "/parent/stories"

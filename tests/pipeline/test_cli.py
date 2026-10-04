@@ -116,7 +116,7 @@ def test_generate_rejects_a_theme_outside_the_locked_set() -> None:
 
 
 def test_generate_rejects_a_premise_over_the_bound() -> None:
-    """AI-470: the same 300-character bound as PackRequest applies here — the
+    """AI-470: the same 300-character bound as StoryRequest applies here — the
     CLI is another way to reach the writer prompt, not a separate rule."""
     result = runner.invoke(
         app,

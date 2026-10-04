@@ -1,7 +1,10 @@
-"""Parent-area API routes (AI-410, ADR-003).
+"""Parent-area routes (AI-410, ADR-003): the /parent pages and their actions.
 
-Only the provision endpoint lives here for now; the /parent pages (sign-in,
-pack request form, my-packs) arrive in the next step of the design.
+Sign-in and provisioning, Your stories, the make-a-story form, and Being made.
+Each run a family requests makes one story (AI-480): POST /parent/runs starts
+it, /parent/runs/{id}/progress polls its row, and approve/reject settle it
+after the review page at /parent/staged/{story_id}. Every read and write is
+scoped to the session's family token.
 """
 
 from __future__ import annotations
@@ -31,7 +34,7 @@ from src.api.routes._nav import fapi_host, home_path
 from src.api.routes._templates import templates
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
-    _staged_story_summaries,
+    _staged_story_summary,
     get_run_manager,
 )
 from src.config import Settings, get_settings
@@ -50,9 +53,9 @@ from src.workshop.manager import RunCapExceeded, RunManager, blocking_cap
 from src.workshop.records import (
     ConcurrentModificationError,
     InvalidTransition,
-    PackRequest,
     RunRecord,
-    pack_request_error_message,
+    StoryRequest,
+    story_request_error_message,
 )
 
 if TYPE_CHECKING:
@@ -64,10 +67,9 @@ router = APIRouter(prefix="/parent")
 def _published_at(runs: list[RunRecord]) -> dict[str, datetime]:
     """The family's published story ids, each with its approval (publish) time."""
     return {
-        story_id: record.updated_at
+        record.story_id: record.updated_at
         for record in runs
-        if record.state == "approved"
-        for story_id in record.story_ids
+        if record.state == "approved" and record.story_id is not None
     }
 
 
@@ -194,11 +196,11 @@ async def parent_home(
         # First sign-in: page JS POSTs /parent/api/provision then reloads.
         context["onboarding"] = True
         return templates.TemplateResponse(request, "auth/sign_in.html", context)
-    # Provisioned parents get the packs page with their own runs, newest first.
+    # Provisioned parents land on Being made with their own runs, newest first.
     view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
     return templates.TemplateResponse(
         request,
-        "parent/packs.html",
+        "parent/being_made.html",
         {
             **context,
             "family_token": ctx.family_token,  # seeds same-device overlay adoption
@@ -329,8 +331,8 @@ async def delete_parent_story(
     return RedirectResponse("/parent/stories", status_code=303)
 
 
-@router.post("/packs")
-async def request_pack(
+@router.post("/runs")
+async def parent_request_story(
     request: Request,
     ctx: Annotated[ParentContext, Depends(require_parent)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -340,17 +342,15 @@ async def request_pack(
     language: Annotated[str, Form()],
     premise: Annotated[str, Form()] = "",
 ) -> Response:
-    # One story at a time: the parent surface never batches a pack, so count is
-    # fixed at 1 here rather than read from the form.
     try:
-        pack = PackRequest(theme=theme, language=language, count=1, premise=premise or None)  # type: ignore[arg-type]
+        story_request = StoryRequest(theme=theme, language=language, premise=premise or None)  # type: ignore[arg-type]
     except ValidationError as error:
         ctx_dict = await _make_ctx(
-            ctx.family_token, settings, manager, form_error=pack_request_error_message(error)
+            ctx.family_token, settings, manager, form_error=story_request_error_message(error)
         )
         return templates.TemplateResponse(request, "parent/make.html", ctx_dict, status_code=422)
     try:
-        record = await manager.submit(ctx.family_token, pack)
+        record = await manager.submit(ctx.family_token, story_request)
     except RunCapExceeded as cap:
         view = await run_in_threadpool(_family_view, manager, settings, ctx.family_token)
         context: dict[str, object] = {
@@ -364,13 +364,13 @@ async def request_pack(
             "inflight_count": view.inflight_count,
             "owned_count": len(view.owned),
         }
-        return templates.TemplateResponse(request, "parent/packs.html", context)
+        return templates.TemplateResponse(request, "parent/being_made.html", context)
     background.add_task(manager.execute, record)
     return RedirectResponse("/parent", status_code=303)
 
 
-@router.get("/packs/{run_id}/progress", response_class=HTMLResponse)
-async def pack_progress(
+@router.get("/runs/{run_id}/progress", response_class=HTMLResponse)
+async def parent_run_progress(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
@@ -386,10 +386,10 @@ async def pack_progress(
     record = await run_in_threadpool(read_record)
     if record is None:
         raise HTTPException(status_code=404)
-    staged_stories = (
-        await run_in_threadpool(_staged_story_summaries, record.story_ids, settings)
+    staged_story = (
+        await run_in_threadpool(_staged_story_summary, record.story_id, settings)
         if record.state == "staged"
-        else []
+        else None
     )
     return templates.TemplateResponse(
         request,
@@ -398,14 +398,14 @@ async def pack_progress(
             "record": record,
             "live": ["queued", "running"],
             "steps": _checkpointed_steps(record, settings),
-            "staged_stories": staged_stories,
-            "base_url": "/parent/packs",
+            "staged_story": staged_story,
+            "base_url": "/parent/runs",
         },
     )
 
 
-@router.post("/packs/{run_id}/approve")
-async def approve_pack(
+@router.post("/runs/{run_id}/approve")
+async def parent_approve_run(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
@@ -413,7 +413,7 @@ async def approve_pack(
     manager: Manager,
     publisher: Annotated[FamilyPublisher, Depends(get_family_publisher)],
 ) -> Response:
-    """A family approves its own staged pack → publish to its private overlay.
+    """A family approves its own staged story → publish to its private overlay.
 
     Tenancy: the run is loaded family-scoped, so another family's run 404s.
     There is no shared shelf here — every story lands under the family's own
@@ -427,17 +427,16 @@ async def approve_pack(
             status_code=400,
             detail=f"Run is in {record.state} state, must be staged to approve",
         )
-    # No approve without review (B2): every staged story must still exist and
+    # No approve without review (B2): the run's story must still exist and
     # have been opened on the review page, which renders all of its pages.
+    story_id = record.story_id
+    if story_id is None:
+        raise HTTPException(status_code=409, detail="The run has no staged story to publish")
     if not record.fully_reviewed:
-        raise HTTPException(status_code=409, detail="Review every story before approving")
-    present = await run_in_threadpool(
-        lambda: all(_staged_story_exists(settings, s) for s in record.story_ids)
-    )
-    if not present:
-        raise HTTPException(status_code=409, detail="A staged story is missing")
-    for story_id in record.story_ids:
-        publisher(story_id, ctx.family_token)
+        raise HTTPException(status_code=409, detail="Review the story before approving")
+    if not await run_in_threadpool(_staged_story_exists, settings, story_id):
+        raise HTTPException(status_code=409, detail="The staged story is missing")
+    publisher(story_id, ctx.family_token)
     manager.store.save(record.advance("approved"))
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
@@ -455,19 +454,20 @@ def _staged_story_exists(settings: Settings, story_id: str) -> bool:
 
 
 def _record_review(manager: RunManager, record: RunRecord, story_id: str) -> RunRecord:
-    """The parent has been served this staged story's review page — every page,
-    picture and sound on one screen — so it counts as reviewed (B2). Blocking."""
-    if record.state != "staged" or story_id in record.reviewed_story_ids:
+    """The parent has been served the run's staged story on its review page —
+    every page, picture and sound on one screen — so the run counts as
+    reviewed (B2). Blocking."""
+    if record.state != "staged" or record.story_id != story_id or record.reviewed:
         return record
     try:
-        reviewed = record.mark_reviewed(story_id)
+        reviewed = record.mark_reviewed()
         manager.store.save(reviewed)
     except ConcurrentModificationError:
         # A concurrent write (another tab's review) moved the record on: redo it once.
         fresh = manager.store.load(record.family_token, record.id)
         if fresh is None or fresh.state != "staged":
             return fresh or record
-        reviewed = fresh.mark_reviewed(story_id)
+        reviewed = fresh.mark_reviewed()
         manager.store.save(reviewed)
     return reviewed
 
@@ -492,12 +492,12 @@ async def parent_staged_story(
         record = None
         if run_id:
             candidate = manager.store.load(ctx.family_token, run_id)
-            if candidate and story_id in candidate.story_ids:
+            if candidate and candidate.story_id == story_id:
                 record = candidate
         if record is None:
             # Fall back: scan this family's runs only.
             for candidate in manager.store.list_runs(family_token=ctx.family_token):
-                if story_id in candidate.story_ids:
+                if candidate.story_id == story_id:
                     record = candidate
                     break
         if record is None:
@@ -525,7 +525,7 @@ async def parent_staged_story(
             "publishable_key": settings.clerk_publishable_key.get_secret_value(),
             "story": story,
             "record": record,
-            "base_url": "/parent/packs",
+            "base_url": "/parent/runs",
         },
     )
 
@@ -552,10 +552,10 @@ async def parent_staged_asset(
         # Tenancy: load() and list_runs() are both scoped to the session's family.
         if run:
             record = manager.store.load(ctx.family_token, run)
-            owned = record is not None and story_id in record.story_ids
+            owned = record is not None and record.story_id == story_id
         else:
             owned = any(
-                story_id in r.story_ids
+                r.story_id == story_id
                 for r in manager.store.list_runs(family_token=ctx.family_token)
             )
         if not owned:
@@ -580,14 +580,14 @@ async def parent_staged_asset(
     )
 
 
-@router.post("/packs/{run_id}/reject")
-async def reject_pack(
+@router.post("/runs/{run_id}/reject")
+async def parent_reject_run(
     request: Request,
     run_id: str,
     ctx: Annotated[ParentContext, Depends(require_parent)],
     manager: Manager,
 ) -> Response:
-    """A family rejects its own staged pack."""
+    """A family rejects its own staged story."""
     record = manager.store.load(ctx.family_token, run_id)
     if record is None:
         raise HTTPException(status_code=404)

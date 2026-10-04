@@ -97,7 +97,7 @@ def test_write_surfaces_do_not_exist_in_a_preview(preview_client: TestClient, pa
 
 
 def test_preview_posts_cannot_start_or_publish_runs(preview_client: TestClient) -> None:
-    assert preview_client.post("/parent/packs", data={"theme": "the_sleepy_sea"}).status_code == 404
+    assert preview_client.post("/parent/runs", data={"theme": "the_sleepy_sea"}).status_code == 404
     assert (
         preview_client.post("/workshop/runs", data={"theme": "the_sleepy_sea"}).status_code == 404
     )

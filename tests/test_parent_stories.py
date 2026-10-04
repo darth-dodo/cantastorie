@@ -15,7 +15,7 @@ from src.api.routes.parent import get_run_manager
 from src.api.routes.parent import router as parent_router
 from src.config import get_settings
 from src.pipeline.publish import PublishedStory
-from src.workshop.records import PackRequest, RunRecord, new_run
+from src.workshop.records import RunRecord, StoryRequest, new_run
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -69,18 +69,18 @@ class _FakeManager:
 
 
 def _make_staged_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(family_token, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=[story_id])
+    run = run.advance("staged", story_id=story_id)
     return run
 
 
 def _make_approved_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") -> RunRecord:
-    req = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+    req = StoryRequest(theme="the_sleepy_sea", language="it")
     run = new_run(family_token, req)
     run = run.advance("running")
-    run = run.advance("staged", story_ids=[story_id])
+    run = run.advance("staged", story_id=story_id)
     run = run.advance("approved")
     return run
 
@@ -126,7 +126,7 @@ def _make_client(
 
 
 def test_staged_label_reads_needs_your_eyes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The packs page must show 'needs your eyes' for staged runs (not 'staged — review')."""
+    """The Being made page must show 'needs your eyes' for staged runs (not 'staged — review')."""
     run = _make_staged_run()
     manager = _FakeManager({run.id: run})
     client = _make_client(monkeypatch, manager)

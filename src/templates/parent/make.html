@@ -15,7 +15,7 @@
   {# ── Form card (dimmed and inert while a cap blocks a new run) ───────── #}
   <div class="ws-card ws-start-card{% if cap_message %} ws-form--capped{% endif %}">
     {% if form_error %}<p class="ws-login-error" data-form-error>{{ form_error }}</p>{% endif %}
-    <form method="post" action="/parent/packs" class="ws-run-form">
+    <form method="post" action="/parent/runs" class="ws-run-form">
       <div class="ws-field-grid">
         <div class="ws-field-block ws-field-full">
           <span class="ws-field-label">Theme</span>

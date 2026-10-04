@@ -1,4 +1,4 @@
-"""Workshop run records (AI-387, ADR-005): the durable trace of a pack request.
+"""Workshop run records (AI-387, ADR-005): the durable trace of a story request.
 
 A run record follows queued → running → staged → approved | rejected, with a
 retryable failed off running. Records persist to R2 under
@@ -17,11 +17,11 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import boto3
 from botocore.exceptions import ClientError
-from pydantic import BaseModel, Field, PrivateAttr, ValidationError
+from pydantic import BaseModel, Field, PrivateAttr, ValidationError, model_validator
 
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.publish import CLIENT_CONFIG, STAGED_PREFIX, child_prefixes, parallel_map
@@ -32,6 +32,14 @@ if TYPE_CHECKING:
     from src.config import Settings
 
 PENDING_PREFIX = "pending"
+
+# 2 since AI-480: one story_id and a reviewed flag. Schema 1 held a list of
+# story ids and a list of reviewed ids under these keys; _upgrade_v1 reads them.
+SCHEMA_VERSION = 2
+V1_STORY_IDS_KEY = "story_ids"
+V1_REVIEWED_IDS_KEY = "reviewed_story_ids"
+
+logger = logging.getLogger(__name__)
 
 RunState = Literal["queued", "running", "staged", "approved", "rejected", "failed"]
 
@@ -52,6 +60,18 @@ _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 
 
+def _as_legacy_id_list(value: Any, key: str) -> list[str]:
+    """A v1 record's `story_ids`/`reviewed_story_ids` must be a list of
+    strings (or absent/empty). A string is iterable too — list("abc") would
+    silently yield ["a", "b", "c"] and load as story_id "a" — so it's rejected
+    alongside non-iterables like an int."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{key} must be a list of strings, got {value!r}")
+    return value
+
+
 class InvalidTransition(Exception):
     """The lifecycle does not allow this state change."""
 
@@ -60,22 +80,23 @@ class ConcurrentModificationError(Exception):
     """A stale run record cannot overwrite a newer persisted version."""
 
 
-class PackRequest(BaseModel):
-    """What a parent (or the operator) asked for: theme + language + count.
+class StoryRequest(BaseModel):
+    """What a parent (or the operator) asked for: one story, by theme + language.
 
     Shape defaults to linear so records persisted before branching arrived
-    deserialize unchanged.
+    deserialize unchanged. Records saved before AI-480 also carry a `count`;
+    pydantic's default extra="ignore" drops it on load, so the next save
+    writes it no more.
     """
 
     theme: Theme
     language: Language
-    count: int = Field(ge=1, le=3)
     premise: str | None = Field(default=None, max_length=PREMISE_MAX_LENGTH)
     shape: Literal["linear", "branching"] = "linear"
 
 
-def pack_request_error_message(error: ValidationError) -> str:
-    """A short, human sentence for a PackRequest validation failure — never the
+def story_request_error_message(error: ValidationError) -> str:
+    """A short, human sentence for a StoryRequest validation failure — never the
     raw pydantic error, which a plain form POST would otherwise render as
     unstyled JSON in the browser."""
     for err in error.errors():
@@ -85,29 +106,57 @@ def pack_request_error_message(error: ValidationError) -> str:
 
 
 class RunRecord(BaseModel):
-    """One pack request's durable state. Records are values: advance() returns
+    """One story request's durable state. Records are values: advance() returns
     a copy, so a stale in-memory reference never mutates underfoot."""
 
-    schema_version: int = 1
+    schema_version: int = SCHEMA_VERSION
     id: str
     family_token: str
-    request: PackRequest
+    request: StoryRequest
     state: RunState = "queued"
-    story_ids: list[str] = Field(default_factory=list)
-    # The staged stories a parent has opened on the review page, which renders
-    # every page (B2). Records saved before review tracking have none: unreviewed.
-    reviewed_story_ids: list[str] = Field(default_factory=list)
+    # The one story this run staged; None until it stages.
+    story_id: str | None = None
+    # The parent opened the staged story's review page, which renders every
+    # page (B2). Records saved before review tracking load unreviewed.
+    reviewed: bool = False
     error: str | None = None
     created_at: datetime
     updated_at: datetime
     _etag: str | None = PrivateAttr(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_v1(cls, data: Any) -> Any:
+        """Read a schema-1 record (a list of story ids) as schema 2 (one story_id).
+
+        Approved and rejected records are never saved again, so this shim stays
+        for good. A v1 run with several stories keeps its first and logs the
+        rest: they stay staged in R2, but no record points at them any more.
+        """
+        if not isinstance(data, dict) or (
+            V1_STORY_IDS_KEY not in data and V1_REVIEWED_IDS_KEY not in data
+        ):
+            return data
+        data = dict(data)
+        legacy_ids = _as_legacy_id_list(data.pop(V1_STORY_IDS_KEY, None), V1_STORY_IDS_KEY)
+        reviewed_ids = _as_legacy_id_list(data.pop(V1_REVIEWED_IDS_KEY, None), V1_REVIEWED_IDS_KEY)
+        story_id = legacy_ids[0] if legacy_ids else None
+        if len(legacy_ids) > 1:
+            logger.warning(
+                f"Run record {data.get('id')} held {len(legacy_ids)} stories; "
+                f"keeping {story_id}, dropping {legacy_ids[1:]}"
+            )
+        data.setdefault("story_id", story_id)
+        data.setdefault("reviewed", story_id is not None and story_id in reviewed_ids)
+        data["schema_version"] = SCHEMA_VERSION
+        return data
 
     def advance(
         self,
         state: RunState,
         *,
         error: str | None = None,
-        story_ids: list[str] | None = None,
+        story_id: str | None = None,
     ) -> RunRecord:
         if state not in _TRANSITIONS[self.state]:
             raise InvalidTransition(f"{self.state} → {state} is not in the run lifecycle")
@@ -116,29 +165,25 @@ class RunRecord(BaseModel):
                 "state": state,
                 # A retry starts clean; a failure carries its reason.
                 "error": error if state == "failed" else None,
-                "story_ids": self.story_ids if story_ids is None else story_ids,
-                # Freshly staged stories have not been seen yet.
-                "reviewed_story_ids": [] if state == "staged" else self.reviewed_story_ids,
+                "story_id": self.story_id if story_id is None else story_id,
+                # A freshly staged story has not been seen yet.
+                "reviewed": False if state == "staged" else self.reviewed,
                 "updated_at": datetime.now(UTC),
             }
         )
 
     @property
-    def unreviewed_story_ids(self) -> list[str]:
-        return [s for s in self.story_ids if s not in self.reviewed_story_ids]
-
-    @property
     def fully_reviewed(self) -> bool:
-        """Every staged story was opened for review — and there is at least one."""
-        return bool(self.story_ids) and not self.unreviewed_story_ids
+        """The run's story was opened for review — and there is a story."""
+        return self.story_id is not None and self.reviewed
 
-    def mark_reviewed(self, story_id: str) -> RunRecord:
-        if story_id in self.reviewed_story_ids:
+    def mark_reviewed(self) -> RunRecord:
+        if self.reviewed:
             return self
-        return self.model_copy(update={"reviewed_story_ids": [*self.reviewed_story_ids, story_id]})
+        return self.model_copy(update={"reviewed": True})
 
 
-def new_run(family_token: str, request: PackRequest) -> RunRecord:
+def new_run(family_token: str, request: StoryRequest) -> RunRecord:
     now = datetime.now(UTC)
     return RunRecord(
         id=uuid.uuid4().hex,
@@ -255,7 +300,7 @@ class RunStore:
         try:
             record = RunRecord.model_validate(json.loads(response["Body"].read()))
         except (json.JSONDecodeError, ValidationError) as error:
-            logging.getLogger(__name__).warning(f"Skipping malformed run record at {key}: {error}")
+            logger.warning(f"Skipping malformed run record at {key}: {error}")
             return None
         record._etag = response.get("ETag")
         return record

@@ -48,10 +48,10 @@ from src.pipeline.publish import (
 from src.workshop.manager import RunManager
 from src.workshop.records import (
     InvalidTransition,
-    PackRequest,
     RunRecord,
     RunStore,
-    pack_request_error_message,
+    StoryRequest,
+    story_request_error_message,
 )
 from src.workshop.scope import WorkshopScope, resolve_scope
 
@@ -132,7 +132,7 @@ def _record_or_404(manager: RunManager, scope: WorkshopScope, run_id: str) -> Ru
 
 def _story_record_or_404(manager: RunManager, story_id: str) -> RunRecord:
     for record in manager.store.list_runs():
-        if story_id in record.story_ids:
+        if record.story_id == story_id:
             return record
     raise HTTPException(status_code=404)
 
@@ -149,25 +149,23 @@ def _checkpointed_steps(record: RunRecord, settings: Settings) -> list[str]:
     return steps
 
 
-def _staged_story_summaries(story_ids: list[str], settings: Settings) -> list[dict[str, object]]:
-    """Load id, title, page_count for each staged story from the pending bucket."""
-    summaries: list[dict[str, object]] = []
-    client = _build_client(settings)
-    bucket = settings.pending_bucket
-    for story_id in story_ids:
-        try:
-            obj = client.get_object(Bucket=bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}")
-            data = _json.loads(obj["Body"].read())
-            summaries.append(
-                {
-                    "id": story_id,
-                    "title": data.get("title", story_id),
-                    "page_count": len(data.get("pages", [])),
-                }
-            )
-        except Exception:
-            summaries.append({"id": story_id, "title": story_id, "page_count": 0})
-    return summaries
+def _staged_story_summary(story_id: str | None, settings: Settings) -> dict[str, object] | None:
+    """Load id, title, page_count for the run's staged story from the pending
+    bucket. None when the run has no story; page_count 0 when it can't be read."""
+    if story_id is None:
+        return None
+    try:
+        obj = _build_client(settings).get_object(
+            Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{STORY_FILE}"
+        )
+        data = _json.loads(obj["Body"].read())
+    except Exception:
+        return {"id": story_id, "title": story_id, "page_count": 0}
+    return {
+        "id": story_id,
+        "title": data.get("title", story_id),
+        "page_count": len(data.get("pages", [])),
+    }
 
 
 def _rel_time(dt: datetime) -> str:
@@ -300,7 +298,6 @@ async def start_run(
     background: BackgroundTasks,
     theme: Annotated[str, Form()],
     language: Annotated[str, Form()],
-    count: Annotated[int, Form()] = 1,
     premise: Annotated[str, Form()] = "",
     shape: Annotated[str, Form()] = "linear",
 ) -> Response:
@@ -312,19 +309,18 @@ async def start_run(
     if shape not in ("linear", "branching"):
         raise HTTPException(status_code=400, detail=f"Unknown shape {shape!r}")
     try:
-        pack = PackRequest(
+        story_request = StoryRequest(
             theme=theme,  # type: ignore[arg-type]
             language=language,  # type: ignore[arg-type]
-            count=count,
             premise=premise or None,
             shape=shape,  # type: ignore[arg-type]
         )
     except ValidationError as error:
         ctx = await _dashboard_ctx(
-            request, settings, manager, form_error=pack_request_error_message(error)
+            request, settings, manager, form_error=story_request_error_message(error)
         )
         return templates.TemplateResponse(request, "workshop/dashboard.html", ctx, status_code=422)
-    record = await manager.submit(scope.store_token, pack)
+    record = await manager.submit(scope.store_token, story_request)
     background.add_task(manager.execute, record)
     return RedirectResponse(f"/workshop/runs/{record.id}", status_code=303)
 
@@ -339,7 +335,7 @@ async def run_page(
     if not scope.is_operator:
         return RedirectResponse(home_path(scope.is_operator), status_code=303)
     record = _record_or_404(manager, scope, run_id)
-    staged_stories = _staged_story_summaries(record.story_ids, settings)
+    staged_story = _staged_story_summary(record.story_id, settings)
     return templates.TemplateResponse(
         request,
         "workshop/run.html",
@@ -348,7 +344,7 @@ async def run_page(
             record=record,
             steps=_checkpointed_steps(record, settings),
             live=LIVE_STATES,
-            staged_stories=staged_stories,
+            staged_story=staged_story,
             rel_time=_rel_time,
         ),
     )
@@ -362,13 +358,13 @@ async def run_progress(
     if scope is None or not scope.is_operator:
         raise HTTPException(status_code=404)
 
-    def read_progress() -> tuple[RunRecord, list[dict[str, object]]]:
+    def read_progress() -> tuple[RunRecord, dict[str, object] | None]:
         # Polled every 2 s: all of this stays off the event loop (AI-465).
         manager.reap_stale()  # a stale run's own poll heals it, so it stops polling (AI-417)
         record = _record_or_404(manager, scope, run_id)
-        return record, _staged_story_summaries(record.story_ids, settings)
+        return record, _staged_story_summary(record.story_id, settings)
 
-    record, staged_stories = await run_in_threadpool(read_progress)
+    record, staged_story = await run_in_threadpool(read_progress)
     return templates.TemplateResponse(
         request,
         "workshop/_progress.html",
@@ -377,7 +373,7 @@ async def run_progress(
             record=record,
             steps=_checkpointed_steps(record, settings),
             live=LIVE_STATES,
-            staged_stories=staged_stories,
+            staged_story=staged_story,
         ),
     )
 
@@ -401,8 +397,9 @@ async def approve_run(
             status_code=400,
             detail=f"Run is in {record.state} state, must be staged to approve",
         )
-    for story_id in record.story_ids:
-        publisher(story_id)
+    if record.story_id is None:
+        raise HTTPException(status_code=409, detail="The run has no staged story to publish")
+    publisher(record.story_id)
     manager.store.save(record.advance("approved"))
     return _to_login()
 
@@ -455,17 +452,20 @@ async def delete_run(
     record = _record_or_404(manager, scope, run_id)
     if record.state in LIVE_STATES:
         raise HTTPException(status_code=400)
-    runs = manager.store.list_runs()
-    for story_id in record.story_ids:
-        other_records = [
-            other for other in runs if other.id != record.id and story_id in other.story_ids
+    story_id = record.story_id
+    if story_id is not None:
+        # Identical requests share a story id via the content-addressed cache:
+        # leave the story's artifacts (and its shelf entry) to any other run
+        # that still points at it.
+        sharing = [
+            other
+            for other in manager.store.list_runs()
+            if other.id != record.id and other.story_id == story_id
         ]
-        if not other_records:
+        if not sharing:
             delete_staged_story(story_id, settings)
             shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
-        if record.state == "approved" and not any(
-            other.state == "approved" for other in other_records
-        ):
+        if record.state == "approved" and not any(other.state == "approved" for other in sharing):
             unpublish_story(story_id, settings)
     manager.store.delete(scope.store_token, run_id)
     if request.headers.get("HX-Request"):
@@ -491,9 +491,7 @@ async def delete_staged_story_route(
         unpublish_story(story_id, settings)
     delete_staged_story(story_id, settings)
     shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
-    updated = record.model_copy(
-        update={"story_ids": [s for s in record.story_ids if s != story_id]}
-    )
+    updated = record.model_copy(update={"story_id": None})
     manager.store.save(updated)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
@@ -523,7 +521,7 @@ async def staged_story(
         record = manager.store.load(scope.store_token, run_id)
     if record is None:
         for candidate in manager.store.list_runs():
-            if story_id in candidate.story_ids:
+            if candidate.story_id == story_id:
                 record = candidate
                 break
     return templates.TemplateResponse(
