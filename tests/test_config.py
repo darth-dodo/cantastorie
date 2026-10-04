@@ -248,3 +248,27 @@ def test_distinct_families_still_load() -> None:
 
 def test_settings_has_no_workshop_secret():
     assert not hasattr(Settings(_env_file=None), "workshop_secret")
+
+
+def test_clerk_without_a_pinned_issuer_is_refused_outright() -> None:
+    # M15: a configured Clerk JWKS with no issuer would accept a token minted
+    # by any Clerk instance whose keys we happened to trust — refuse to boot.
+    with pytest.raises(ValidationError, match="CLERK_ISSUER"):
+        Settings(
+            _env_file=None,  # type: ignore[call-arg]
+            clerk_jwks_url="https://clerk.example/.well-known/jwks.json",
+            clerk_issuer="",
+        )
+
+
+def test_clerk_with_a_pinned_issuer_loads() -> None:
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        clerk_jwks_url="https://clerk.example/.well-known/jwks.json",
+        clerk_issuer="https://clerk.example",
+    )
+    assert settings.clerk_issuer == "https://clerk.example"
+
+
+def test_unconfigured_clerk_needs_no_issuer() -> None:
+    assert Settings(_env_file=None).clerk_issuer == ""  # type: ignore[call-arg]

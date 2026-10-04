@@ -361,6 +361,29 @@ def test_issuer_match_returns_parent_context(monkeypatch: pytest.MonkeyPatch) ->
     assert resp.json()["user_id"] == "user_iss_ok"
 
 
+@pytest.mark.parametrize("claim", ["exp", "iat", "sub", "iss"])
+def test_token_missing_a_required_claim_returns_401(
+    monkeypatch: pytest.MonkeyPatch, claim: str
+) -> None:
+    """Given a validly-signed token that omits exp, iat, sub or iss,
+    When require_parent processes the request,
+    Then it raises 401 — these claims are required, not verified-if-present
+    (M15). A token with no exp would otherwise never expire.
+    """
+    private_key = generate_rsa_keypair()
+    monkeypatch.setattr(auth_module, "_fetch_jwks", make_mock_fetch(private_key))
+
+    app = _make_app(clerk_settings())
+    payload = valid_payload()
+    del payload[claim]
+    token = mint_token(private_key, payload)
+
+    with TestClient(app) as client:
+        resp = client.get("/me", cookies={SESSION_COOKIE: token})
+
+    assert resp.status_code == 401
+
+
 def test_non_string_family_token_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
     """Given a validly-signed token whose family_token claim is a non-string (e.g. integer),
     When require_parent processes the request,

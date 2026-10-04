@@ -20,6 +20,9 @@ from pydantic import SecretStr
 from src.config import Settings
 
 TEST_KID = "test-key-001"
+# Settings refuse a configured Clerk without a pinned issuer (M15), so the
+# helpers default both sides — settings and minted tokens — to this one.
+TEST_ISSUER = "https://test.clerk.test"
 
 
 def generate_rsa_keypair() -> RSAPrivateKey:
@@ -63,7 +66,7 @@ def mint_token(
 
 def clerk_settings(
     jwks_url: str = "https://test.clerk.test/.well-known/jwks.json",
-    clerk_issuer: str = "",
+    clerk_issuer: str = TEST_ISSUER,
 ) -> Settings:
     return Settings(
         _env_file=None,
@@ -104,7 +107,7 @@ def valid_payload(
     *,
     disabled: bool = False,
     include_family_token: bool = True,
-    iss: str = "",
+    iss: str = TEST_ISSUER,
 ) -> dict[str, Any]:
     n = now()
     payload: dict[str, Any] = {
