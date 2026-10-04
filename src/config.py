@@ -124,8 +124,9 @@ class Settings(BaseSettings):
     clerk_publishable_key: SecretStr = SecretStr("")
     clerk_secret_key: SecretStr = SecretStr("")
     clerk_jwks_url: str = ""
-    # Clerk instance issuer (the Frontend API / `iss` claim); when set,
-    # require_parent pins it. Unset ⇒ issuer not enforced, mirroring the azp deferral.
+    # Clerk instance issuer (the Frontend API / `iss` claim). Required whenever
+    # clerk_jwks_url is set (M15): verification always pins it, so a token
+    # minted by another Clerk instance can never pass.
     clerk_issuer: str = ""
 
     # Per-family run caps for the /parent surface (AI-411). One active run per
@@ -204,6 +205,18 @@ class Settings(BaseSettings):
             raise ValueError(
                 "R2_PENDING_BUCKET must name a private bucket separate from R2_BUCKET — "
                 "the public bucket serves every key, so pending/ content cannot live there"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def clerk_issuer_is_pinned_if_clerk_is_on(self) -> Self:
+        # clerk_jwks_url is the feature switch the verify path guards on, so
+        # "Clerk configured" means exactly that. Without an issuer, any token
+        # signed by a key in the JWKS would pass whatever its `iss` (M15).
+        if self.clerk_jwks_url and not self.clerk_issuer:
+            raise ValueError(
+                "CLERK_ISSUER must be set when CLERK_JWKS_URL is — session tokens "
+                "are only accepted from the pinned Clerk instance"
             )
         return self
 

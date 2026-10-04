@@ -180,8 +180,11 @@ async def verify_clerk_session(
             raw_token,
             keys[kid],
             algorithms=["RS256"],
-            issuer=settings.clerk_issuer or None,
-            options={"verify_exp": True, "verify_nbf": True},
+            issuer=settings.clerk_issuer,
+            # Required, not verified-if-present (M15): a token without exp
+            # would never expire. Settings refuses to boot with Clerk on and
+            # no issuer, so `iss` is always pinned here too.
+            options={"verify_exp": True, "verify_nbf": True, "require": ["exp", "iat", "sub"]},
         )
     except Exception:
         return None
