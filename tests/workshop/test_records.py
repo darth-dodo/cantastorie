@@ -425,6 +425,48 @@ def test_a_v1_review_list_maps_to_the_single_reviewed_flag(
     assert loaded.reviewed is expected
 
 
+@pytest.mark.parametrize("malformed_ids", [5, "abc"])
+def test_a_malformed_legacy_story_ids_value_is_rejected(malformed_ids: object) -> None:
+    """A v1 record's story_ids must be a list of strings. `5` isn't iterable
+    into ids at all; `"abc"` is iterable but silently yields the single-char
+    story_id "a" — both must fail validation, not produce a bogus record."""
+    record = _staged("s1")
+    body = json.loads(record.model_dump_json())
+    body.pop("story_id")
+    body.pop("reviewed")
+    body["schema_version"] = 1
+    body[records.V1_STORY_IDS_KEY] = malformed_ids
+
+    with pytest.raises(ValidationError):
+        records.RunRecord.model_validate(body)
+
+
+@pytest.mark.parametrize("malformed_ids", [5, "abc"])
+def test_a_malformed_legacy_reviewed_story_ids_value_is_rejected(malformed_ids: object) -> None:
+    record = _staged("s1")
+    body = _v1(record, ids=["s1"])
+    body[records.V1_REVIEWED_IDS_KEY] = malformed_ids
+
+    with pytest.raises(ValidationError):
+        records.RunRecord.model_validate(body)
+
+
+def test_store_list_skips_a_malformed_v1_record_next_to_a_good_one(s3: S3Client) -> None:
+    """A single bad legacy record must not take down the whole listing (the
+    TypeError from `list(5)` previously escaped `_load_key` uncaught)."""
+    store = RunStore(_settings(), client=s3)
+    good = new_run("family-abc", REQUEST)
+    store.save(good)
+    bad_record = _staged("s1")
+    bad_body = _v1(bad_record, ids=["s1"])
+    bad_body[records.V1_STORY_IDS_KEY] = 5
+    _put_raw(s3, bad_record, bad_body)
+
+    listed = store.list_runs()
+
+    assert listed == [good]
+
+
 def test_saving_an_upgraded_record_writes_the_v2_shape(s3: S3Client) -> None:
     store = RunStore(_settings(), client=s3)
     record = _staged("s1")

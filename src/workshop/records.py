@@ -60,6 +60,18 @@ _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 
 
+def _as_legacy_id_list(value: Any, key: str) -> list[str]:
+    """A v1 record's `story_ids`/`reviewed_story_ids` must be a list of
+    strings (or absent/empty). A string is iterable too — list("abc") would
+    silently yield ["a", "b", "c"] and load as story_id "a" — so it's rejected
+    alongside non-iterables like an int."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{key} must be a list of strings, got {value!r}")
+    return value
+
+
 class InvalidTransition(Exception):
     """The lifecycle does not allow this state change."""
 
@@ -126,8 +138,8 @@ class RunRecord(BaseModel):
         ):
             return data
         data = dict(data)
-        legacy_ids = list(data.pop(V1_STORY_IDS_KEY, None) or [])
-        reviewed_ids = list(data.pop(V1_REVIEWED_IDS_KEY, None) or [])
+        legacy_ids = _as_legacy_id_list(data.pop(V1_STORY_IDS_KEY, None), V1_STORY_IDS_KEY)
+        reviewed_ids = _as_legacy_id_list(data.pop(V1_REVIEWED_IDS_KEY, None), V1_REVIEWED_IDS_KEY)
         story_id = legacy_ids[0] if legacy_ids else None
         if len(legacy_ids) > 1:
             logger.warning(
