@@ -268,15 +268,18 @@ export function createPlayback({
     // The cover tap: prefetch everything (spoken prompts included — the
     // end prompt must be local long before the end screen), offer resume
     // if the story was left unfinished, otherwise speak the start prompt
-    // and begin page 1.
-    async openStory(loaded) {
+    // and begin page 1. A resumed branching path (main.js replayResume)
+    // passes where its last replayed arm starts: the next branch is the
+    // first choice page from there, exactly as extendPath would have set it
+    // mid-run — p1's choice is already behind the child (M28).
+    async openStory(loaded, { choiceSearchFrom = 0 } = {}) {
       story = loaded;
       narratingPage = null;
       updateWatchdog(store.state);
       const promptUrls = [prompts.story_start, prompts.end, prompts.audio_retry].filter(Boolean);
       prefetcher?.prefetchStory(loaded, promptUrls); // fire and forget; load() dedupes
 
-      const choiceIndex = loaded.pages.findIndex((page) => page.choice);
+      const choiceIndex = loaded.pages.findIndex((page, i) => i >= choiceSearchFrom && page.choice);
       starting = true;
       store.openStory({
         pageCount: loaded.pages.length,
