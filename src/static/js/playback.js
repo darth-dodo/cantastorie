@@ -39,6 +39,7 @@ export function createPlayback({
   let starting = false; // the story start prompt is speaking; hold page 1
   let prevScreen = store.state.screen;
   let choiceWasOpen = store.state.choiceOpen; // to catch the open transition
+  let disposed = false; // retired by a language switch: nothing may speak
 
   // The stall watchdog: polls the engine's position while a page's voice
   // should be moving, and counts how long it has stood still.
@@ -162,7 +163,7 @@ export function createPlayback({
     engine
       .load(prompts.end)
       .then(() => {
-        if (store.state.screen !== "end") return undefined;
+        if (disposed || store.state.screen !== "end") return undefined;
         return engine.playPrompt(prompts.end);
       })
       .catch(() => {});
@@ -177,7 +178,7 @@ export function createPlayback({
     const urls = options.map((option) => option.audioUrl).filter(Boolean);
     if (urls.length === 0) return;
     const speakFrom = (i) => {
-      if (i >= urls.length) return;
+      if (disposed || i >= urls.length) return;
       engine
         .playPrompt(urls[i], { onEnded: () => speakFrom(i + 1) })
         .catch(() => {});
@@ -236,10 +237,25 @@ export function createPlayback({
     }
   }
 
-  store.subscribe(sync);
+  const unsubscribe = store.subscribe(sync);
 
   return {
     hasStory: () => story !== null,
+
+    // A language switch retires this instance for a new one on the same
+    // store and engine (M23). Unsubscribed, a stale sync can never speak the
+    // old language's end prompt; the flag quiets what is already in flight —
+    // an end prompt or label still loading, a start prompt still banking.
+    // The shared engine is left alone: the new instance owns it now.
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      unsubscribe();
+      story = null;
+      narratingPage = null;
+      starting = false; // a start prompt landing later releases nothing
+      stopWatchdog();
+    },
 
     // A branch option was tapped (AI-428): append the chosen arm's pages to
     // the played path and recompute the next choicePage. main.js calls this

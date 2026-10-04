@@ -372,6 +372,10 @@ export async function init(
     manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
     prefetcher = createPrefetcher({ engine, fetchFn });
+    // Retire the old instance before its replacement subscribes: left
+    // subscribed, it would still react to the store and speak the old
+    // language's prompts (M23).
+    playback.dispose();
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
     store.toShelf();
     shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen };
