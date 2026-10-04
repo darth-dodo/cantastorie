@@ -1,6 +1,6 @@
 [project]
 name = "cantastorie"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bedtime stories a child steers, told aloud in the languages the family speaks; authored offline, approved by a parent"
 readme = "README.md"
 requires-python = ">=3.12"
