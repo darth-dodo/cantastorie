@@ -133,6 +133,7 @@ def author_story(
     safety_model: Model | None = None,
     revise_model: Model | None = None,
     premise: str | None = None,
+    run_nonce: str | None = None,
 ) -> tuple[Story, SafetyReport]:
     """write → gate → bounded revise: the one loop the pipeline owns.
 
@@ -143,7 +144,14 @@ def author_story(
     """
     with timed_step("write", shape=shape):
         story = write_story(
-            theme, language, settings, cache, model=write_model, premise=premise, shape=shape
+            theme,
+            language,
+            settings,
+            cache,
+            model=write_model,
+            premise=premise,
+            shape=shape,
+            run_nonce=run_nonce,
         )
     with timed_step("safety", story_id=story.id, attempt=0):
         report = safety_gate(story, settings, cache, model=safety_model)
