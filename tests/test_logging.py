@@ -48,7 +48,7 @@ from src.pipeline.publish import AuditResult, publish_story, unpublish_story
 from src.pipeline.steps.assemble import ContentRulesViolation
 from src.pipeline.steps.image_safety import IMAGE_SAFETY_MAX_REGENERATIONS
 from src.workshop.manager import RunCapExceeded, RunManager
-from src.workshop.records import PackRequest, RunStore
+from src.workshop.records import RunStore, StoryRequest
 from tests.pipeline.test_generate import (
     _GOOD_DRAFT,
     _PASSING_REPORT,
@@ -63,7 +63,7 @@ BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
 PUBLIC_BASE = "https://cdn.example.test/published"
 FAMILY = "0123456789abcdef0123456789abcdef"
-REQUEST = PackRequest(theme="the_sleepy_sea", language="it", count=1)
+REQUEST = StoryRequest(theme="the_sleepy_sea", language="it")
 PIPELINE_STEPS = {"write", "safety", "narrate", "illustrate", "image_safety", "assemble", "stage"}
 
 
@@ -116,28 +116,26 @@ def _events(caplog: pytest.LogCaptureFixture, event: str) -> list[logging.LogRec
     return [r for r in caplog.records if getattr(r, "event", None) == event]
 
 
-def _pack_with(
+def _generate_with(
     *, safety_report: dict[str, Any] = _PASSING_REPORT, image_judge: TestModel | None = None
-) -> Callable[[PackRequest, Settings], list[str]]:
-    def pack(request: PackRequest, settings: Settings) -> list[str]:
-        return [
-            generate_story(
-                request.theme,
-                request.language,
-                settings,
-                write_model=TestModel(custom_output_args=_GOOD_DRAFT),
-                safety_model=TestModel(custom_output_args=safety_report),
-                revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
-                narration_client=_fake_narration(),
-                image_transport=_fake_images(),
-                image_safety_model=image_judge or _calm_judge(),
-            )
-        ]
+) -> Callable[[StoryRequest, Settings], str]:
+    def generate(request: StoryRequest, settings: Settings) -> str:
+        return generate_story(
+            request.theme,
+            request.language,
+            settings,
+            write_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            safety_model=TestModel(custom_output_args=safety_report),
+            revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
+            narration_client=_fake_narration(),
+            image_transport=_fake_images(),
+            image_safety_model=image_judge or _calm_judge(),
+        )
 
-    return pack
+    return generate
 
 
-_real_pack = _pack_with()
+_real_generate = _generate_with()
 
 
 def _scan_for(phrase: str, caplog: pytest.LogCaptureFixture) -> None:
@@ -374,10 +372,10 @@ def test_run_failure_logs_a_traceback_with_the_run_id(
 ) -> None:
     settings = _settings(tmp_path)
 
-    def explode(request: PackRequest, st: Settings) -> list[str]:
+    def explode(request: StoryRequest, st: Settings) -> str:
         raise RuntimeError("narrate exploded")
 
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=explode)
+    manager = RunManager(RunStore(settings, client=s3), settings, generate=explode)
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
     asyncio.run(manager.execute(record))
 
@@ -396,7 +394,7 @@ def test_each_pipeline_step_logs_its_duration_under_the_run_id(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path)
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=_real_pack)
+    manager = RunManager(RunStore(settings, client=s3), settings, generate=_real_generate)
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
     asyncio.run(manager.execute(record))
 
@@ -414,7 +412,9 @@ def test_cap_rejection_logs_the_reason(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path)
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=lambda r, s: [])
+    manager = RunManager(
+        RunStore(settings, client=s3), settings, generate=lambda r, s: "pending/staged/x"
+    )
     asyncio.run(manager.submit(FAMILY, REQUEST))
 
     with pytest.raises(RunCapExceeded):
@@ -429,7 +429,9 @@ def test_daily_cap_rejection_logs_the_daily_reason(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path).model_copy(update={"parent_daily_run_cap": 0})
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=lambda r, s: [])
+    manager = RunManager(
+        RunStore(settings, client=s3), settings, generate=lambda r, s: "pending/staged/x"
+    )
 
     with pytest.raises(RunCapExceeded):
         asyncio.run(manager.submit(FAMILY, REQUEST))
@@ -442,7 +444,9 @@ def test_reaped_runs_and_boot_resume_are_logged(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path).model_copy(update={"run_stale_after_seconds": -1})
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=lambda r, s: [])
+    manager = RunManager(
+        RunStore(settings, client=s3), settings, generate=lambda r, s: "pending/staged/x"
+    )
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
 
     asyncio.run(main_module._reap_and_resume(manager))
@@ -463,7 +467,7 @@ def test_publish_and_unpublish_log_story_id_and_lane(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path)
-    story_id = _real_pack(REQUEST, settings)[0].rsplit("/", 1)[-1]
+    story_id = _real_generate(REQUEST, settings).rsplit("/", 1)[-1]
 
     publish_story(story_id, settings, client=s3, family_token=FAMILY)
     unpublish_story(story_id, settings, client=s3, family_token=FAMILY)
@@ -486,11 +490,11 @@ def test_a_full_run_never_logs_the_raw_family_token(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path)
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=_real_pack)
+    manager = RunManager(RunStore(settings, client=s3), settings, generate=_real_generate)
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
     done = asyncio.run(manager.execute(record))
-    publish_story(done.story_ids[0], settings, client=s3, family_token=FAMILY)
-    unpublish_story(done.story_ids[0], settings, client=s3, family_token=FAMILY)
+    publish_story(done.story_id, settings, client=s3, family_token=FAMILY)
+    unpublish_story(done.story_id, settings, client=s3, family_token=FAMILY)
 
     assert info_logs.records
     formatter = KeyValueFormatter()
@@ -534,8 +538,8 @@ def test_image_redraws_and_rejection_log_slot_attempt_and_criteria_only(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path)
-    pack = _pack_with(image_judge=_failing_image_judge())
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=pack)
+    generate = _generate_with(image_judge=_failing_image_judge())
+    manager = RunManager(RunStore(settings, client=s3), settings, generate=generate)
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
     asyncio.run(manager.execute(record))
 
@@ -564,8 +568,8 @@ def test_text_gate_rejection_logs_criteria_without_the_judge_reason(
     s3: S3Client, tmp_path: Path, info_logs: pytest.LogCaptureFixture
 ) -> None:
     settings = _settings(tmp_path)
-    pack = _pack_with(safety_report=_failing_text_report())
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=pack)
+    generate = _generate_with(safety_report=_failing_text_report())
+    manager = RunManager(RunStore(settings, client=s3), settings, generate=generate)
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
     done = asyncio.run(manager.execute(record))
 
@@ -588,12 +592,12 @@ def test_a_content_rules_violation_logs_rule_names_without_a_traceback(
 ) -> None:
     settings = _settings(tmp_path)
 
-    def violate(request: PackRequest, st: Settings) -> list[str]:
+    def violate(request: StoryRequest, st: Settings) -> str:
         raise ContentRulesViolation(
             [ContentViolation(rule="page_words", page_id="p1", detail=f"too long: {SENTINEL}")]
         )
 
-    manager = RunManager(RunStore(settings, client=s3), settings, generate_pack=violate)
+    manager = RunManager(RunStore(settings, client=s3), settings, generate=violate)
     record = asyncio.run(manager.submit(FAMILY, REQUEST))
     asyncio.run(manager.execute(record))
 
