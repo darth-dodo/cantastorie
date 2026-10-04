@@ -20,22 +20,30 @@
         <div class="ws-field-block ws-field-full">
           <span class="ws-field-label">Theme</span>
           <div class="ws-field-select-wrap">
-            <select name="theme" class="ws-field ws-select" data-custom-theme>
+            <select name="theme" class="ws-field ws-select">
               {% for theme in themes %}<option value="{{ theme }}">{{ theme.replace("_", " ").title() }}</option>{% endfor %}
-              <option value="custom">Custom…</option>
             </select>
           </div>
         </div>
-        <div class="ws-field-block ws-field-full" data-custom-premise hidden>
-          <span class="ws-field-label">Your story</span>
+        <div class="ws-field-block ws-field-full">
+          <span class="ws-field-label">Your idea (optional)</span>
           <textarea name="premise" maxlength="{{ premise_max_length }}" rows="3" class="ws-field ws-textarea"
                     placeholder="a small boat wants to see the moon"></textarea>
         </div>
-        <div class="ws-field-block ws-field-full">
+        <div class="ws-field-block">
           <span class="ws-field-label">Language</span>
           <div class="ws-field-select-wrap">
             <select name="language" class="ws-field ws-select">
               {% for language in languages %}<option value="{{ language }}">{{ language | language_name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="ws-field-block">
+          <span class="ws-field-label">Shape</span>
+          <div class="ws-field-select-wrap">
+            <select name="shape" class="ws-field ws-select">
+              <option value="linear">One story</option>
+              <option value="branching">Child chooses the ending</option>
             </select>
           </div>
         </div>
@@ -51,27 +59,4 @@
   </div>
 
 </div>
-
-<script>
-(function () {
-  "use strict";
-  var sel = document.querySelector("[data-custom-theme]");
-  var box = document.querySelector("[data-custom-premise]");
-  if (!sel || !box) return;
-  function sync() {
-    var isCustom = sel.value === "custom";
-    box.hidden = !isCustom;
-    var inp = box.querySelector("textarea");
-    if (inp) inp.disabled = !isCustom;
-    // Orchid active border on select when Custom is chosen.
-    if (isCustom) {
-      sel.classList.add("ws-select--custom-active");
-    } else {
-      sel.classList.remove("ws-select--custom-active");
-    }
-  }
-  sel.addEventListener("change", sync);
-  sync();
-})();
-</script>
 {% endblock %}

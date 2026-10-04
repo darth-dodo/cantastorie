@@ -11,18 +11,19 @@ Where this document and the code disagree, the code has moved on — fix this do
 
 ## The System at a Glance
 
-One FastAPI app serves a static shell, offers an optional same-origin proxy onto the R2 bucket for dev parity, and hosts the operator workshop; everything the child experiences after page load happens in the browser. The authoring pipeline is a plain-Python package in the same repo, runnable two ways: as a CLI, and in-process through the workshop's `RunManager`. The app and the pipeline share `src/config.py` and the `story.json` contract.
+One FastAPI app serves a public landing page at `/` and the player shell at `/play`, offers an optional same-origin proxy onto the R2 bucket for dev parity, and hosts the operator workshop; everything the child experiences after page load happens in the browser. The authoring pipeline is a plain-Python package in the same repo, runnable two ways: as a CLI, and in-process through the workshop's `RunManager`. The app and the pipeline share `src/config.py` and the `story.json` contract.
 
 ```mermaid
 flowchart LR
     subgraph Browser["Browser (child)"]
         P["Player<br/>ES modules + Web Audio"]
-        LS[("localStorage<br/>(IndexedDB later)")]
+        LS[("localStorage (progress, settings)<br/>IndexedDB (family token)")]
         P <--> LS
     end
 
     subgraph App["FastAPI app (Render)"]
-        T["/ — Jinja2 player shell"]
+        L["/ — landing page"]
+        T["/play — Jinja2 player shell"]
         PUB["/published/* — optional R2 proxy<br/>(dev parity, not the prod path)"]
         WS["/workshop — operator UI<br/>(Clerk sign-in, HTMX)"]
         PA["/parent/api/provision<br/>(Clerk-verified)"]
@@ -44,6 +45,7 @@ flowchart LR
     R2["Cloudflare R2<br/>published/ · pending/"]
 
     Browser -- "page load" --> T
+    Browser -. "first visit" .-> L
     P -- "manifests, story.json,<br/>audio, images (bucket-direct)" --> R2
     P -. "dev parity only" .-> PUB
     PUB --> R2
@@ -98,7 +100,7 @@ flowchart TD
 | `prefetch.js` | On cover tap, bank every page's audio (decoded buffers) and image (HTTP cache), both branch arms included, plus each choice option's card image and spoken label; failures counted, never fatal | `createPrefetcher` |
 | `story.js` | `loadStory()` validates `schema_version: 1`, orders pages by walking `next_page` links, resolves relative asset URLs (choice-card images and label audio included); the fetch is bounded by `AbortSignal.timeout(STORY_FETCH_TIMEOUT_MS)` (10 s); `pagesFrom(pageId)` walks one arm for branch following; also the mock shelf/story that back unpublished covers | `loadStory`, `orderPages`, `STORY_FETCH_TIMEOUT_MS`, `shelf`, `story` |
 | `screens.js` | Detached-element builders for shelf, player, end screen, the choice/resume/settings overlays, and the failure states (audio-retry bird, offline clouds); the choice overlay shows each option's card image (a wash fallback when absent) behind its spoken label; `playerView()` derives captions/beads/images from a loaded story | `buildShelf`, `buildPlayer`, `updatePlayer`, … |
-| `storage.js` | Progress persistence under one key (only `page` and the recorded `choices` are trusted from a saved payload; `load()` always normalizes `screen` back to `shelf` and drops the rest, so a reload never resumes mid-story on the mock view — AI-468); localStorage now, IndexedDB when real stories land; failures are silent by design | `load`, `save` |
+| `storage.js` | Progress persistence under one key (only `page` and the recorded `choices` are trusted from a saved payload; `load()` always normalizes `screen` back to `shelf` and drops the rest, so a reload never resumes mid-story on the mock view — AI-468); kept in localStorage under `cantastorie-shell` (the family token is the only thing in IndexedDB, read by `main.js`); failures are silent by design | `load`, `save` |
 | `palette-resolve.js` | Theme (light/dusk by hour, `?theme=` override) and palette resolution; pure logic shared with the `palette.js` head script and the test suites | `VALID_PALETTES`, `resolvePalette`, `resolveTheme` |
 
 ### Player state (`store.js`)
@@ -149,7 +151,7 @@ stateDiagram-v2
 Mechanics that the rest of the system relies on:
 
 - **Crossfade = overlapping ramps.** Starting page N+1's narration while page N is fading out (0.9 s, `CROSSFADE_SECONDS`) is the gentle page turn.
-- **Exact-position hold.** Pausing or ducking computes the playhead offset and stores `{url, offset, onEnded}`; resuming restarts the buffer at that offset. This is the number that will land in IndexedDB for exact-position resume.
+- **Exact-position hold.** Pausing or ducking computes the playhead offset and stores `{url, offset, onEnded}`; resuming restarts the buffer at that offset. It lives in memory only: across a reload, `storage.js` keeps the page and branch choices, not the offset.
 - **`_manualStop` discipline.** A deliberately silenced source must not fire its natural `onended` chain; a stale voice never turns the page.
 - **`load()` is the prefetch bank.** Decoded buffers are cached per URL and deduped by promise, so prefetch and playback share one in-flight fetch.
 
@@ -274,11 +276,12 @@ Progress shown in the UI is read from the run record plus the working folder's c
 
 ## The App (`src/api/`)
 
-An app factory (`create_app`) that initializes observability, adds LangSmith's `TracingMiddleware` (`src/observability.py`), mounts `/static`, and includes `/health` (which the Dockerfile healthcheck and Render both poll) plus four routers:
+An app factory (`create_app`) that initializes observability, adds LangSmith's `TracingMiddleware` (`src/observability.py`), mounts `/static`, and includes `/health` (which the Dockerfile healthcheck and Render both poll) plus five routers:
 
 | Router | Path | What it does |
 |--------|------|--------------|
-| `player.py` | `/` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
+| `landing.py` | `/` | The public landing page (`templates/landing.html`, AI-433): what the product is, with links to `/play` and `/parent`. Static, Clerk-free, no child data, no server calls |
+| `player.py` | `/play` | Deliberately thin: renders `templates/index.html`, injecting the `asset-base` meta tag |
 | `published.py` | `/published` | Optional same-origin R2 proxy for local/dev parity against a real bucket (production playback is bucket-direct). Unauthenticated, so it serves only the key shapes `publish_story` writes (`{lang}/manifest.json`, `stories/{id}/…`, `prompts/{lang}/…`, optionally under `families/{token}/`); anything else, including encoded dot segments, is a 404 before R2 is asked. Streams the body and passes through R2's `Cache-Control`/`ETag` |
 | `parent.py` | `/parent` | Clerk-gated parent surface (Jinja2 + HTMX): sign-in, the story request form (`POST /parent/runs`), the Being made list with progress polling (`GET /parent/runs/{id}/progress`), reviewing the run's staged story (`/parent/staged/{id}`), and **approving a reviewed story to the family's private overlay** (`POST /parent/runs/{id}/approve` → `publish_story(..., family_token=…)`; 409 until the story is reviewed) or rejecting it (`POST /parent/runs/{id}/reject`) — all scoped to the session's `family_token`, with per-family run caps (AI-411). `/parent/api/provision` mints-or-links the family token at first sign-in; `auth.py` verifies session JWTs via JWKS (async fetch, PyJWT), `clerk.py` writes the token to Clerk `public_metadata` |
 | `workshop.py` | `/workshop` | Clerk-gated operator screens, operator role (Jinja2 + HTMX): start a run, watch step progress, review the staged story, publish. `src/workshop/manager.py` orchestrates runs in-process and reaps stale ones; `records.py` persists run records to the R2 pending bucket, surviving Render's ephemeral disk |
@@ -329,7 +332,7 @@ The provider and Clerk tests mock at the httpx-transport seam, so logic is teste
 |----------|-----------|--------------|
 | Page timer (3.8 s) for unpublished covers | Narration `onEnded` → `advance()` (already live for published stories) | more published stories |
 | `/static/content/` as the *default* `asset_base` | Production sets `ASSET_BASE` to the R2 public URL + `/published` (bucket-direct); `ASSET_BASE=/published` (the app proxy) is an optional dev-parity setting; the fixture remains the dev default | per-deploy `ASSET_BASE` |
-| `localStorage` progress | IndexedDB (progress, settings, lockout, family token) | slice 2 |
+| `localStorage` progress and settings | IndexedDB (progress, settings, lockout), beside the family token already stored there | slice 2 |
 | Empty word timings in `story.json` | Deepgram STT transcription pass | slice 6 (reading mode) |
 | No gloss step in the pipeline | Word-to-English gloss maps (cheap model) | slice 6 (reading mode) |
 | Five spoken prompts per language, published by `publish-prompts` (only `it` is live in production as of 2026-10-03; Spanish and English are final copy; the other lines are machine-drafted, pending native review) | All ten prompts per enabled language, reviewed | slice 4 |

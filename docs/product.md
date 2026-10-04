@@ -89,14 +89,17 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; curated set gated on the narrator-voice bake-off |
 | **8 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German, Bulgarian, Russian, Marathi alongside — per-language manifests and the settings switch are live; every language has stories; spoken prompts live for it only until the publish-prompts run |
 | **Parent gate** | ⏳ Planned | Hold-plus-arithmetic gate with persistent lockout |
-| **Parent dashboard** | 🔄 In progress | Story rows with a single destructive delete of this family's own **private shelf** (the family overlay); language tabs and kill switch planned |
+| **Parent dashboard** | ✅ Shipped | `/parent/stories`: story rows with a single destructive delete of this family's own **private shelf** (the family overlay). Language tabs and the kill switch are still planned |
 | **Private family shelf** | ✅ Shipped | A family's approved stories publish to a private overlay (`published/families/{token}/…`) that only that family's child sees; the child player merges it onto the shared shelf. Never promoted to global — private stays private |
 | **Story requests & review** | 🔄 In progress | Parents request one story at a time on a theme, open the staged story's full review page (text, audio, image), and approve it to their private shelf — approve is refused until the parent has opened that review page; regenerate planned |
-| **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator sees "coming soon" until the parent views ship |
+| **Workshop access** | ✅ Shipped | The operator authoring surface at `/workshop` gates on **Clerk sign-in (operator role)** — no env-var secret; a signed-in non-operator is redirected to their parent home |
+| **Operator library** | ✅ Shipped | `/workshop/library` lists every published story across the shared shelf and every family overlay, flags orphan story folders, and lets the operator delete any story — moderation, never promotion |
 | **Parent sign-in** | ✅ Shipped | Clerk-verified parent identity with mint-or-link family token at first sign-in; the child player stays account-free ([ADR-003](adr/ADR-003-parent-authentication-clerk.md)) |
 | **Authoring pipeline** | 🔄 In progress | Generates story text, narration, watercolor images, word timings, and glosses for approval — all steps ship except word timings (Deepgram pass) and glosses |
 | **Live generation** | ⏳ Planned | Auto safety gate with unanimous-pass publishing, audit log, kill switch (Phase 3) |
 | **Export / import** | ⏳ Planned | The whole family state round-trips through a file; no child accounts anywhere |
+| **Landing page** | ✅ Shipped | A public, static home at `/` explaining the product, linking to the player (`/play`) and the parent area; no sign-in, no child data |
+| **Observability** | ✅ Shipped | Server-side Sentry error monitoring ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)) and structured one-line-per-event logs to stdout, with family tokens hashed and no model text; the child player sends nothing |
 
 ---
 
@@ -218,7 +221,7 @@ A small low-contrast corner of the shelf leads to everything grown-up.
 
 ### Requesting Stories (Phase 2)
 
-**Story requests.** A story request takes a theme from the [theme list](#content-rules) and a language (plus an optional story idea), makes exactly one story, and is keyed to the family token.
+**Story requests.** A story request takes a theme from the [theme list](#content-rules), a language, an optional story idea that steers the theme rather than replacing it, and a shape (one linear story, or a branching story where the child picks the ending). It makes exactly one story and is keyed to the family token. Parents and the operator choose from the same fields.
 
 ```mermaid
 flowchart LR
@@ -312,7 +315,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 
 | Behavior | Detail |
 |----------|--------|
-| **Local-only progress** | Progress and the family token live only in IndexedDB |
+| **Local-only progress** | Progress and the family token live only in the browser: progress in localStorage, the family token in IndexedDB |
 | **Family token** | A random identifier created on first parent-gate entry. It keys this family's stories and names no one — a capability, not an identity. |
 | **Per-family shelves** | One shared deployment; each family's shelf shows the bundled launch set plus its own approved stories, via a token-keyed manifest overlay |
 | **Export / import** | The whole family state, token included, round-trips through a file. An invalid import changes nothing and names the failing field. |
@@ -375,10 +378,10 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 
 One FastAPI app on Render with three faces, in the habla-hermano mold:
 
-- **Player**: a lean full-screen page of vanilla ES modules and Web Audio; at story time it talks only to Cloudflare R2 (bucket-direct assets) and IndexedDB — no cookies, no server calls with child data
+- **Player**: a lean full-screen page of vanilla ES modules and Web Audio; served at `/play` (a public landing page sits at `/`); at story time it talks only to Cloudflare R2 (bucket-direct assets) and browser storage — no cookies, no server calls with child data
 - **Parent area**: server-rendered Jinja2 + HTMX behind the gate
-- **Factory**: a plain-Python authoring pipeline (Pydantic AI over OpenRouter for stories, safety verdicts, glosses, images, and narration — default narration on Gemini TTS via OpenRouter, one pinned house voice; voice cloning on Voxtral via the Mistral API; word timings via a Deepgram transcription pass at slice 6; ElevenLabs retired, see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) and [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) — a local CLI in Phase 1, the same functions behind routes in Phase 2
-- **State**: IndexedDB only — no server-side child state, no child accounts; parent signs in via Clerk (ADR-003, Accepted)
+- **Factory**: a plain-Python authoring pipeline (Pydantic AI over OpenRouter for stories, safety verdicts, images, and narration — default narration on Gemini TTS via OpenRouter, one pinned house voice; planned, not yet built: glosses, voice cloning on Voxtral via the Mistral API, and word timings via a Deepgram transcription pass at slice 6; ElevenLabs retired, see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) and [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) — a local CLI in Phase 1, the same functions behind routes in Phase 2
+- **State**: browser storage only (progress and settings in localStorage, the family token in IndexedDB) — no server-side child state, no child accounts; parent signs in via Clerk (ADR-003, Accepted)
 - **Shelves**: a per-language manifest of launch content, plus a token-keyed overlay per family for approved stories
 
 See the [Architecture Documentation](architecture.md) for the pipeline design, storage layout, caching, and risks.

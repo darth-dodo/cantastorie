@@ -21,6 +21,8 @@ import {
   buildEnd,
   buildSettingsOverlay,
   playerView,
+  focusDialog,
+  pageAnnouncement,
 } from "./screens.js";
 
 const PALETTE_LABELS = {
@@ -185,22 +187,27 @@ function saveLang(lang, storage = globalThis.localStorage) {
 // story that branches again is followed correctly. Mutating loaded.pages here
 // (before it becomes playback's story) is what extendPath does mid-run — safe
 // because openCover hands in a per-open copy, never the cached story; the
-// unfinished check then sees the full rebuilt length. Returns false when a pick
-// no longer fits the graph (choice page gone, option index out of range, or a
-// dangling next_page) so the caller can discard the save.
+// unfinished check then sees the full rebuilt length. Returns where the last
+// replayed arm starts (0 with no picks): playback looks for the next branch
+// from there, as extendPath would have (M28). Returns null, leaving the path
+// untouched, when a pick no longer fits the graph (choice page gone, option
+// index out of range, or a dangling next_page) so the caller can discard the
+// save.
 function replayResume(loaded, choices) {
+  let pages = loaded.pages;
   let searchFrom = 0;
   for (const optionIndex of choices) {
-    const choicePageIndex = loaded.pages.findIndex((page, i) => i >= searchFrom && page.choice);
-    if (choicePageIndex === -1) return false;
-    const option = loaded.pages[choicePageIndex].choice.options?.[optionIndex];
-    if (!option) return false;
+    const choicePageIndex = pages.findIndex((page, i) => i >= searchFrom && page.choice);
+    if (choicePageIndex === -1) return null;
+    const option = pages[choicePageIndex].choice.options?.[optionIndex];
+    if (!option) return null;
     const arm = loaded.pagesFrom(option.next_page);
-    if (arm.length === 0) return false;
-    searchFrom = loaded.pages.length; // the next branch must be inside the new arm
-    loaded.pages = [...loaded.pages, ...arm];
+    if (arm.length === 0) return null;
+    searchFrom = pages.length; // the next branch must be inside the new arm
+    pages = [...pages, ...arm];
   }
-  return true;
+  loaded.pages = pages;
+  return searchFrom;
 }
 
 export async function init(
@@ -222,6 +229,8 @@ export async function init(
   const assetBase =
     root.querySelector('meta[name="asset-base"]')?.getAttribute("content") ?? "content";
   let lang = pickLang(params, loadLang());
+  // Screen readers pick voice and pronunciation from <html lang>.
+  root.documentElement.lang = lang;
 
   const store = createStore(load());
   engine ??= createAudioEngine();
@@ -344,10 +353,9 @@ export async function init(
       // pageCount) must see the rebuilt path, and the restored page index must
       // point into it. A pick that no longer fits the graph (republished
       // story) discards the save and starts fresh; never a crash.
-      const savedChoices = store.state.choices ?? [];
-      const replayed = savedChoices.length === 0 || replayResume(loaded, savedChoices);
-      await playback.openStory(loaded);
-      if (!replayed) store.resumeRestart();
+      const armStart = replayResume(loaded, store.state.choices ?? []);
+      await playback.openStory(loaded, { choiceSearchFrom: armStart ?? 0 });
+      if (armStart === null) store.resumeRestart();
       return;
     }
     // Only a cover with no story.json at all (the dev/mock shelf) runs on
@@ -361,6 +369,7 @@ export async function init(
     if (newLang === lang) return;
     lang = newLang;
     saveLang(lang);
+    root.documentElement.lang = lang;
     openSeq += 1; // a cover still loading in the old language is dropped
     storyCache.clear();
     activeStory = null;
@@ -368,6 +377,10 @@ export async function init(
     manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
     prefetcher = createPrefetcher({ engine, fetchFn });
+    // Retire the old instance before its replacement subscribes: left
+    // subscribed, it would still react to the store and speak the old
+    // language's prompts (M23).
+    playback.dispose();
     playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
     store.toShelf();
     shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen };
@@ -401,6 +414,23 @@ export async function init(
   let settingsOpen = false;
   let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen: false };
   let playerScreen = null;
+
+  // Page turns are announced from a polite live region that sits beside
+  // #app, so it outlives the structural renders that rebuild the player.
+  let announcer = doc.querySelector(".page-announcer");
+  if (!announcer) {
+    announcer = doc.createElement("div");
+    announcer.className = "page-announcer visually-hidden";
+    announcer.setAttribute("aria-live", "polite");
+    app.after(announcer);
+  }
+  let announcedPage = null;
+
+  // A structural render rebuilds the control that opened an overlay, so
+  // focus is handed back to its rebuilt twin, found by its stable class.
+  const OPENERS = [".settings-gear", ".nav-next", ".nav-prev", ".play-pause", ".exit"];
+  let returnFocus = null;
+  const openerOf = (node) => OPENERS.find((sel) => node?.matches?.(sel)) ?? null;
 
   function openSettings() {
     settingsOpen = true;
@@ -439,7 +469,11 @@ export async function init(
 
     const view = activeStory ? playerView(activeStory) : undefined;
 
+    const overlayWas = shown.settingsOpen || shown.choiceOpen || shown.resumeOpen || shown.audioError;
+    const overlayNow = settingsOpen || state.choiceOpen || state.resumeOpen || state.audioError;
+
     if (structural) {
+      if (overlayNow && !overlayWas) returnFocus = openerOf(doc.activeElement);
       app.replaceChildren();
       if (state.screen === "shelf") {
         playerScreen = null;
@@ -492,9 +526,31 @@ export async function init(
         app.appendChild(buildEnd(store, ENDS[lang] ?? ENDS.en));
       }
       shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError, settingsOpen };
+
+      // Focus follows the overlay: into it while one is up (the sleeping
+      // bird is itself the one control), back to its opener once it closes.
+      if (overlayNow) {
+        const top = app.querySelector(".audio-error") ?? app.querySelector('[role="dialog"]');
+        if (top?.matches(".audio-error")) top.focus();
+        else focusDialog(top);
+      } else if (overlayWas) {
+        const fallback = state.screen === "player" ? ".play-pause" : ".settings-gear";
+        app.querySelector(returnFocus ?? fallback)?.focus();
+        if (doc.activeElement === doc.body) app.querySelector(fallback)?.focus();
+        returnFocus = null;
+      }
     }
 
-    if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state, view);
+    if (state.screen === "player" && playerScreen) {
+      updatePlayer(playerScreen, state, view);
+      if (state.page !== announcedPage) {
+        announcedPage = state.page;
+        announcer.textContent = pageAnnouncement(lang, state.page, state.pageCount);
+      }
+    } else if (announcedPage !== null) {
+      announcedPage = null;
+      announcer.textContent = "";
+    }
   }
 
   store.subscribe(render);

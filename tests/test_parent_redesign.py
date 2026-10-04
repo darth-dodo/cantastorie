@@ -138,12 +138,13 @@ def test_make_route_returns_200(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_make_route_has_premise_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    """GET /parent/make includes the premise field (custom disclosure)."""
+    """GET /parent/make includes the optional premise field, offered alongside
+    the theme rather than behind a "Custom…" theme (AI-503)."""
     manager = _FakeManager({})
     client = _make_client(monkeypatch, manager)
     r = client.get("/parent/make")
     assert r.status_code == 200
-    assert "data-custom-premise" in r.text
+    assert 'name="premise"' in r.text
 
 
 def test_make_route_has_make_our_story_button(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,8 +186,8 @@ def test_being_made_tab_does_not_have_make_form(monkeypatch: pytest.MonkeyPatch)
     assert r.status_code == 200
     # The form's action target must NOT appear in the Being Made tab
     assert 'action="/parent/runs"' not in r.text
-    # The custom premise field must NOT appear here
-    assert "data-custom-premise" not in r.text
+    # The premise field must NOT appear here
+    assert 'name="premise"' not in r.text
 
 
 # ── Tab counts ────────────────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ Every Blocker and High finding has been re-checked against `origin/main` as of t
 | B3 | A live `/parent` link sits on the child's shelf | Fixed by #96 (AI-441 design overhaul); closed in the audit by #116 (AI-486) — the shelf's parent corner was removed, and `/parent` is reachable only through the settings sheet's grown-up gate, held in CI by `tests/e2e/two-tap.spec.js` and `tests/e2e/overhaul-flow.spec.js`. |
 | B4 | Images are never checked, by a rule that cannot check them | Fixed in code (#110, AI-476) |
 | B5 | `resume_on_boot()` is dead code | Fixed in code (#109, AI-477) |
-| B6 | The application has no logging | Open — in review (AI-485), not merged yet |
+| B6 | The application has no logging | Fixed in code (#121, AI-485) |
 | B7 | Closing the tab mid-story boots the child into a story that does not exist | Fixed in code (#103, AI-468) |
 | B8 | No timeout on any player fetch | Fixed in code (#113, AI-473) |
 | B9 | Narration dies permanently when the device sleeps | Fixed in code (#102, AI-461). Operator step pending: the real-device checklist. |
@@ -57,6 +57,8 @@ Every Blocker and High finding has been re-checked against `origin/main` as of t
 - **H6**: get native review on the machine-drafted el/de/bg/ru/mr prompt lines (production publish and the `--local` fixtures are already done).
 
 **Updated verdict: Go pending B6 and the remaining operator steps.** All four of the original no-go grounds (B1, B2, B4, and the B7/B8/B9/H6 group) are fixed in code, and B1, B3, and H3 are now also closed operationally. B6 (no logging) is the one blocker still outstanding, in review as AI-485. H1 is now fixed in code (AI-493). H4 remains open — a real gap worth tracking — but this audit places it under **High**, not **Blocker**; by the audit's own severity categorization it does not reopen the no-go verdict on its own.
+
+**Update (2026-10-04):** B6 merged as #121 (AI-485), so no Blocker is open in code. The verdict is now Go pending the operator steps above.
 
 ---
 
@@ -401,39 +403,41 @@ Fixed in code (AI-472).
 
 ## Medium
 
-| ID | Finding | Location |
-|----|---------|----------|
-| M1 | `/health` is a constant; Render cannot detect a broken deploy and will cut traffic to it | `src/api/main.py:32-34` |
-| M2 | Seven Playwright e2e specs exist; no CI job runs them (jobs are lint, typecheck, test, test-js, security, build, audit) | `.github/workflows/ci.yml` |
-| M3 | No fail-fast on missing `OPENROUTER_API_KEY`/R2 — the app boots and fails at first submit | `src/config.py:21` |
-| M4 | No CSRF defence; protection rests entirely on a `SameSite` attribute set by Clerk, asserted by no test | `src/api/main.py:20-36` |
-| M5 | Family token travels in query strings and every family's token renders on the operator library page | `src/templates/workshop/library.html:17,21` |
-| M6 | A leaked family token is permanent self-service account takeover via provision; no rate limit, no rotation | `src/api/routes/parent.py:295-324` |
-| M7 | Anonymous `/published/{path}` proxy returns raw exception text (leaks R2 account id) and is unbounded, uncached, non-streaming | `src/api/routes/published.py:36-53` |
-| M8 | Zero retries on any provider call; one transient 429 fails an entire run | `src/pipeline/providers.py:64`, `src/pipeline/steps/illustrate.py:71` |
-| M9 | Parent progress poll never calls `reap_stale()`; only an operator can unstick a family | `src/api/routes/parent.py:240-262` |
-| M10 | Cap enforcement is check-then-act; `save()` on a new record is an unconditional PUT | `src/workshop/manager.py:91-96` |
-| M11 | Correct only at one worker and one replica; nothing in `Dockerfile` or `render.yaml` enforces that | `src/workshop/manager.py:85` |
-| M12 | Repair tooling and orphan detection skip family overlays entirely | `scripts/repair_manifests.py:35`, `src/pipeline/publish.py:712` |
-| M13 | No R2 versioning, backup, or manifest-loss recovery path | `render.yaml`, `docs/setup.md` |
-| M14 | `.env.example` omits `ASSET_BASE`, `CONTENT_DIR`, `STAGING_DIR`, `PARENT_DAILY_RUN_CAP` | `.env.example` |
-| M15 | JWT issuer unpinned by default (`clerk_issuer` defaults empty) and `exp` is verified-if-present, not required | `src/api/auth.py:179-185` |
-| M16 | No security response headers anywhere (CSP, X-Frame-Options, nosniff, Referrer-Policy) | `src/` |
-| M17 | Italian spoken prompts are story-independent but cached per-story, so they are re-bought every Italian run | `src/pipeline/generate.py:85-92` |
-| M18 | Per-run `get_object` on the event loop; the operator dashboard degrades non-linearly with run count | `src/workshop/records.py:196-204` |
-| M19 | Decoded audio buffers are never evicted; three stories browsed ≈ 110 MB of live PCM, enough to have the tab killed on a budget tablet | `src/static/js/audio-engine.js:26,125-143` |
-| M20 | No visible focus indicator anywhere in the player — `all: unset` on `button` removes it; WCAG 2.4.7 fails outright | `src/static/css/player.css:49-52` |
-| M21 | Whole-story prefetch fires ~20 unthrottled requests with no prioritization, starving page 1's narration | `src/static/js/prefetch.js:41-60` |
-| M22 | Two different day/night rules; between midnight and 07:00 the theme flashes bright before settling to dusk | `src/static/js/palette.js:25` vs `src/static/js/main.js:53` |
-| M23 | Playback instances leak on language switch; a stale instance speaks the end prompt in the previous language | `src/static/js/playback.js:123` |
-| M24 | `<html lang>` is hardcoded `en` and never updated, so screen readers voice Greek/Russian/Marathi with an English voice | `src/templates/index.html:2` |
-| M25 | Overlays have no dialog semantics, no focus management, no Escape, and there is no live region for page turns | `src/static/js/screens.js:188-237,323-400` |
-| M26 | Cover captions fail AA contrast in both themes (≈4.24:1 light, ≈3.49:1 dusk at 11px/600) | `src/static/css/player.css:222-235` |
-| M27 | Prev/next chevrons clip off-screen below 336px viewport width — and they are the only escape when narration stalls | `src/static/css/player.css:796-831` |
-| M28 | Resumed branching story skips its second branch and cuts to the end screen; latent until the pipeline emits a twice-branching story | `src/static/js/main.js:186-199` |
-| M29 | Three duplicated boto3 client builders that differ subtly — one omits the `or None` fallback, so an empty key blocks environment credentials | `src/api/routes/published.py:26` |
-| M30 | `WorkshopScope.publish_target` is security-shaped dead code, read by nothing; lane selection is implicit in the router | `src/workshop/scope.py:24` |
-| M31 | Auto-continue on the choice overlay is specified and skipped in e2e but never wired, so a hands-off child waits indefinitely | `tests/e2e/branching.spec.js:159` |
+| ID | Finding | Location | Status (2026-10-04) |
+|----|---------|----------|--------|
+| M1 | `/health` is a constant; Render cannot detect a broken deploy and will cut traffic to it | `src/api/main.py:32-34` | Open — AI-490 |
+| M2 | Seven Playwright e2e specs exist; no CI job runs them (jobs are lint, typecheck, test, test-js, security, build, audit) | `.github/workflows/ci.yml` | Fixed (#95) |
+| M3 | No fail-fast on missing `OPENROUTER_API_KEY`/R2 — the app boots and fails at first submit | `src/config.py:21` | Partly fixed; rest in AI-502 |
+| M4 | No CSRF defence; protection rests entirely on a `SameSite` attribute set by Clerk, asserted by no test | `src/api/main.py:20-36` | Open — AI-496 |
+| M5 | Family token travels in query strings and every family's token renders on the operator library page | `src/templates/workshop/library.html:17,21` | Partly fixed; rest in AI-497 |
+| M6 | A leaked family token is permanent self-service account takeover via provision; no rate limit, no rotation | `src/api/routes/parent.py:295-324` | Open — AI-497 |
+| M7 | Anonymous `/published/{path}` proxy returns raw exception text (leaks R2 account id) and is unbounded, uncached, non-streaming | `src/api/routes/published.py:36-53` | Fixed via H7 (#105) |
+| M8 | Zero retries on any provider call; one transient 429 fails an entire run | `src/pipeline/providers.py:64`, `src/pipeline/steps/illustrate.py:71` | Open — AI-495 |
+| M9 | Parent progress poll never calls `reap_stale()`; only an operator can unstick a family | `src/api/routes/parent.py:240-262` | Fixed (#114) |
+| M10 | Cap enforcement is check-then-act; `save()` on a new record is an unconditional PUT | `src/workshop/manager.py:91-96` | Open — AI-491 |
+| M11 | Correct only at one worker and one replica; nothing in `Dockerfile` or `render.yaml` enforces that | `src/workshop/manager.py:85` | Open — AI-491 |
+| M12 | Repair tooling and orphan detection skip family overlays entirely | `scripts/repair_manifests.py:35`, `src/pipeline/publish.py:712` | Partly fixed; rest in AI-502 |
+| M13 | No R2 versioning, backup, or manifest-loss recovery path | `render.yaml`, `docs/setup.md` | Open — AI-492 |
+| M14 | `.env.example` omits `ASSET_BASE`, `CONTENT_DIR`, `STAGING_DIR`, `PARENT_DAILY_RUN_CAP` | `.env.example` | Fixed (AI-501) |
+| M15 | JWT issuer unpinned by default (`clerk_issuer` defaults empty) and `exp` is verified-if-present, not required | `src/api/auth.py:179-185` | Open — AI-496 |
+| M16 | No security response headers anywhere (CSP, X-Frame-Options, nosniff, Referrer-Policy) | `src/` | Open — AI-496 |
+| M17 | Italian spoken prompts are story-independent but cached per-story, so they are re-bought every Italian run | `src/pipeline/generate.py:85-92` | Open — AI-502 |
+| M18 | Per-run `get_object` on the event loop; the operator dashboard degrades non-linearly with run count | `src/workshop/records.py:196-204` | Fixed (verified 2026-10-04) |
+| M19 | Decoded audio buffers are never evicted; three stories browsed ≈ 110 MB of live PCM, enough to have the tab killed on a budget tablet | `src/static/js/audio-engine.js:26,125-143` | Open — AI-500 |
+| M20 | No visible focus indicator anywhere in the player — `all: unset` on `button` removes it; WCAG 2.4.7 fails outright | `src/static/css/player.css:49-52` | Open — AI-498 |
+| M21 | Whole-story prefetch fires ~20 unthrottled requests with no prioritization, starving page 1's narration | `src/static/js/prefetch.js:41-60` | Open — AI-500 |
+| M22 | Two different day/night rules; between midnight and 07:00 the theme flashes bright before settling to dusk | `src/static/js/palette.js:25` vs `src/static/js/main.js:53` | Fixed (verified 2026-10-04) |
+| M23 | Playback instances leak on language switch; a stale instance speaks the end prompt in the previous language | `src/static/js/playback.js:123` | Open — AI-494 |
+| M24 | `<html lang>` is hardcoded `en` and never updated, so screen readers voice Greek/Russian/Marathi with an English voice | `src/templates/index.html:2` | Open — AI-498 |
+| M25 | Overlays have no dialog semantics, no focus management, no Escape, and there is no live region for page turns | `src/static/js/screens.js:188-237,323-400` | Open — AI-498 |
+| M26 | Cover captions fail AA contrast in both themes (≈4.24:1 light, ≈3.49:1 dusk at 11px/600) | `src/static/css/player.css:222-235` | Partly fixed; rest in AI-498 |
+| M27 | Prev/next chevrons clip off-screen below 336px viewport width — and they are the only escape when narration stalls | `src/static/css/player.css:796-831` | Open — AI-498 |
+| M28 | Resumed branching story skips its second branch and cuts to the end screen; latent until the pipeline emits a twice-branching story | `src/static/js/main.js:186-199` | Open — AI-494 |
+| M29 | Three duplicated boto3 client builders that differ subtly — one omits the `or None` fallback, so an empty key blocks environment credentials | `src/api/routes/published.py:26` | Fixed (verified 2026-10-04) |
+| M30 | `WorkshopScope.publish_target` is security-shaped dead code, read by nothing; lane selection is implicit in the router | `src/workshop/scope.py:24` | Open — AI-496 |
+| M31 | Auto-continue on the choice overlay is specified and skipped in e2e but never wired, so a hands-off child waits indefinitely | `tests/e2e/branching.spec.js:159` | Open — AI-499 |
+
+Status re-checked against `origin/main` on 2026-10-04. Open items are grouped into Linear issues: M1 (AI-490), M10 and M11 (AI-491), M13 (AI-492), M23 and M28 (AI-494), M8 (AI-495), M4, M15, M16 and M30 (AI-496), M5 and M6 (AI-497), M20 and M24 to M27 (AI-498), M31 (AI-499), M19 and M21 (AI-500), M14 with the documentation accuracy table below (AI-501), M3, M12 and M17 (AI-502).
 
 ---
 
@@ -441,19 +445,19 @@ Fixed in code (AI-472).
 
 Verified claim-by-claim against the code. The documentation is good in substance and stale in specifics; these are the ones that would mislead someone acting on them.
 
-| Claim | Reality |
-|-------|---------|
-| `docs/setup.md:51` — the audit fails on any `pending/` object in the public bucket | It never lists `pending/` (B1) |
-| `docs/setup.md:11` — "the running site needs no secrets" | Generation runs in-process; the container needs the provider key and R2 credentials |
-| `Dockerfile:9-11`, `render.yaml:9` — the app needs no API keys | Same contradiction, repeated in the deploy artifacts; `Dockerfile:10` still names a retired provider |
-| `docs/system-overview.md:234`, `docs/adr/ADR-005:12,70` — runs resume on startup | `resume_on_boot()` is never called (B5) |
-| `docs/architecture.md:88`, `docs/system-overview.md:27,265` — the player is at `/` | The player is at `/play`; `/` is the landing page, which appears in no document |
-| `README.md:114`, `docs/architecture.md:105,143-148` — `gloss.py` is a pipeline step | No such file; the steps are write, safety, revise, narrate, illustrate, assemble |
-| `README.md:141`, `docs/architecture.md:74`, `docs/setup.md:11` — two further API keys are required | Neither exists in `src/config.py` nor anywhere in `src/` |
-| ADR-005 — the operator face is guarded by a shared env-var secret | Superseded in practice by Clerk; the ADR is unmarked and `docs/design/design-system.md` repeats the stale claim |
-| Language count | Code has 8; README and architecture say seven; product says five |
-| `docs/product.md:92` — parent dashboard "in progress" | Shipped. The status table also omits the landing page, the operator library, and observability |
-| `docs/architecture.md:71`, `AGENTS.md:70` — child state is in IndexedDB | `storage.js` is explicit that progress is localStorage; only the family token is in IndexedDB |
+| Claim | Reality | Status (2026-10-04) |
+|-------|---------|--------|
+| `docs/setup.md:51` — the audit fails on any `pending/` object in the public bucket | It never lists `pending/` (B1) | Already fixed (B1, #107): the audit now sweeps `pending/` |
+| `docs/setup.md:11` — "the running site needs no secrets" | Generation runs in-process; the container needs the provider key and R2 credentials | Fixed (AI-501): setup.md lists the keys the web service needs |
+| `Dockerfile:9-11`, `render.yaml:9` — the app needs no API keys | Same contradiction, repeated in the deploy artifacts; `Dockerfile:10` still names a retired provider | Fixed (AI-501): Dockerfile comment corrected; `render.yaml` and the provider name were already corrected |
+| `docs/system-overview.md:234`, `docs/adr/ADR-005:12,70` — runs resume on startup | `resume_on_boot()` is never called (B5) | Already fixed (B5, #109): runs resume on boot, so the claim is now true |
+| `docs/architecture.md:88`, `docs/system-overview.md:27,265` — the player is at `/` | The player is at `/play`; `/` is the landing page, which appears in no document | Fixed (AI-501): `/play` throughout; landing page documented |
+| `README.md:114`, `docs/architecture.md:105,143-148` — `gloss.py` is a pipeline step | No such file; the steps are write, safety, revise, narrate, illustrate, assemble | Fixed (AI-501): gloss marked as a planned step |
+| `README.md:141`, `docs/architecture.md:74`, `docs/setup.md:11` — two further API keys are required | Neither exists in `src/config.py` nor anywhere in `src/` | Fixed (AI-501): Deepgram and Mistral keys marked as future, not read today |
+| ADR-005 — the operator face is guarded by a shared env-var secret | Superseded in practice by Clerk; the ADR is unmarked and `docs/design/design-system.md` repeats the stale claim | Fixed (AI-501): ADR-005 carries an amendment note; `design-system.md` no longer repeats the claim |
+| Language count | Code has 8; README and architecture say seven; product says five | Already fixed: every document says eight |
+| `docs/product.md:92` — parent dashboard "in progress" | Shipped. The status table also omits the landing page, the operator library, and observability | Fixed (AI-501): status updated; the three rows added |
+| `docs/architecture.md:71`, `AGENTS.md:70` — child state is in IndexedDB | `storage.js` is explicit that progress is localStorage; only the family token is in IndexedDB | Fixed (AI-501): wording corrected in both, and in README, product.md and system-overview.md |
 
 Verified clean: every relative markdown link resolves, every documented `make` target, npm script and CLI command exists, the ADR supersession chain is correctly recorded, and `docs/setup.md`'s R2 section is accurate. `docs/system-overview.md` is the most accurate document in the repository — where it and the others disagree, it is the one that is right.
 

@@ -1,9 +1,10 @@
 # ADR-005: The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs
 
 **Date**: 2026-07-11
-**Status**: Accepted
+**Status**: Accepted — amended by AI-426 (the operator face's env-var secret is replaced by Clerk sign-in with an operator role; see the 2026-08-08 amendment below)
 **Context**: Establishing where the authoring workshop lives, who reaches it, and how pipeline runs execute when triggered from the web
 **Decider(s)**: Project Owner
+**Amended**: 2026-08-08 (AI-426, PR #64) — the operator gate moved to Clerk. `/workshop` no longer reads an env-var operator secret: every request verifies the Clerk session JWT and resolves a `WorkshopScope` (`src/workshop/scope.py`); a user whose `public_metadata.role` is `operator` gets the operator face, and any other signed-in user is a parent confined to their own `family_token`. With Clerk unconfigured, `/workshop` answers 404. The body below still describes the original env-var secret and is kept as the record of what was decided on 2026-07-11; where it mentions the operator secret, read Clerk operator scope. The in-process run model, R2 persistence and resume-on-boot are unchanged.
 **Amended**: 2026-10-03 (AI-480) — one story per request: a run requests, stages, reviews and approves exactly one story, and the former "pack" wording (a batch of 1–3 stories) is rewritten as stories and story requests. Parent routes moved to `/parent/runs`. The decision itself is unchanged.
 
 ---

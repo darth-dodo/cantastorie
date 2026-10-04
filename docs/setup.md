@@ -4,11 +4,23 @@ Cantastorie has two deployed pieces and one that never deploys:
 
 | Piece | Where | Serves |
 |-------|-------|--------|
-| **Web service** | Render (Docker, `render.yaml`) | The static player shell and the parent area |
+| **Web service** | Render (Docker, `render.yaml`) | The landing page, the child player, the parent area and the workshop; runs story generation in-process |
 | **Content bucket** | Cloudflare R2 | Published stories and prompts, fetched bucket-direct |
-| **Authoring pipeline** | Your laptop only | Runs the CLI; its two API keys stay in local `.env` |
+| **Pipeline CLI** | Your laptop only | Operator commands (`publish-prompts`, `audit`, local runs) against a local `.env` |
 
-The pipeline's keys are **never** deployed — the running site needs no secrets. `OPENROUTER_API_KEY` is the one key that runs the default pipeline (ElevenLabs is retired — [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)). Two pipeline-only keys are the bounded exceptions: `DEEPGRAM_API_KEY` for the slice 6 word-timing pass (OpenRouter does not carry the Deepgram models), and `MISTRAL_API_KEY` for voice cloning only, once Nonna Narrates ships ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)). See [architecture.md → Content Storage](architecture.md#content-storage).
+The web service is not secret-free. A parent or operator run generates its story inside the web process (`src/workshop/manager.py` calls `generate_story`), so the service needs the generation key, the R2 credentials and the Clerk settings that `src/config.py` reads:
+
+| Variable | Needed for |
+|----------|------------|
+| `OPENROUTER_API_KEY` | Every model call: writing, the safety judges, images and narration |
+| `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, `R2_PENDING_BUCKET` | Run records, staged stories and publishing. All or none; with an endpoint set the app refuses to boot unless `R2_PENDING_BUCKET` names a separate private bucket |
+| `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL` | Parent and operator sign-in. Unset, `/parent` and `/workshop` answer 404 |
+| `CLERK_SECRET_KEY` | The one Clerk REST call: writing a new family's token into `public_metadata` at first sign-in (`src/api/clerk.py`) |
+| `CLERK_ISSUER` (optional) | Pins the token issuer; unset, the issuer is not enforced |
+| `ASSET_BASE` | Where the player fetches published stories (the bucket's public URL plus `/published`) |
+| `SENTRY_DSN` (optional) | Error monitoring ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)); unset, Sentry never initializes |
+
+`render.yaml` declares most of these as `sync: false`; `CLERK_SECRET_KEY` and `CLERK_ISSUER` are not in the blueprint and are added by hand in the Render dashboard. No secret reaches the browser (the Clerk publishable key is public by design and goes only to the parent and workshop pages), and the child player makes no keyed calls. ElevenLabs is retired ([ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)). `DEEPGRAM_API_KEY` (the planned word-timing pass) and `MISTRAL_API_KEY` (voice cloning, once Nonna Narrates ships, [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)) are future keys: nothing in `src/` reads them today. See [architecture.md → Content Storage](architecture.md#content-storage).
 
 ---
 
@@ -140,6 +152,9 @@ Writing `it` replaces the committed chime stand-ins with spoken lines. `scripts/
 2. Set the environment variables on the service:
    - **`ASSET_BASE`** = the bucket's public URL **plus the `/published` prefix**, no trailing slash. For the live EU bucket that is `https://pub-ee7647e725e84705b6c5be139919f6b8.r2.dev/published` (or `https://cdn.your-domain/published` once a custom domain is attached).
    - The R2 publish target, all declared `sync: false` in `render.yaml`: `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, and **`R2_PENDING_BUCKET`** (the private bucket above). The app will not boot with an endpoint set and the pending bucket missing or equal to `R2_BUCKET`.
+   - **`OPENROUTER_API_KEY`**, which in-process generation needs for every model call.
+   - **`CLERK_PUBLISHABLE_KEY`** and **`CLERK_JWKS_URL`** (without them `/parent` and `/workshop` answer 404), **`CLERK_SECRET_KEY`** (family-token provisioning), and optionally `CLERK_ISSUER`. The last two are not declared in `render.yaml`; add them by hand.
+   - **`SENTRY_DSN`**, optional, for error monitoring.
 3. Wire up CI-gated deploys (below). `render.yaml` sets `autoDeploy: false`, so a push to `main` no longer redeploys by itself. The Dockerfile compiles Tailwind, installs the exact dependency set from `uv.lock`, and serves the shell; `/health` is the health check.
 4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 

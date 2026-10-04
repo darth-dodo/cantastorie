@@ -51,6 +51,26 @@ button {
   cursor: pointer;
 }
 
+/* `all: unset` strips the browser's focus ring, so keyboard focus gets one
+   back (WCAG 2.4.7). :focus-visible keeps it off taps and clicks. */
+:focus-visible {
+  outline: 3px solid var(--focus-ring, #A88BE0);
+  outline-offset: 3px;
+}
+
+/* Read aloud, never painted: the page-turn live region (AI-498). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 button:active .presses,
 button.presses:active {
   transform: scale(0.95);
@@ -266,7 +286,7 @@ button.presses:active {
 .cover-caption {
   font: 700 14px/1.2 var(--font-app, system-ui);
   text-align: center;
-  color: var(--ink-soft);
+  color: var(--caption-ink, var(--ink-soft));
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1188,11 +1208,21 @@ button.presses:active {
 }
 
 .nav-prev {
-  left: calc(50% - 168px);
+  /* Clamped so a narrow phone (<336px) never clips the chevrons off-screen. */
+  left: max(8px, calc(50% - 168px));
 }
 
 .nav-next {
-  left: calc(50% + 88px);
+  right: max(8px, calc(50% - 168px));
+}
+
+/* Below 336px the clamped chevrons close in on the 140px play-pause; a
+   slightly smaller button keeps clear air between them (still ≥48px). */
+@media (max-width: 335px) {
+  .nav {
+    width: 70px;
+    height: 70px;
+  }
 }
 
 .chevron-left {

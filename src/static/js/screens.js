@@ -84,6 +84,8 @@ export function setReadWithMe(value, storage = globalThis.localStorage) {
 
 // Localized copy for the settings sheet.
 // Keys also consumed by Task 10 (gate): gateHeading, gateWrong, gateBack.
+// settings names the sheet for screen readers; pageOf is the page-turn
+// announcement ({page} is one-based).
 const SETTINGS_COPY = {
   it: {
     languages:    'Lingua',
@@ -99,6 +101,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Codice genitore',
     gateWrong:    'Codice errato, riprova',
     gateBack:     'Indietro',
+    settings:     'Impostazioni',
+    pageOf:       'Pagina {page} di {count}',
   },
   es: {
     languages:    'Idioma',
@@ -114,6 +118,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Código parental',
     gateWrong:    'Código incorrecto, inténtalo de nuevo',
     gateBack:     'Volver',
+    settings:     'Ajustes',
+    pageOf:       'Página {page} de {count}',
   },
   en: {
     languages:    'Language',
@@ -129,6 +135,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Parent code',
     gateWrong:    'Wrong code, try again',
     gateBack:     'Back',
+    settings:     'Settings',
+    pageOf:       'Page {page} of {count}',
   },
   el: {
     languages:    'Γλώσσα',
@@ -144,6 +152,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Κωδικός γονέα',
     gateWrong:    'Λάθος κωδικός, ξαναπροσπάθησε',
     gateBack:     'Πίσω',
+    settings:     'Ρυθμίσεις',
+    pageOf:       'Σελίδα {page} από {count}',
   },
   de: {
     languages:    'Sprache',
@@ -159,6 +169,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Elterncode',
     gateWrong:    'Falscher Code, nochmal versuchen',
     gateBack:     'Zurück',
+    settings:     'Einstellungen',
+    pageOf:       'Seite {page} von {count}',
   },
   bg: {
     languages:    'Език',
@@ -174,6 +186,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Родителски код',
     gateWrong:    'Грешен код, опитай пак',
     gateBack:     'Назад',
+    settings:     'Настройки',
+    pageOf:       'Страница {page} от {count}',
   },
   ru: {
     languages:    'Язык',
@@ -189,6 +203,8 @@ const SETTINGS_COPY = {
     gateHeading:  'Родительский код',
     gateWrong:    'Неверный код, попробуй ещё раз',
     gateBack:     'Назад',
+    settings:     'Настройки',
+    pageOf:       'Страница {page} из {count}',
   },
   mr: {
     languages:    'भाषा',
@@ -204,11 +220,75 @@ const SETTINGS_COPY = {
     gateHeading:  'पालक कोड',
     gateWrong:    'चुकीचा कोड, पुन्हा प्रयत्न करा',
     gateBack:     'मागे',
+    settings:     'सेटिंग्ज',
+    pageOf:       '{count} पैकी पान {page}',
   },
 };
 
 export function settingsCopy(lang) {
   return SETTINGS_COPY[lang] ?? SETTINGS_COPY.en;
+}
+
+// The page-turn line for the live region; `page` is the zero-based index.
+export function pageAnnouncement(lang, page, count) {
+  return settingsCopy(lang)
+    .pageOf.replace("{page}", String(page + 1))
+    .replace("{count}", String(count));
+}
+
+// ── Modal dialogs (AI-498) ───────────────────────────────────────────────────
+// Every modal overlay is a named dialog that keeps Tab inside itself. Escape
+// is wired only where closing is an ordinary way out (settings, the gate's
+// Back) — never on the story's choice, which must not be skipped.
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+let dialogIds = 0;
+export function nextDialogId(prefix) {
+  dialogIds += 1;
+  return `${prefix}-${dialogIds}`;
+}
+
+function focusables(node) {
+  return [...node.querySelectorAll(FOCUSABLE)].filter(
+    (item) => !item.disabled && !item.closest('[aria-hidden="true"]'),
+  );
+}
+
+export function makeDialog(node, { label, labelledBy, onEscape } = {}) {
+  node.setAttribute("role", "dialog");
+  node.setAttribute("aria-modal", "true");
+  if (labelledBy) node.setAttribute("aria-labelledby", labelledBy);
+  else if (label) node.setAttribute("aria-label", label);
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && onEscape) {
+      event.preventDefault();
+      event.stopPropagation();
+      onEscape();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const items = focusables(node);
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = node.ownerDocument.activeElement;
+    if (event.shiftKey && (active === first || !node.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || !node.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  return node;
+}
+
+// Move focus into an attached dialog: its [data-autofocus] control if it
+// names one, else the first focusable control.
+export function focusDialog(node) {
+  if (!node?.isConnected) return;
+  const target = node.querySelector("[data-autofocus]") ?? focusables(node)[0];
+  target?.focus();
 }
 
 export function cycleLanguage(current) {
@@ -372,7 +452,7 @@ export function buildSettingsOverlay({
     if (event.target === backdrop) onClose();
   });
 
-  const sheet = el("div", "settings-sheet");
+  const sheet = makeDialog(el("div", "settings-sheet"), { label: copy.settings, onEscape: onClose });
 
   // Drag handle (decorative)
   const handle = el("div", "settings-handle");
@@ -385,7 +465,12 @@ export function buildSettingsOverlay({
   const langGrid = el("div", "settings-lang-grid");
   LANG_CODES.forEach((code) => {
     const tile = el("button", "settings-lang-tile", { "aria-label": LANG_NAMES[code] });
-    if (code === currentLang) tile.classList.add("selected");
+    if (code === currentLang) {
+      tile.classList.add("selected");
+      // Focus lands on the active language when the sheet opens — and again
+      // when a switch rebuilds the sheet, so a keyboard user keeps their place.
+      tile.dataset.autofocus = "";
+    }
     const flag = el("span", "settings-lang-flag");
     flag.textContent = LANG_FLAGS[code];
     const name = el("span", "settings-lang-name");
@@ -469,8 +554,13 @@ export function buildSettingsOverlay({
   lockIcon.append(lockShackle, lockBody);
   workshopRow.append(workshopLabel, lockIcon);
   workshopRow.addEventListener("click", () => {
-    const gate = buildGate({ lang: currentLang, onPass: () => { gate.remove(); onWorkshop(); } });
+    const gate = buildGate({
+      lang: currentLang,
+      onPass: () => { gate.remove(); onWorkshop(); },
+      opener: workshopRow,
+    });
     (doc?.body ?? globalThis.document.body).appendChild(gate);
+    focusDialog(gate.querySelector(".gate-modal"));
   });
 
   grownupsSection.append(grownupsHeading, rwmRow, workshopRow);
@@ -591,8 +681,10 @@ export function updatePlayer(screen, state, view = mockView) {
 // Without a view (a story-less cover), the mock choice backs the overlay.
 export function buildChoiceOverlay(view, store, onChoose) {
   const choice = view ?? story.choice;
-  const overlay = el("div", "overlay");
-  const prompt = el("div", "prompt");
+  const promptId = nextDialogId("choice-prompt");
+  // No Escape: the branch is the story's own fork, never skippable.
+  const overlay = makeDialog(el("div", "overlay"), { labelledBy: promptId });
+  const prompt = el("div", "prompt", { id: promptId });
   prompt.textContent = choice.prompt;
   const options = el("div", "options");
   choice.options.forEach(({ label, wash, card_image }, index) => {
@@ -623,9 +715,11 @@ export function buildChoiceOverlay(view, store, onChoose) {
 }
 
 export function buildResumeOverlay(store, resumeText = "Welcome back! Continue or start over?") {
-  const overlay = el("div", "overlay");
+  const titleId = nextDialogId("resume-title");
+  // No Escape: continue and start over are both real answers, neither a cancel.
+  const overlay = makeDialog(el("div", "overlay"), { labelledBy: titleId });
   const prompt = el("div", "prompt");
-  const title = el("strong");
+  const title = el("strong", null, { id: titleId });
   title.textContent = "Welcome back!";
   const sub = el("small");
   sub.textContent = resumeText;
@@ -693,18 +787,23 @@ export function checkGate(choice, answer, onPass) {
   if (choice === answer) onPass();
 }
 
-// buildGate({ lang, onPass }) → detached modal element.
-// The gate is not dismissible on wrong answer; only the Back link exits.
-// onPass is called when the correct sum is tapped.
-export function buildGate({ lang = 'en', onPass = () => {} } = {}) {
+// buildGate({ lang, onPass, opener }) → detached modal element.
+// The gate is not dismissible on wrong answer; only Back (or Escape) exits,
+// handing focus back to `opener`. onPass is called when the correct sum is tapped.
+export function buildGate({ lang = 'en', onPass = () => {}, opener = null } = {}) {
   const copy = settingsCopy(lang);
   const { options, answer } = gateOptions(7, 6);
 
   const backdrop = el('div', 'gate-backdrop');
 
-  const modal = el('div', 'gate-modal');
+  const headingId = nextDialogId('gate-heading');
+  const close = () => {
+    backdrop.remove();
+    if (opener?.isConnected) opener.focus();
+  };
+  const modal = makeDialog(el('div', 'gate-modal'), { labelledBy: headingId, onEscape: close });
 
-  const heading = el('h2', 'gate-heading');
+  const heading = el('h2', 'gate-heading', { id: headingId });
   heading.textContent = copy.gateHeading;
 
   const equationRow = el('div', 'gate-equation');
@@ -731,7 +830,7 @@ export function buildGate({ lang = 'en', onPass = () => {} } = {}) {
 
   const backBtn = el('button', 'gate-back');
   backBtn.textContent = copy.gateBack;
-  backBtn.addEventListener('click', () => backdrop.remove());
+  backBtn.addEventListener('click', close);
 
   modal.append(heading, equationRow, choicesRow, wrongMsg, backBtn);
   backdrop.appendChild(modal);
