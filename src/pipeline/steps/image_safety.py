@@ -20,6 +20,7 @@ the config otherwise (docs/architecture.md "Model roles").
 """
 
 import hashlib
+import logging
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -30,6 +31,7 @@ from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 
 from src.config import Settings
+from src.observability import timed_step
 from src.pipeline.cache import ArtifactCache, run_step
 from src.pipeline.models import ImageSafetyReport, Story
 from src.pipeline.providers import build_model
@@ -42,6 +44,8 @@ from src.pipeline.steps.illustrate import (
 )
 
 STEP_NAME = "image_safety"
+
+logger = logging.getLogger(__name__)
 
 # Bump when the instructions change: prompt text is a cache-key input by proxy.
 # Also bumped when temperature 0 started reaching the wire (B4 review): verdicts
@@ -78,9 +82,13 @@ JUDGE_PROMPT = "Judge this bedtime-story illustration against the three criteria
 class ImageSafetyRejectedError(Exception):
     """Raised when an image still fails after IMAGE_SAFETY_MAX_REGENERATIONS redraws."""
 
-    def __init__(self, story: Story, failures: Sequence[str]) -> None:
+    def __init__(
+        self, story: Story, failures: Sequence[str], *, criteria: Sequence[str] = ()
+    ) -> None:
         self.story = story
         self.failures = list(failures)
+        # Failed criterion names only — safe to log, unlike the judge's free text.
+        self.criteria = list(criteria)
         super().__init__(
             f"story {story.id} rejected: image safety still failing after "
             f"{IMAGE_SAFETY_MAX_REGENERATIONS} regenerations: " + "; ".join(self.failures)
@@ -132,6 +140,10 @@ def _shown_images(illustrations: IllustrationSet) -> dict[str, Path]:
     return images
 
 
+def _failed_criteria(report: ImageSafetyReport) -> list[str]:
+    return [v.criterion for v in report.verdicts if not v.passed]
+
+
 def _failure_line(slot: str, report: ImageSafetyReport) -> str:
     reasons = ", ".join(f"{v.criterion}: {v.reason}" for v in report.verdicts if not v.passed)
     return f"{slot}: {reasons}"
@@ -156,23 +168,56 @@ def illustrate_safely(
     if llm is None:
         llm = build_model(settings.image_safety_model, settings)
     regenerations: dict[str, int] = {}
+    round_ = 0
     while True:
-        illustrations = illustrate_story(
-            story, settings, cache, transport=transport, regenerations=regenerations
-        )
-        failed = {
-            slot: report
-            for slot, path in _shown_images(illustrations).items()
-            if not (report := judge_image(path.read_bytes(), settings, cache, model=llm)).passed
-        }
+        with timed_step("illustrate", story_id=story.id, round=round_):
+            illustrations = illustrate_story(
+                story, settings, cache, transport=transport, regenerations=regenerations
+            )
+        shown = _shown_images(illustrations)
+        with timed_step("image_safety", story_id=story.id, round=round_, images=len(shown)):
+            failed = {
+                slot: report
+                for slot, path in shown.items()
+                if not (report := judge_image(path.read_bytes(), settings, cache, model=llm)).passed
+            }
         if not failed:
             return illustrations
-        exhausted = [
-            _failure_line(slot, report)
+        exhausted = {
+            slot: report
             for slot, report in failed.items()
             if regenerations.get(slot, 0) >= IMAGE_SAFETY_MAX_REGENERATIONS
-        ]
+        }
         if exhausted:
-            raise ImageSafetyRejectedError(story, exhausted)
-        for slot in failed:
+            criteria = sorted(
+                {c for report in exhausted.values() for c in _failed_criteria(report)}
+            )
+            logger.warning(
+                "image_safety_rejected",
+                extra={
+                    "event": "image_safety_rejected",
+                    "story_id": story.id,
+                    "slots": ",".join(sorted(exhausted)),
+                    "criteria": ",".join(criteria),
+                    "failed_slots": len(exhausted),
+                    "attempt": IMAGE_SAFETY_MAX_REGENERATIONS,
+                },
+            )
+            raise ImageSafetyRejectedError(
+                story,
+                [_failure_line(slot, report) for slot, report in exhausted.items()],
+                criteria=criteria,
+            )
+        for slot, report in failed.items():
             regenerations[slot] = regenerations.get(slot, 0) + 1
+            logger.info(
+                "image_redraw",
+                extra={
+                    "event": "image_redraw",
+                    "story_id": story.id,
+                    "slot": slot,
+                    "attempt": regenerations[slot],
+                    "criteria": ",".join(_failed_criteria(report)),
+                },
+            )
+        round_ += 1

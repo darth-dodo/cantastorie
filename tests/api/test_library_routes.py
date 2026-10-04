@@ -287,6 +287,8 @@ def test_the_library_lists_family_overlays_tagged_by_owner(tmp_path: Path, s3: S
     assert "Storia globale" in page.text
     assert "Storia privata" in page.text
     assert FAMILY in page.text  # the owning family is surfaced to the operator
+    # ...but never in a URL, where the access log would record it (B6)
+    assert f"family_token={FAMILY}" not in page.text
 
 
 def test_an_operator_deletes_a_familys_private_story(tmp_path: Path, s3: S3Client) -> None:
@@ -296,7 +298,8 @@ def test_an_operator_deletes_a_familys_private_story(tmp_path: Path, s3: S3Clien
     harness.sign_in(OPERATOR)
 
     response = harness.client.post(
-        f"/workshop/stories/fam-it-1/delete?family_token={FAMILY}",
+        "/workshop/stories/fam-it-1/delete",
+        data={"family_token": FAMILY},
         headers={"HX-Request": "true"},
     )
 
@@ -311,7 +314,9 @@ def test_a_parent_cannot_reach_the_operator_overlay_delete(tmp_path: Path, s3: S
     harness = Harness(tmp_path, s3)
     harness.sign_in(PARENT)
 
-    response = harness.client.post(f"/workshop/stories/fam-it-1/delete?family_token={FAMILY}")
+    response = harness.client.post(
+        "/workshop/stories/fam-it-1/delete", data={"family_token": FAMILY}
+    )
 
     assert response.status_code == 403
     assert len(_overlay_asset_keys(s3, FAMILY, "fam-it-1")) == 2

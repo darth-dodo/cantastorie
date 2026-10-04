@@ -7,6 +7,7 @@ come from two gates: content limits as code (content_rules) and the
 cross-family safety judge.
 """
 
+import logging
 from collections.abc import Sequence
 from typing import Literal
 
@@ -14,6 +15,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
 from src.config import Settings
+from src.observability import timed_step
 from src.pipeline.cache import ArtifactCache, run_step
 from src.pipeline.content_rules import check_story
 from src.pipeline.models import Language, SafetyReport, Story, Theme
@@ -27,6 +29,8 @@ from src.pipeline.steps.write import (
     story_from_draft,
     write_story,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_REVISIONS = 2
 
@@ -50,6 +54,9 @@ class StoryRejectedError(Exception):
     def __init__(self, story: Story, failures: Sequence[str]) -> None:
         self.story = story
         self.failures = list(failures)
+        # "content_rules/<rule>" / "safety/<rule>" names only — every failure
+        # line is "<name>: <free text>", and only the name is safe to log.
+        self.criteria = sorted({failure.split(":", 1)[0] for failure in self.failures})
         super().__init__(
             f"story {story.id} rejected after {MAX_REVISIONS} failed revisions: "
             + "; ".join(self.failures)
@@ -134,19 +141,34 @@ def author_story(
     revisions reject the story. The shape selects a linear or branching
     writer; revise infers it from the story it is correcting.
     """
-    story = write_story(
-        theme, language, settings, cache, model=write_model, premise=premise, shape=shape
-    )
-    report = safety_gate(story, settings, cache, model=safety_model)
+    with timed_step("write", shape=shape):
+        story = write_story(
+            theme, language, settings, cache, model=write_model, premise=premise, shape=shape
+        )
+    with timed_step("safety", story_id=story.id, attempt=0):
+        report = safety_gate(story, settings, cache, model=safety_model)
     failures = _gate_failures(story, report)
 
     revisions = 0
     while failures and revisions < MAX_REVISIONS:
-        story = revise_story(story, failures, settings, cache, model=revise_model)
         revisions += 1
-        report = safety_gate(story, settings, cache, model=safety_model)
+        with timed_step("revise", story_id=story.id, attempt=revisions, failures=len(failures)):
+            story = revise_story(story, failures, settings, cache, model=revise_model)
+        with timed_step("safety", story_id=story.id, attempt=revisions):
+            report = safety_gate(story, settings, cache, model=safety_model)
         failures = _gate_failures(story, report)
 
     if failures:
-        raise StoryRejectedError(story, failures)
+        rejected = StoryRejectedError(story, failures)
+        logger.warning(
+            "story_safety_rejected",
+            extra={
+                "event": "story_safety_rejected",
+                "story_id": story.id,
+                "criteria": ",".join(rejected.criteria),
+                "failure_count": len(failures),
+                "attempt": revisions,
+            },
+        )
+        raise rejected
     return story, report

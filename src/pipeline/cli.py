@@ -12,7 +12,7 @@ from typing import Literal, cast, get_args
 import typer
 
 from src.config import get_settings
-from src.observability import init_error_monitoring, init_observability
+from src.observability import configure_logging, init_error_monitoring, init_observability
 from src.pipeline.generate import generate_story
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.prompts import PromptPublishResult, publish_prompts, write_dev_prompts
@@ -22,6 +22,12 @@ app = typer.Typer(help="Cantastorie authoring pipeline", no_args_is_help=True)
 
 _LANGUAGES = get_args(Language)
 _THEMES = get_args(Theme)
+
+
+@app.callback()
+def _setup() -> None:
+    """Every command logs the same key=value lines the app does (B6)."""
+    configure_logging(get_settings())
 
 
 def _not_yet(issue: str) -> None:

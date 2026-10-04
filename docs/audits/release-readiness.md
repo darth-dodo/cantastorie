@@ -208,6 +208,8 @@ Every other blocker in this document becomes materially harder to detect and dia
 
 **Fix**: configure structured logging to stdout at startup, covering run submitted/started/failed-with-traceback/reaped with `run_id`, `family_token` and duration. Set `PYTHONUNBUFFERED=1` in the `Dockerfile`.
 
+**Fixed in code (AI-485).** `configure_logging` (`src/observability.py`, stdlib only, idempotent) runs at startup in `create_app` and the CLI and writes key=value lines to stdout at `LOG_LEVEL` (default `INFO`). Logged events: run submitted, started, staged, failed (`logger.exception`, with traceback, for unexpected errors), reaped; each pipeline step's `duration_ms` under its `run_id`, image safety included; image redraws and image/text safety rejections by slot, attempt and criterion name. Safety rejections log criterion names and counts only, with no traceback, so no judge free text reaches stdout (the workshop UI and Sentry still carry it); cap rejections with their reason; publish and unpublish with story id and lane; boot reap and resume counts. The family token is logged only as a salted 12-hex hash, never raw: uvicorn access lines are redacted by a filter, the `/published` proxy logs the hash with the token segment stripped, and the library's overlay delete moved the token from the query string to the form body. Tracebacks on stdout show frames and exception type names, never messages; content-limit violations log by rule name like the safety gates; every record inside a run carries `run_id`. Sentry's logging integration is breadcrumbs-only, so a logged exception is not a second Sentry event. `PYTHONUNBUFFERED=1` landed with H3. Provider-call and spend logging are not part of this fix.
+
 ---
 
 ### B7 — Closing the tab mid-story boots the child into a story that does not exist
@@ -497,7 +499,7 @@ Ordered by risk reduction per unit of effort.
 - [x] No provider image-safety setting exists (OpenRouter exposes none); `calm_pictures` moved to a post-illustration vision judge (B4)
 - [x] `reap_stale()` and non-blocking `resume_on_boot()` wired into a FastAPI `lifespan`; `reap_stale()` also called on a parent-reachable path so a family can self-heal (B5, M9)
   - **Fixed in code (AI-483).** The parent's own `/parent/packs/{id}/progress` poll now calls `reap_stale()` too, mirroring the operator dashboard's poll (`src/api/routes/workshop.py`'s `run_progress()`) — a family self-heals behind a stranded run without needing an operator to notice. The B5 half of this line (the boot-time FastAPI `lifespan`) ships separately under AI-477.
-- [ ] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6)
+- [x] Structured logging to stdout with run lifecycle and tracebacks; `PYTHONUNBUFFERED=1` (B6) — Fixed in code (AI-485)
 - [x] Persisted player state normalized on load so a relaunch always reaches the shelf (B7)
 - [x] Timeouts on the manifest and story fetches, with the loading affordance wired (B8)
 - [x] Audio unlock made idempotent and re-run on `visibilitychange`; narration watchdog added (B9)
