@@ -50,6 +50,12 @@
   --ink:      #2F3646;
   --ink-soft: #7C8598;
   --ink-faint:#A3ABBC;
+  /* Cover captions are 14px text: --ink-soft (3.4:1 on --surface) misses
+     AA, so they get a deeper slate — 5.1:1 on --surface (AI-498). */
+  --caption-ink: #5F687B;
+  /* Keyboard focus ring: orchid deepened to 4.6:1 on --surface, since
+     --accent is only 2.6:1 on the light ground (AI-498). */
+  --focus-ring: #7A5CC0;
   --mono-ink: #6B7488;
   --mono-faint: rgba(47,54,70,.40);
 
@@ -96,6 +102,8 @@
   --ink:      #E8EBF2;
   --ink-soft: #97A0B5;
   --ink-faint:#7C86A0;
+  --caption-ink: var(--ink-soft);
+  --focus-ring: var(--accent);
   --mono-ink: #AAB3C8;
   --mono-faint: rgba(232,235,242,.40);
 
@@ -146,6 +154,7 @@
   --confirm:  #7FA98D;
   --accent:   #A88BE0;
   --accent-text: #BFA8EB;
+  --focus-ring: #A88BE0;
   --info:     #7FA0C4;
   --page-glow: radial-gradient(90% 30% at 50% -8%, rgba(168,139,224,.12), transparent 70%);
 }

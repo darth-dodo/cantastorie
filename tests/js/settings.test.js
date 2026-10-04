@@ -32,7 +32,7 @@ describe('settingsCopy', () => {
       for (const key of [
         'languages', 'light', 'lightDay', 'lightAuto', 'lightEvening', 'lightHint',
         'grownups', 'readWithMe', 'workshop', 'close',
-        'gateHeading', 'gateWrong', 'gateBack',
+        'gateHeading', 'gateWrong', 'gateBack', 'settings', 'pageOf',
       ])
         expect(c[key], `${code}.${key}`).toBeTruthy();
     }
