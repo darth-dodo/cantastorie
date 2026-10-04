@@ -21,6 +21,8 @@ import {
   buildEnd,
   buildSettingsOverlay,
   playerView,
+  focusDialog,
+  pageAnnouncement,
 } from "./screens.js";
 
 const PALETTE_LABELS = {
@@ -405,6 +407,23 @@ export async function init(
   let shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen: false };
   let playerScreen = null;
 
+  // Page turns are announced from a polite live region that sits beside
+  // #app, so it outlives the structural renders that rebuild the player.
+  let announcer = doc.querySelector(".page-announcer");
+  if (!announcer) {
+    announcer = doc.createElement("div");
+    announcer.className = "page-announcer visually-hidden";
+    announcer.setAttribute("aria-live", "polite");
+    app.after(announcer);
+  }
+  let announcedPage = null;
+
+  // A structural render rebuilds the control that opened an overlay, so
+  // focus is handed back to its rebuilt twin, found by its stable class.
+  const OPENERS = [".settings-gear", ".nav-next", ".nav-prev", ".play-pause", ".exit"];
+  let returnFocus = null;
+  const openerOf = (node) => OPENERS.find((sel) => node?.matches?.(sel)) ?? null;
+
   function openSettings() {
     settingsOpen = true;
     render(store.state);
@@ -442,7 +461,11 @@ export async function init(
 
     const view = activeStory ? playerView(activeStory) : undefined;
 
+    const overlayWas = shown.settingsOpen || shown.choiceOpen || shown.resumeOpen || shown.audioError;
+    const overlayNow = settingsOpen || state.choiceOpen || state.resumeOpen || state.audioError;
+
     if (structural) {
+      if (overlayNow && !overlayWas) returnFocus = openerOf(doc.activeElement);
       app.replaceChildren();
       if (state.screen === "shelf") {
         playerScreen = null;
@@ -495,9 +518,31 @@ export async function init(
         app.appendChild(buildEnd(store, ENDS[lang] ?? ENDS.en));
       }
       shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError, settingsOpen };
+
+      // Focus follows the overlay: into it while one is up (the sleeping
+      // bird is itself the one control), back to its opener once it closes.
+      if (overlayNow) {
+        const top = app.querySelector(".audio-error") ?? app.querySelector('[role="dialog"]');
+        if (top?.matches(".audio-error")) top.focus();
+        else focusDialog(top);
+      } else if (overlayWas) {
+        const fallback = state.screen === "player" ? ".play-pause" : ".settings-gear";
+        app.querySelector(returnFocus ?? fallback)?.focus();
+        if (doc.activeElement === doc.body) app.querySelector(fallback)?.focus();
+        returnFocus = null;
+      }
     }
 
-    if (state.screen === "player" && playerScreen) updatePlayer(playerScreen, state, view);
+    if (state.screen === "player" && playerScreen) {
+      updatePlayer(playerScreen, state, view);
+      if (state.page !== announcedPage) {
+        announcedPage = state.page;
+        announcer.textContent = pageAnnouncement(lang, state.page, state.pageCount);
+      }
+    } else if (announcedPage !== null) {
+      announcedPage = null;
+      announcer.textContent = "";
+    }
   }
 
   store.subscribe(render);

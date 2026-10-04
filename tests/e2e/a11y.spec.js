@@ -1,6 +1,7 @@
 // Keyboard and narrow-screen accessibility for the child player (AI-498):
-// a visible focus ring for keyboard users only (M20), AA cover captions in
-// the light theme (M26), and the page chevrons stay on screen at the
+// a visible focus ring for keyboard users only (M20), Escape closes the
+// settings sheet and the gate and hands focus back (M25), AA cover captions
+// in the light theme (M26), and the page chevrons stay on screen at the
 // narrowest supported phone width (M27).
 
 import { expect, test } from "@playwright/test";
@@ -19,6 +20,8 @@ for (const theme of ["light", "dusk"]) {
     // A mouse click focuses the gear but must not paint the ring.
     await page.locator(".settings-gear").click();
     await expect(page.locator(".settings-sheet")).toBeVisible();
+    // Focus moved into the sheet, but a pointer user sees no ring.
+    expect((await outlineOf(page.locator(":focus"))).style).toBe("none");
     await page.locator(".settings-close-pill").click();
     await expect(page.locator(".settings-sheet")).toHaveCount(0);
     await page.mouse.click(5, 5);
@@ -31,6 +34,35 @@ for (const theme of ["light", "dusk"]) {
     expect(ring.width).toBeGreaterThanOrEqual(2);
   });
 }
+
+test("Escape closes the settings sheet and focus returns to the gear", async ({ page }) => {
+  await page.goto("/play?lang=it&theme=light");
+  await expect(page.locator(".settings-gear")).toBeVisible();
+  await page.locator(".settings-gear").focus();
+  await page.keyboard.press("Enter");
+  const sheet = page.locator('.settings-sheet[role="dialog"]');
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await expect(sheet).toHaveAttribute("aria-label", "Impostazioni");
+  expect(await sheet.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe("it");
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".settings-sheet")).toHaveCount(0);
+  await expect(page.locator(".settings-gear")).toBeFocused();
+});
+
+test("Escape on the grown-up gate is Back: the sheet stays, focus returns to the row", async ({ page }) => {
+  await page.goto("/play?lang=it&theme=light");
+  await page.locator(".settings-gear").click();
+  await page.locator(".settings-row--workshop").click();
+  const gate = page.locator('.gate-modal[role="dialog"]');
+  await expect(gate).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".gate-backdrop")).toHaveCount(0);
+  await expect(page.locator(".settings-sheet")).toBeVisible();
+  await expect(page.locator(".settings-row--workshop")).toBeFocused();
+});
 
 test("at 320px the page chevrons stay on screen and clear of play-pause", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
