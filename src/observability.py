@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TextIO, TypeVar, cast
 import sentry_sdk
 from langsmith import traceable
 from langsmith.wrappers import wrap_openai
-from openai import AsyncOpenAI
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 if TYPE_CHECKING:
@@ -258,13 +258,17 @@ def init_error_monitoring(settings: Settings) -> None:
 
 
 def build_traced_openai_client(
-    settings: Settings, *, http_client: httpx.AsyncClient | None = None
+    settings: Settings,
+    *,
+    http_client: httpx.AsyncClient | None = None,
+    max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> AsyncOpenAI:
     return wrap_openai(
         AsyncOpenAI(
             base_url=settings.openrouter_base_url,
             api_key=settings.openrouter_api_key.get_secret_value(),
             http_client=http_client,
+            max_retries=max_retries,
         )
     )
 

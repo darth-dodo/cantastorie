@@ -27,6 +27,7 @@ from src.observability import typed_traceable
 from src.pipeline._parallel import parallel_map
 from src.pipeline.cache import ArtifactCache, cache_key, run_step
 from src.pipeline.models import ChoiceOption, Page, Story
+from src.pipeline.retry import with_retries
 
 # The locked style (docs/product.md → decision log "Style", **Watercolor
 # boards**, **Calm pictures**). A module-level constant so it is diffable and
@@ -97,10 +98,11 @@ class ImageClient:
         self._model = settings.image_model
         # The key is unwrapped only here, at the transport boundary — it
         # lives in a header, never in this object's attributes or repr.
+        # Transient 429/5xx are retried in the transport (src.pipeline.retry).
         self._client = httpx.Client(
             base_url=settings.openrouter_base_url,
             headers={"Authorization": f"Bearer {settings.openrouter_api_key.get_secret_value()}"},
-            transport=transport,
+            transport=with_retries(transport),
             timeout=300.0,
         )
 
