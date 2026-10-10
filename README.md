@@ -159,6 +159,7 @@ What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [A
 - [Product Specification](docs/product.md) — vision, behaviors, content rules, decision log
 - [Architecture](docs/architecture.md) — the FastAPI app, the Web Audio player, the authoring pipeline, and narration
 - [System Overview](docs/system-overview.md) — the code as built: module map, state machines, and seams
+- [Architecture Whiteboard](docs/whiteboards/architecture.md) — salient features and a six-module walkthrough with diagrams and line-level code links
 - [Setup & Deploy](docs/setup.md) — R2 bucket, CORS, and the Render blueprint
 - [Architecture Decision Records](docs/adr/) — settled decisions:
   - [ADR-001: Technology Stack](docs/adr/ADR-001-technology-stack.md) — FastAPI, vanilla JS, plain-Python pipeline, OpenRouter, R2, Render

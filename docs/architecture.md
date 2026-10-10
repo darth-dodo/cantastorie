@@ -434,6 +434,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 |-----|---------|
 | [Product Spec](product.md) | Vision, behaviors, content rules, spoken prompts, decision log |
 | [System Overview](system-overview.md) | The code as built: module map, state machines, and seams |
+| [Architecture Whiteboard](whiteboards/architecture.md) | Module-by-module walkthrough with diagrams and line-level code permalinks, pinned to `35f3b29` |
 | [Setup & Deploy](setup.md) | R2 bucket, CORS, and the Render blueprint |
 | [ADR-001](adr/ADR-001-technology-stack.md) | Foundational technology stack (why this shape) |
 | [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram; ElevenLabs retired (supersedes [ADR-002](adr/ADR-002-narration-provider.md); amended by ADR-008) |
