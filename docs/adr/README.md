@@ -34,7 +34,7 @@ Small, local, easily-reversed choices do not need an ADR. When in doubt, prefer 
 | [ADR-005](ADR-005-workshop-area.md) | The Workshop Area — In-App Authoring Surface with In-Process Pipeline Runs | Accepted (operator gate amended to Clerk scope, AI-426) | 2026-07-11 |
 | [ADR-006](ADR-006-family-voice-narration.md) | Nonna Narrates (family voice narration) | Proposed | 2026-07-11 |
 | [ADR-007](ADR-007-langsmith-observability.md) | LangSmith App-Wide Observability | Accepted | 2026-07-12 |
-| [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md) | Default Voices on Gemini TTS, Cloning Scoped to Mistral | Accepted | 2026-07-11 |
+| [ADR-008](ADR-008-narration-gemini-defaults-mistral-cloning.md) | Default Voices on Gemini TTS, Cloning Scoped to Mistral | Accepted; outcome 2026-10-10 (voice `Kore`, Greek passed, Aura retired) | 2026-07-11 |
 | [ADR-009](ADR-009-sentry-error-monitoring.md) | Sentry Error Monitoring (Server-Side Only) | Accepted | 2026-09-27 |
 | [ADR-010](ADR-010-audio-wake-and-stall-recovery.md) | Audio Wake and Stall Recovery in the Child Player | Accepted | 2026-09-27 |
 | [ADR-011](ADR-011-image-safety-vision-judge.md) | Image Safety via a Cross-Family Vision Judge | Accepted | 2026-09-28 |
