@@ -35,7 +35,7 @@ A tap wakes the shelf, which greets the child aloud — *"Ciao! Quale storia asc
 
 ### Child-Steered Branches
 
-At the branch point the page dims behind two picture cards with spoken labels. The child taps one and the story follows that arm to its own ending — agency without reading. A child who drifts off mid-choice still gets a complete, gentle ending: after a spoken nudge and a short wait, the first option auto-continues. Replayability lives in the branches — the boat story again, then the other ending.
+At the branch point the page dims behind two picture cards with spoken labels. The child taps one and the story follows that arm to its own ending — agency without reading. Today the overlay waits for that tap. The planned idle nudge (a spoken prompt after 30 seconds) and auto-continue on the first option, so a child who drifts off mid-choice still gets a complete ending, are not built yet (AI-370). Replayability lives in the branches — the boat story again, then the other ending.
 
 ### One Warm Narrator
 
@@ -45,13 +45,15 @@ The target is a single warm narrator identity across every story and language, l
 
 Soft watercolor, warm palette, rounded characters, nothing frightening — bedtime, not Saturday cartoons. Images carry no text and nothing scary. Every story's final page lands on comfort or sleepiness.
 
-### The Parent Gate (planned)
+### The Parent Gate
 
-Everything grown-up will sit behind a small, low-contrast corner of the shelf. The gate is a three-second hold followed by a two-integer addition on a keypad — no PIN, freshly random each time. Five failures lock it for five minutes, and the lockout survives reloads. Behind it: reading mode and export/import (with the dashboard and review queue arriving in Phase 2). Today the gate is not yet built — language and theme settings sit in an ungated settings overlay on the shelf.
+Today a simple stand-in gate guards the way to the parent area. In the shelf's settings sheet, the grown-ups row asks for a sum (`7 + 6`) with three answer buttons. The right answer opens `/parent`, which has its own sign-in. Language, light/dusk, and read-with-me settings sit in the same sheet, ungated.
+
+The designed gate is planned: a three-second hold followed by a two-integer addition on a keypad, with no PIN and a fresh random sum each time. Five failures lock it for five minutes, and the lockout survives reloads. Reading mode and export/import will sit behind it.
 
 ### The Workshop
 
-Behind Clerk operator sign-in, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. Runs execute in-process and survive restarts — the pipeline's filesystem checkpoints double as the resume mechanism, so a mid-run reboot re-buys zero API calls. The design is settled in [ADR-005](docs/adr/ADR-005-workshop-area.md).
+Behind Clerk operator sign-in, `/workshop` is where stories are born: start a generation run, watch each pipeline step's progress, inspect the staged story (text, audio, images), and publish to R2 when it's right. The operator can also see and delete any family's private story from the library (moderation only, never promotion to the shared shelf). Runs execute in-process, one at a time, and survive restarts: stale runs are retired at boot, interrupted ones are re-entered, and the pipeline's content-addressed checkpoints mean a resumed run pays only for steps it hadn't finished. The design is settled in [ADR-005](docs/adr/ADR-005-workshop-area.md).
 
 ### Reading Mode, Optional (planned)
 
@@ -63,13 +65,13 @@ Italian and Spanish are the flagships — deepest content, first through every q
 
 ### Truly Private, Parent-Approved
 
-No child accounts, no tracking, no analytics. The child player is account-free — progress and settings live in the browser's localStorage and the family token in IndexedDB, and progress will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — at `/parent` they sign in to request stories, one per run, and follow their runs; the review queue arrives in Phase 2 — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
+No child accounts, no tracking, no analytics. The child player is account-free — progress and settings live in the browser's localStorage and the family token in IndexedDB, and progress will export to a file; nothing about the child ever leaves the device. A parent signs in via Clerk (magic link or OAuth) only for grown-up things — at `/parent` they request stories (one per run), follow each run, and review the finished story's every page, picture and sound before approving it to their family's private shelf — and no Clerk script or cookie touches any child path. And every story passes a machine safety gate *and* a parent's eyes and ears before it reaches a shelf — a model mistake needs a human mistake on top of it to reach a child.
 
 ---
 
 ## For Developers
 
-Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area (`/parent` — Clerk sign-in, story requests with daily run caps, one story per run, and per-family run status), and an operator workshop (`/workshop`, behind Clerk operator sign-in) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
+Cantastorie is one FastAPI app with three faces: a vanilla-JS child player, a server-rendered parent area (`/parent` — Clerk sign-in, story requests with daily run caps, one story per run, per-family run status, and review-then-approve to the family's private shelf), and an operator workshop (`/workshop`, behind Clerk operator sign-in) for in-app story authoring and review. A plain-Python authoring pipeline runs in the same repo, either from the CLI or in-process via the workshop. The stack mirrors the sibling project [habla-hermano](https://github.com/darth-dodo/habla-hermano); the reasoning behind each choice is in [ADR-001](docs/adr/ADR-001-technology-stack.md).
 
 ### Tech Stack
 
@@ -121,7 +123,7 @@ src/
     └── css/             Player watercolor CSS; parent Tailwind
 
 content/                 Pipeline working folders (gitignored)
-staging/                 Staged stories for operator review
+staging/                 Local spoken-prompt output (stories stage to the private R2 pending bucket)
 tests/                   pytest + Vitest + Playwright
 docs/                    product.md, architecture.md, system-overview.md, setup.md, adr/
 ```
@@ -146,9 +148,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Status
 
-The authoring pipeline is built end to end — write, safety gate, bounded revise, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls. The gloss step is planned with reading mode and not built yet. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and resume-from-exact-position state persisted in the browser. Branching stories work end to end — the pipeline authors a shared opening, one picture-choice point, and two arms (each with watercolor choice cards and spoken labels), and the player follows the tapped arm to its own ending, with the chosen path persisted so resume replays it. The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story requests (one story per run) under daily run caps, and per-family run tracking ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
+The authoring pipeline is built end to end — write, safety gate, bounded revise, narrate (Gemini 3.1 Flash TTS via OpenRouter, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), illustrate (character sheet → pages → cover), image safety (a cross-family vision judge with bounded redraws, [ADR-011](docs/adr/ADR-011-image-safety-vision-judge.md)), assemble, stage, and publish to R2 — with content-addressed caching so unchanged inputs cost zero API calls, and bounded retries on transient provider errors that never re-send a request that may already be billing. The gloss step is planned with reading mode and not built yet. The child player is built: a mobile-first FSM with Web Audio playback, auto page turns, crossfades, and resume-from-exact-position state persisted in the browser. Branching stories work end to end — the pipeline authors a shared opening, one picture-choice point, and two arms (each with watercolor choice cards and spoken labels), and the player follows the tapped arm to its own ending, with the chosen path persisted so resume replays it (the idle nudge and auto-continue are not built yet, AI-370). The operator workshop at `/workshop` runs the pipeline in-process with step-level progress, staged review, and publish — behind Clerk operator sign-in, with resume-on-boot for interrupted runs ([ADR-005](docs/adr/ADR-005-workshop-area.md)). The parent area at `/parent` is live: Clerk sign-in, story requests (one story per run) under daily run caps, per-family run tracking, and review-then-approve to the family's private shelf, with approval bound to the exact staged bytes the parent reviewed ([ADR-003](docs/adr/ADR-003-parent-authentication-clerk.md)). Published stories are live on R2 with bucket-direct playback.
 
-What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the review queue (Phase 2), and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
+What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [ADR-008](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), the choice nudge and auto-continue (AI-370), the designed parent gate, and the family-voice narration feature ([ADR-006](docs/adr/ADR-006-family-voice-narration.md), Proposed).
 
 ---
 
@@ -168,6 +170,8 @@ What's next: the Gemini TTS bake-off to finalize per-language voices (AI-366, [A
   - [ADR-007: LangSmith Observability](docs/adr/ADR-007-langsmith-observability.md) — app-wide tracing
   - [ADR-008: Gemini TTS Defaults, Mistral Cloning](docs/adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) — default voices on Gemini via OpenRouter; cloning scoped to Voxtral on the Mistral API
   - [ADR-009: Sentry Error Monitoring](docs/adr/ADR-009-sentry-error-monitoring.md) — server-side exception reporting, errors only, no child data
+  - [ADR-010: Audio Wake and Stall Recovery](docs/adr/ADR-010-audio-wake-and-stall-recovery.md) — re-unlock audio on every activation; a stall watchdog turns frozen narration into the retry state
+  - [ADR-011: Image Safety via a Cross-Family Vision Judge](docs/adr/ADR-011-image-safety-vision-judge.md) — every rendered image judged; bounded redraws, then reject
 
 ---
 

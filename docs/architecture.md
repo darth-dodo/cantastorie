@@ -84,19 +84,22 @@ src/
 ├── config.py               Settings (R2 bucket, provider keys, model choices per step)
 ├── api/
 │   ├── main.py             FastAPI app factory, middleware
-│   ├── auth.py             require_parent — Clerk JWT verification via JWKS
+│   ├── auth.py             require_parent / require_parent_candidate — Clerk JWT verification via JWKS
 │   ├── clerk.py            Clerk REST client: family-token mint-or-link
 │   └── routes/
 │       ├── landing.py      GET / — the public landing page
 │       ├── player.py       GET /play — the child player shell
-│       ├── parent.py       /parent/api/provision — family token mint-or-link (parent pages arrive in Phase 2)
+│       ├── parent.py       /parent — story requests, run progress, review, approve/reject, provision
 │       ├── published.py    /published — R2 content proxy for dev/prod parity
-│       └── workshop.py     /workshop — operator screens: runs, staging, review, publish
+│       ├── workshop.py     /workshop — operator screens: runs, staging, review, publish, library
+│       ├── _nav.py         Post-sign-in navigation: each role's home, 303 for the other role
+│       └── _templates.py   Shared Jinja2 environment
 ├── workshop/
-│   ├── manager.py          In-process run orchestration + stale-run reaping
-│   └── records.py          Durable run records in R2 (pending prefix)
+│   ├── manager.py          In-process run orchestration (one run at a time), caps, stale-run reaping, boot resume
+│   ├── records.py          Durable run records in R2 (pending prefix), ETag-guarded saves
+│   └── scope.py            WorkshopScope: operator (shared shelf) vs parent (own family partition)
 ├── pipeline/
-│   ├── cli.py              Typer CLI: generate, publish, audit
+│   ├── cli.py              Typer CLI: generate, publish, publish-prompts, audit
 │   ├── generate.py         The linear pipeline: author → narrate → illustrate → image safety → assemble → stage
 │   ├── steps/
 │   │   ├── write.py        Native-language story authoring (strong model)
@@ -106,12 +109,17 @@ src/
 │   │   ├── illustrate.py   Character sheet first, then pages against it
 │   │   ├── image_safety.py Vision judge over every shown image, bounded redraws (ADR-011)
 │   │   ├── assemble.py     story.json assembly + validation
-    │   │   └── (gloss.py)      Planned, not built: word-to-English gloss maps (cheap model), with reading mode
+│   │   ├── utterance_texts.py  The five spoken-prompt lines per language
+│   │   └── (gloss.py)      Planned, not built: word-to-English gloss maps (cheap model), with reading mode
 │   ├── cache.py            Content-addressed artifact cache
+│   ├── _parallel.py        Bounded thread pool for per-page narration and illustration calls
 │   ├── content_rules.py    The nine content rules, shared by write and safety prompts
-│   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, ImageSafetyVerdict, GlossMap
+│   ├── languages.py        Language display names, shared by templates and the player
+│   ├── models.py           Pydantic: Story, Page, ChoicePoint, SafetyReport, ImageSafetyReport
+│   ├── prompts.py          publish-prompts: narrate and publish a language's spoken prompts
 │   ├── providers.py        OpenRouter transport (chat, images, TTS); every model via OpenRouterProvider, so judges' temperature 0 reaches the wire
-│   └── publish.py          R2 staging + publish, manifest update, immutable naming
+│   ├── retry.py            Bounded provider retries (429/502/503/504 and connect failures only)
+│   └── publish.py          R2 staging + publish, review digest, manifest update, immutable naming, audit
 ├── observability.py        LangSmith tracing + Sentry error monitoring for pipeline and app
 ├── templates/              Jinja2: landing.html, index.html (player shell), parent/ and workshop/ screens
 └── static/
@@ -121,11 +129,13 @@ src/
     │   ├── wake.js          Unlock on every activation + visibilitychange; fires the shelf greeting once
     │   ├── main.js         Composition root: boot, manifest, wiring, render loop
     │   ├── store.js        Player state + transitions
-    │   ├── playback.js     Narration drives pages; pause/resume
-    │   ├── screens.js      DOM for shelf, player, end + overlays (choice, resume, settings)
+    │   ├── playback.js     Narration drives pages; pause/resume; stall watchdog; branch following
+    │   ├── screens.js      DOM for shelf, player, end + overlays (choice, resume, settings, grown-up gate)
     │   ├── story.js        story.json → playable; mock shelf for unpublished covers
     │   ├── prefetch.js     Whole-story prefetch on cover tap
     │   ├── palette-resolve.js  Theme + palette resolution (pure, shared with tests)
+    │   ├── palette.js      Sync head script: sets theme + palette before first paint
+    │   ├── auth.js         Shared Clerk sign-in/out + HTMX session-lapse recovery (workshop, parent)
     │   ├── workshop.js     Operator-screen behaviors (HTMX companion)
     │   ├── family-adopt.js Writes the family token to IndexedDB
     │   └── storage.js      Progress persistence in localStorage (page + branch choices)
@@ -199,6 +209,10 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 
 Exact model IDs live in `config.py`, chosen and re-benchmarked freely since OpenRouter makes them a string swap — narration included, now that it runs on the same gateway.
 
+### Provider retries
+
+Every provider client (text models, both judges, images, narration) sits on one retrying HTTP transport (`pipeline/retry.py`, AI-495); the OpenAI SDK's own retries are off so the two layers cannot multiply. At most three sends per request, retried only on 429/502/503/504 and on connect-phase failures — answers that mean the provider never served the request. A plain 500 or a read timeout is never retried, because the provider may already be generating (and billing) an image or an audio clip. `Retry-After` is honoured up to 30 seconds; otherwise exponential backoff with jitter. Retries are logged as `provider_retry` with method, host, path and status only.
+
 ### Spoken prompts as first-class assets
 
 The ten spoken prompts are first-class pipeline assets (generated, reviewed, published per language), not an afterthought — slice 1 already needs the shelf greeting and story start. They are narrated through the same `narrate` step and provider as story pages. Every language in the roster has its lines (`UTTERANCE_TEXTS` in `steps/utterance_texts.py`, five per language today; the Italian, Spanish and English sets are final copy from product.md, the rest machine-drafted, pending native review). A generation run stages only the Italian set; the operator's `cantastorie publish-prompts` command publishes any language's set to `published/prompts/{lang}/` and its manifest (H6, AI-481; runbook in [setup.md](setup.md#spoken-prompts-for-every-language-h6-ai-481)).
@@ -238,6 +252,14 @@ published/
 
 A `pending/` prefix in its **own private bucket** (`R2_PENDING_BUCKET`, never listed in any manifest) holds generated-but-unapproved stories and run records. The public bucket serves every key it holds, so config refuses a live endpoint whose pending bucket is unset or equal to the public one, and the audit fails on any `pending/` object found in the public bucket. **Two publish lanes** share the `published/` bucket: the **shared shelf** (operator, global — `published/stories/…` + `published/{lang}/manifest.json`) and a **family overlay** (private — `published/families/{token}/stories/…` + `published/families/{token}/{lang}/manifest.json`). `publish_story(..., family_token=…)` selects the lane; the family-token prefix is the tenancy boundary and is validated (`^[0-9a-f]{32}$`) before it becomes a key. The lanes never cross and there is no promotion of private → global. The audit (`audit_published_bucket`) enforces this: a manifest may reference only its own lane's assets — a cross-tenant URL is a violation.
 
+### Review binding and publish order
+
+A family can approve only the bytes it reviewed (B2, H1). Rendering the parent review page records a **staged digest** on the run record: SHA-256 over the staged `story.json` plus every staged asset's name and ETag (`publish.staged_digest`). Approve refuses a run that was never reviewed, or whose staged story has changed since. `publish_story(..., expected_digest=…)` then recomputes the digest before copying anything and raises `StagedContentChangedError` with nothing published, which closes the window between the route's check and the copy. Each workshop run's id is folded into its story id as a nonce, so no other run can stage over a reviewed story.
+
+The operator's approve (`/workshop/runs/{id}/approve`) publishes to the shared shelf **without** `expected_digest`: the digest binding guards the family lane only.
+
+Publishing copies, never regenerates. Assets go first, each skipped if its ETag already matches, with `Cache-Control: public, max-age=31536000, immutable`. Then `story.json`, then the language's prompts, and the manifest **last**, with `max-age=60`. So a manifest never lists an asset that is not yet in the bucket. Every manifest write (publish, unpublish, the repair script, publish-prompts) goes through one load–mutate–write path with `IfMatch` on the ETag and up to three attempts. Two concurrent approvals in the same lane therefore cannot drop each other's entry.
+
 ### Serving
 
 The player fetches published assets bucket-direct: the web service injects `ASSET_BASE` (the bucket's public URL plus the `/published` prefix) into the shell, and the player appends `/{lang}/manifest.json`. When a `family_token` is present in the child's IndexedDB, the player additionally fetches `/{ASSET_BASE}/families/{token}/{lang}/manifest.json` and merges its stories onto the shared shelf (dedupe by id, shared wins; overlay fetch failure falls back to the shared shelf and never blocks playback). No token → zero overlay requests. The overlay fetch is anonymous and bucket-direct — the child loads no auth SDK and sets no cookies. The bucket has **public read, access logs off, and CORS scoped to the player origin** (`deploy/r2-cors.json`) — nothing about the child ever leaves the browser, so there is nothing to log. Deploy steps and verification live in [`docs/setup.md`](setup.md).
@@ -263,10 +285,12 @@ Vanilla ES modules around a small finite state machine (hermano's `fsm.js`, port
 ```
 shelf → story-loading → playing ⇄ paused
                         playing → page-turn → playing
-                        playing → choice → (tap | nudge | auto) → playing
+                        playing → choice → tap → playing
                         playing → audio-error → (tap retries) → playing
                         playing → ended → (replay | shelf | goodnight)
 ```
+
+**Choice overlay, as built:** the overlay speaks each option's label and then waits for a tap; there is no time limit. The idle **Choice nudge** (30 seconds) and auto-continue on the first option (10 seconds later) specified in [product.md](product.md#the-picture-choice-pattern) are **not built** (AI-370). Neither is the spoken tap confirmation: the five prompts that exist are listed under [Spoken prompts](#spoken-prompts-as-first-class-assets). The Playwright auto-continue test is skipped until the timers land (`tests/e2e/branching.spec.js`).
 
 ### The audio engine
 
@@ -275,7 +299,7 @@ One module owns a single `AudioContext`. Everything else asks it to play things.
 - **Unlock on every activation, and on return to view.** Browsers block sound before a user gesture, and mobile browsers can drop a running context back to suspended or (Safari) `interrupted` with no event at all when the tab backgrounds or the device sleeps. `wake.js` re-arms unlock on every activation-triggering event (no `once`) and on a visible `visibilitychange`, so the shelf greeting fires once on the first successful unlock and playback recovers without a reload — the two-tap budget absorbs it (first tap wakes and greets, cover tap starts the story). A narration stall watchdog turns a frozen voice into the sleeping-bird audio-error state instead of dead air. See [ADR-010](adr/ADR-010-audio-wake-and-stall-recovery.md).
 - **Crossfades via gain nodes.** Two sources overlapping with gain ramps — works on iOS where media-element volume is read-only.
 - **Exact-position resume** from buffer offsets within a session. Across a reload, the page and branch choices persist in localStorage, and the resume offer reopens the story on that page.
-- **Priority ducking**: prompt playback (nudges, confirmations) and narration never overlap.
+- **Priority ducking**: prompt playback (the story-start line, spoken choice labels, the retry and end prompts) and narration never overlap.
 
 ### Whole-story prefetch
 
@@ -332,13 +356,15 @@ Playback mechanics live in [The Player → The audio engine](#the-audio-engine):
 
 ## The Parent Area
 
-Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision` mint-or-link) and the parent pages themselves (AI-411) — a sign-in home, story requests under a daily run cap (each run makes exactly one story, AI-480), and per-run progress polling. The gate and export/import are designed but not yet built; language and theme settings live in child-side dropdowns on the shelf, ungated.
+Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision` mint-or-link) and the parent pages themselves (AI-411) — a sign-in home, story requests under a daily run cap (each run makes exactly one story, AI-480), and per-run progress polling. Parents review a staged story on one page (every page, picture and sound) and approve or reject it; approval is bound to the reviewed bytes (see [Review binding and publish order](#review-binding-and-publish-order)). Export/import is designed but not yet built.
 
-- **The gate (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
-- **Settings**: language multi-select, reading mode toggle.
+- **The gate, as built (AI-444)** is a stand-in. The player's settings sheet has a "grown-ups" row that opens a modal asking for the sum `7 + 6` with three answer buttons. A wrong tap shows a message and keeps the modal open; Back or Escape closes it. The correct answer navigates to `/parent`, which has its own Clerk sign-in. There is no hold, no fresh random equation, and no failure count or lockout.
+- **The gate, as designed (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
+- **Settings** (the player's settings sheet, ungated): language, light/dusk/auto, and the read-with-me toggle. Only the parent-area row sits behind the gate.
 - **Export/import (not yet built)**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
 - **Parent authentication**: parents sign in via **Clerk** (magic link / OAuth) — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted, implemented). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK, async fetch). One parent account = one family; the family token is minted or linked at first sign-in and lives in Clerk `public_metadata`. Approved stories publish to `published/families/{family_token}/…` + a family overlay manifest (a family approving its run's staged story at `/parent/runs/{id}/approve`); the child player merges that overlay onto the shared shelf. The child player stays account-free — no Clerk script, no cookies on any child path.
 - **The workshop is Clerk-gated; the parent area is its sibling surface (AI-426, AI-430)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition who publishes to their private overlay. The operator can also **see and delete** any family's private story from `/workshop/library` (moderation — never promotion). Parents work in their own `/parent` surface — sign-in, story requests, run tracking, approving a staged story to their private shelf — while operators author in `/workshop`; shared post-sign-in navigation (`src/api/routes/_nav.py`) dispatches each role to its home and 303-redirects the other, so neither role hits a dead end or a redirect loop. With Clerk unconfigured, both areas answer 404. ClerkJS loads on every workshop and parent page to keep the `__session` JWT refreshed for HTMX polling.
+- **How runs execute.** A request creates a `RunRecord` (`queued → running → staged → approved | rejected`, with `failed` re-queueable) saved to the private pending bucket under `pending/{family|operator}/runs/`. Saves are conditional on the record's ETag, so concurrent writers raise instead of overwriting each other. Parents are capped at one queued-or-running run and a daily count; the operator is exempt. `RunManager.execute` runs as a FastAPI background task and calls `generate_story` in a worker thread under one `asyncio.Lock`, so **one generation runs at a time per process**. A restart is not a state. At boot the app schedules, without awaiting, a task that first retires runs whose last update is older than the stale threshold, then re-enters the queued and running runs that remain. `/health` answers immediately. The reaper also runs, throttled, from each progress poll. Because of the content-addressed cache, a re-entered run pays only for the steps it had not finished.
 - **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
 
 ---
@@ -362,7 +388,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | Pipeline | pytest | Step functions with providers mocked (hermano's fixture pattern); cache-key behavior; safety-gate routing (pass / revise / reject); assembly validation |
 | API | pytest | Player page, parent routes, export/import validation |
 | Player modules | Vitest | FSM transitions, audio-engine state, storage round-trips, prefetch logic, choice timers |
-| Child flows | Playwright | Two taps to narration, page turns, choice overlay, retry state, resume offer, gate lockout |
+| Child flows | Playwright | Two taps to narration, page turns, choice overlay, retry state, resume offer, the stand-in gate (wrong answer stays, right answer passes; Escape is Back). Auto-continue is specified but skipped until AI-370 |
 | Safety | Audit script in CI | Zero unapproved assets reachable from any manifest |
 
 The content rules (page counts, word counts, sentence caps) are enforced twice: as pipeline validation in `assemble` and as pytest assertions against every published `story.json`.
@@ -377,7 +403,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 |-------|--------------|----------------|
 | 1 — One story plays | Shelf (one cover), playback, auto page turns, end screen | CLI core: write → safety → narrate → illustrate → publish; one Italian story (no timings — slice 1 does not use them) |
 | 2 — Survives real life | Retry & offline states, local progress (localStorage), resume, goodnight sign-off | — |
-| 3 — The story branches | Choice overlay, nudge, auto-continue, branch-following (`pagesFrom`/`extendPath`), resume across branches | Branching writer (`shape`), choice-card images, spoken labels |
+| 3 — The story branches | Choice overlay with spoken labels (nudge and auto-continue not yet built, AI-370), branch-following (`pagesFrom`/`extendPath`), resume across branches | Branching writer (`shape`), choice-card images, spoken labels |
 | 4 — Grown-ups arrive | Gate, settings, first-run rule, language chip | Second language (Spanish); all ten prompts per enabled language |
 | 5 — The full shelf | Empty-shelf state | Batch runs; 19 stories × 5 languages; audit script |
 | 6 — Reading mode | Text panel, karaoke, gloss bubbles | Gloss step; word timings reconstructed here via the Deepgram STT transcription pass (see [Narration / Audio](#narration--audio)), since narration ships without them |
