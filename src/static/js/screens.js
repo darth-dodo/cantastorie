@@ -62,10 +62,10 @@ export function sortShelf(entries) {
   return [...family, ...shared];
 }
 
-export const LANG_CODES = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru', 'mr'];
-const LANG_FLAGS = { it: '🇮🇹', es: '🇪🇸', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺', mr: '🇮🇳' };
-const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ', mr: 'मरा' };
-const LANG_NAMES = { it: 'Italiano', es: 'Español', en: 'English', el: 'Ελληνικά', de: 'Deutsch', bg: 'Български', ru: 'Русский', mr: 'मराठी' };
+export const LANG_CODES = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru', 'mr', 'hi', 'ja'];
+const LANG_FLAGS = { it: '🇮🇹', es: '🇪🇸', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺', mr: '🇮🇳', hi: '🇮🇳', ja: '🇯🇵' };
+const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ', mr: 'मरा', hi: 'हिं', ja: '日本' };
+const LANG_NAMES = { it: 'Italiano', es: 'Español', en: 'English', el: 'Ελληνικά', de: 'Deutsch', bg: 'Български', ru: 'Русский', mr: 'मराठी', hi: 'हिन्दी', ja: '日本語' };
 
 // Read-with-me: persisted to localStorage. When ON the player shows page text.
 const READ_WITH_ME_KEY = 'cantastorie-read-with-me';
@@ -222,6 +222,40 @@ const SETTINGS_COPY = {
     gateBack:     'मागे',
     settings:     'सेटिंग्ज',
     pageOf:       '{count} पैकी पान {page}',
+  },
+  hi: {
+    languages:    'भाषा',
+    light:        'रोशनी',
+    lightDay:     'दिन',
+    lightAuto:    'अपने आप',
+    lightEvening: 'शाम',
+    lightHint:    'शाम को अपने आप अँधेरा हो जाता है',
+    grownups:     'बड़ों के लिए',
+    readWithMe:   'मेरे साथ पढ़ो',
+    workshop:     'कार्यशाला',
+    close:        'हो गया',
+    gateHeading:  'अभिभावक कोड',
+    gateWrong:    'गलत कोड, फिर से कोशिश करें',
+    gateBack:     'वापस',
+    settings:     'सेटिंग्स',
+    pageOf:       '{count} में से पेज {page}',
+  },
+  ja: {
+    languages:    'ことば',
+    light:        'あかるさ',
+    lightDay:     'ひる',
+    lightAuto:    'じどう',
+    lightEvening: 'よる',
+    lightHint:    'よるになると じどうで くらくなります',
+    grownups:     'おとなの かたへ',
+    readWithMe:   'いっしょに よもう',
+    workshop:     'ワークショップ',
+    close:        'できた',
+    gateHeading:  '保護者コード',
+    gateWrong:    'コードが ちがいます。もういちど ためしてください',
+    gateBack:     'もどる',
+    settings:     'せってい',
+    pageOf:       '{page} / {count} ページ',
   },
 };
 

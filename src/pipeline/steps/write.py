@@ -21,6 +21,7 @@ from src.pipeline.content_rules import (
     SENTENCE_WORDS_MAX,
     STORY_WORDS_MAX,
     STORY_WORDS_MIN,
+    length_note,
 )
 from src.pipeline.models import ChoiceOption, ChoicePoint, Language, Page, Story, Theme
 from src.pipeline.providers import build_model
@@ -39,6 +40,8 @@ LANGUAGE_NAMES: dict[Language, str] = {
     "bg": "Bulgarian",
     "ru": "Russian",
     "mr": "Marathi",
+    "hi": "Hindi",
+    "ja": "Japanese",
 }
 
 # The content rules from docs/product.md "Content Rules", verbatim as limits.
@@ -227,6 +230,8 @@ def write_story(
         )
         if premise is not None:
             prompt += f"\nFollow this premise closely:\n{premise}"
+        if note := length_note(language):
+            prompt += f"\n{note}"
         if shape == "branching":
             agent = Agent(
                 model=llm,

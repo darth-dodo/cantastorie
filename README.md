@@ -52,13 +52,13 @@ At the story's turning point the page dims and two watercolor cards appear: the 
 </p>
 
 ### 🎙️ One warm narrator
-Every story and every spoken line is told by one house voice, the same storyteller in all eight languages, so a bilingual child hears one familiar narrator whichever language tonight's story is in.
+Every story and every spoken line is told by one house voice, the same storyteller in every language, so a bilingual child hears one familiar narrator whichever language tonight's story is in.
 
 ### 🎨 Watercolor, not cartoons
 Soft palettes, rounded characters, nothing frightening, no text in the pictures. Every image is checked by a separate AI judge before it can reach the shelf, and every story ends on comfort or sleepiness.
 
-### 🗣️ Eight languages, written natively
-Italian, Spanish, English, Greek, German, Bulgarian, Russian and Marathi. Stories are *authored* in each language rather than translated, so an Italian story reaches for *biscotti della nonna* and a Spanish one for *magdalenas*.
+### 🗣️ Ten languages, written natively
+Italian, Spanish, English, Greek, German, Bulgarian, Russian, Marathi, Hindi and Japanese. Stories are *authored* in each language rather than translated, so an Italian story reaches for *biscotti della nonna* and a Spanish one for *magdalenas*.
 
 ### 🐦 Built for real bedtimes
 Wi-Fi drops and tablets go to sleep. Cantastorie loads the whole story before page one, remembers exactly where your child stopped (including which path they chose), and if the sound ever stalls, a sleeping bird waits for one tap to carry on.

@@ -17,7 +17,7 @@ from pydantic_ai.models import Model
 from src.config import Settings
 from src.observability import timed_step
 from src.pipeline.cache import ArtifactCache, run_step
-from src.pipeline.content_rules import check_story
+from src.pipeline.content_rules import check_story, length_note
 from src.pipeline.models import Language, SafetyReport, Story, Theme
 from src.pipeline.providers import build_model
 from src.pipeline.steps.safety import safety_gate
@@ -94,6 +94,8 @@ def revise_story(
             f"This story failed review:\n{story.model_dump_json()}\n\n"
             f"Failures to fix:\n{failure_lines}"
         )
+        if note := length_note(story.language):
+            prompt += f"\n\n{note}"
         if story.shape == "branching":
             branching_draft = build_branching_revise_agent(llm).run_sync(prompt).output
             revised = branching_story_from_draft(

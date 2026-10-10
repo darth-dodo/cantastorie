@@ -111,8 +111,8 @@ describe('readWithMe toggles on-screen page text', () => {
     expect(texts.every((t) => t.style.display === 'none')).toBe(true);
   });
 
-  it('LANG_CODES is exported in the it..mr order', () => {
+  it('LANG_CODES is exported in the it..ja order', () => {
     expect(LANG_CODES[0]).toBe('it');
-    expect(LANG_CODES.at(-1)).toBe('mr');
+    expect(LANG_CODES.at(-1)).toBe('ja');
   });
 });

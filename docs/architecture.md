@@ -313,7 +313,7 @@ The loaded story exposes `pagesFrom(pageId)`, an ordered walk of one arm. When a
 
 ## Narration / Audio
 
-Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across eight languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
+Narration is the app's spine — one warm narrator identity carries every story and every spoken prompt across all ten roster languages. There are two halves to it: **generation** at authoring time (a pipeline step) and **playback** at story time (the Web Audio engine in [The Player](#the-player)). Because every asset is precomputed and served bucket-direct, playback costs **zero API calls** and no provider key ever reaches the browser.
 
 ### Provider: Gemini TTS defaults via OpenRouter; Voxtral cloning via Mistral; Deepgram alongside
 
@@ -348,6 +348,7 @@ The narration gate that [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-
 - **Greek**: passed the listening test. Greek ships on the house voice, and the MAI-Voice-2 fallback is not needed.
 - **Deepgram Aura bench**: retired. There is no longer a per-language fallback voice; a forced change of narrator would now take a new ADR.
 - **Still open: timing alignment quality.** Deepgram STT word timings on synthetic narration, including Greek STT support, remain to be validated when reading mode (slice 6) builds the timing pass.
+- **Hindi and Japanese** (added 2026-10-10, AI-508) narrate on the same `Kore` voice. The verdict above covered the original eight languages; a listening test for `hi` and `ja` is still to be done.
 
 ### Playback
 
@@ -392,7 +393,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | Child flows | Playwright | Two taps to narration, page turns, choice overlay, retry state, resume offer, the stand-in gate (wrong answer stays, right answer passes; Escape is Back). Auto-continue is specified but skipped until AI-370 |
 | Safety | Audit script in CI | Zero unapproved assets reachable from any manifest |
 
-The content rules (page counts, word counts, sentence caps) are enforced twice: as pipeline validation in `assemble` and as pytest assertions against every published `story.json`.
+The content rules (page counts, word counts, sentence caps) are enforced twice: as pipeline validation in `assemble` and as pytest assertions against every published `story.json`. Japanese, which has no spaces between words, is measured in characters (spaces and punctuation excluded) against the word limits scaled at 2.5 characters per word (`content_rules.limits_for`, AI-508). The Japanese writer, judge and reviser get those limits restated in characters in their per-call message, so the shared instructions, and every other language's cache keys, are unchanged.
 
 ---
 

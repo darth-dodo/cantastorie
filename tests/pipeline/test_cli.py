@@ -341,7 +341,7 @@ def test_publish_prompts_dry_run_needs_no_yes_and_covers_all_languages(
 
     assert result.exit_code == 0
     assert seen == [(lang, True) for lang in get_args(Language)]
-    assert "8 TTS call(s)" in result.output
+    assert f"{len(get_args(Language))} TTS call(s)" in result.output
 
 
 def test_publish_prompts_local_writes_dev_fixtures_without_yes(
