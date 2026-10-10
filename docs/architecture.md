@@ -65,7 +65,7 @@ graph LR
 | Player UI | Vanilla ES modules + Web Audio API | Full-screen audio-driven experience; FSM-managed states; crossfades that work on iOS |
 | Pipeline | Plain Python + Pydantic AI | Typed step functions; validated structured outputs (safety verdicts as models), retries, per-step model config via OpenRouter |
 | LLMs, images & narration | OpenRouter | One gateway, per-step model choice — a different model family for the safety judge than the writer, and narration TTS on the same key (see [Narration / Audio](#narration--audio)) |
-| Narration | Gemini 3.1 Flash TTS via OpenRouter (defaults, one pinned house voice); Voxtral voice profiles via the Mistral API (cloning only); Deepgram for word timings and the fallback voice bench | Gemini covers 70+ languages under the existing OpenRouter key (Voxtral's OpenRouter roster is English/French only, with no cloning parameter); word timings come from a Deepgram STT pass over the narrated audio; Deepgram Aura is the fallback bench for `it`/`es`/`de` — see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) as amended by [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) |
+| Narration | Gemini 3.1 Flash TTS via OpenRouter (defaults, one pinned house voice, `Kore`); Voxtral voice profiles via the Mistral API (cloning only); Deepgram for word timings (planned) | Gemini covers 70+ languages under the existing OpenRouter key (Voxtral's OpenRouter roster is English/French only, with no cloning parameter); word timings will come from a Deepgram STT pass over the narrated audio; the Deepgram Aura fallback bench was retired on 2026-10-10 — see [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) as amended by [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) |
 | Asset storage | Cloudflare R2 | Zero egress fees, access logs off, public bucket for published content |
 | App hosting | Render | Hermano's render.yaml precedent |
 | Parent authentication | Clerk (parent area only; [ADR-003](adr/ADR-003-parent-authentication-clerk.md)) | Magic-link / OAuth sign-in; JWT verified via JWKS (PyJWT, no vendor SDK); the child player stays account-free |
@@ -84,19 +84,22 @@ src/
 ├── config.py               Settings (R2 bucket, provider keys, model choices per step)
 ├── api/
 │   ├── main.py             FastAPI app factory, middleware
-│   ├── auth.py             require_parent — Clerk JWT verification via JWKS
+│   ├── auth.py             require_parent / require_parent_candidate — Clerk JWT verification via JWKS
 │   ├── clerk.py            Clerk REST client: family-token mint-or-link
 │   └── routes/
 │       ├── landing.py      GET / — the public landing page
 │       ├── player.py       GET /play — the child player shell
-│       ├── parent.py       /parent/api/provision — family token mint-or-link (parent pages arrive in Phase 2)
+│       ├── parent.py       /parent — story requests, run progress, review, approve/reject, provision
 │       ├── published.py    /published — R2 content proxy for dev/prod parity
-│       └── workshop.py     /workshop — operator screens: runs, staging, review, publish
+│       ├── workshop.py     /workshop — operator screens: runs, staging, review, publish, library
+│       ├── _nav.py         Post-sign-in navigation: each role's home, 303 for the other role
+│       └── _templates.py   Shared Jinja2 environment
 ├── workshop/
-│   ├── manager.py          In-process run orchestration + stale-run reaping
-│   └── records.py          Durable run records in R2 (pending prefix)
+│   ├── manager.py          In-process run orchestration (one run at a time), caps, stale-run reaping, boot resume
+│   ├── records.py          Durable run records in R2 (pending prefix), ETag-guarded saves
+│   └── scope.py            WorkshopScope: operator (shared shelf) vs parent (own family partition)
 ├── pipeline/
-│   ├── cli.py              Typer CLI: generate, publish, audit
+│   ├── cli.py              Typer CLI: generate, publish, publish-prompts, audit
 │   ├── generate.py         The linear pipeline: author → narrate → illustrate → image safety → assemble → stage
 │   ├── steps/
 │   │   ├── write.py        Native-language story authoring (strong model)
@@ -106,12 +109,17 @@ src/
 │   │   ├── illustrate.py   Character sheet first, then pages against it
 │   │   ├── image_safety.py Vision judge over every shown image, bounded redraws (ADR-011)
 │   │   ├── assemble.py     story.json assembly + validation
-    │   │   └── (gloss.py)      Planned, not built: word-to-English gloss maps (cheap model), with reading mode
+│   │   ├── utterance_texts.py  The five spoken-prompt lines per language
+│   │   └── (gloss.py)      Planned, not built: word-to-English gloss maps (cheap model), with reading mode
 │   ├── cache.py            Content-addressed artifact cache
+│   ├── _parallel.py        Bounded thread pool for per-page narration and illustration calls
 │   ├── content_rules.py    The nine content rules, shared by write and safety prompts
-│   ├── models.py           Pydantic: Story, Page, Choice, SafetyVerdict, ImageSafetyVerdict, GlossMap
+│   ├── languages.py        Language display names, shared by templates and the player
+│   ├── models.py           Pydantic: Story, Page, ChoicePoint, SafetyReport, ImageSafetyReport
+│   ├── prompts.py          publish-prompts: narrate and publish a language's spoken prompts
 │   ├── providers.py        OpenRouter transport (chat, images, TTS); every model via OpenRouterProvider, so judges' temperature 0 reaches the wire
-│   └── publish.py          R2 staging + publish, manifest update, immutable naming
+│   ├── retry.py            Bounded provider retries (429/502/503/504 and connect failures only)
+│   └── publish.py          R2 staging + publish, review digest, manifest update, immutable naming, audit
 ├── observability.py        LangSmith tracing + Sentry error monitoring for pipeline and app
 ├── templates/              Jinja2: landing.html, index.html (player shell), parent/ and workshop/ screens
 └── static/
@@ -121,11 +129,13 @@ src/
     │   ├── wake.js          Unlock on every activation + visibilitychange; fires the shelf greeting once
     │   ├── main.js         Composition root: boot, manifest, wiring, render loop
     │   ├── store.js        Player state + transitions
-    │   ├── playback.js     Narration drives pages; pause/resume
-    │   ├── screens.js      DOM for shelf, player, end + overlays (choice, resume, settings)
+    │   ├── playback.js     Narration drives pages; pause/resume; stall watchdog; branch following
+    │   ├── screens.js      DOM for shelf, player, end + overlays (choice, resume, settings, grown-up gate)
     │   ├── story.js        story.json → playable; mock shelf for unpublished covers
     │   ├── prefetch.js     Whole-story prefetch on cover tap
     │   ├── palette-resolve.js  Theme + palette resolution (pure, shared with tests)
+    │   ├── palette.js      Sync head script: sets theme + palette before first paint
+    │   ├── auth.js         Shared Clerk sign-in/out + HTMX session-lapse recovery (workshop, parent)
     │   ├── workshop.js     Operator-screen behaviors (HTMX companion)
     │   ├── family-adopt.js Writes the family token to IndexedDB
     │   └── storage.js      Progress persistence in localStorage (page + branch choices)
@@ -194,10 +204,14 @@ Editing page 5's text and re-running regenerates page 5's audio and image — no
 | Safety gate | **Different family** than the writer, temperature 0 | A shared writer/judge blind spot is the failure mode that matters; cross-family judging is one config line |
 | Image safety | Vision model, **different family** than the image model, temperature 0 | **Calm pictures** judged on the rendered images, not the text ([ADR-011](adr/ADR-011-image-safety-vision-judge.md)); verdicts no text / nothing frightening / calm per page, card and cover; a failure is redrawn at most twice, then the story is rejected. Refused at config load if the families match |
 | Glosses (planned) | Cheap fast model | Mechanical contextual mapping; `GLOSS_MODEL` is configured but no step reads it yet |
-| Narrate | TTS model (Gemini 3.1 Flash TTS via OpenRouter, `google/gemini-3.1-flash-tts-preview`) | One house voice across all languages, pinned at the AI-366 bake-off; `pcm` output wrapped to WAV (Gemini rejects `mp3`); no timestamps (see [Narration / Audio](#narration--audio)) |
+| Narrate | TTS model (Gemini 3.1 Flash TTS via OpenRouter, `google/gemini-3.1-flash-tts-preview`) | One house voice (`Kore`) across all languages, finalized 2026-10-10; `pcm` output wrapped to WAV (Gemini rejects `mp3`); no timestamps (see [Narration / Audio](#narration--audio)) |
 | Illustrate | Image-capable model | Character sheet fed as reference to every page — chaining page-to-page compounds drift |
 
 Exact model IDs live in `config.py`, chosen and re-benchmarked freely since OpenRouter makes them a string swap — narration included, now that it runs on the same gateway.
+
+### Provider retries
+
+Every provider client (text models, both judges, images, narration) sits on one retrying HTTP transport (`pipeline/retry.py`, AI-495); the OpenAI SDK's own retries are off so the two layers cannot multiply. At most three sends per request, retried only on 429/502/503/504 and on connect-phase failures — answers that mean the provider never served the request. A plain 500 or a read timeout is never retried, because the provider may already be generating (and billing) an image or an audio clip. `Retry-After` is honoured up to 30 seconds; otherwise exponential backoff with jitter. Retries are logged as `provider_retry` with method, host, path and status only.
 
 ### Spoken prompts as first-class assets
 
@@ -238,6 +252,14 @@ published/
 
 A `pending/` prefix in its **own private bucket** (`R2_PENDING_BUCKET`, never listed in any manifest) holds generated-but-unapproved stories and run records. The public bucket serves every key it holds, so config refuses a live endpoint whose pending bucket is unset or equal to the public one, and the audit fails on any `pending/` object found in the public bucket. **Two publish lanes** share the `published/` bucket: the **shared shelf** (operator, global — `published/stories/…` + `published/{lang}/manifest.json`) and a **family overlay** (private — `published/families/{token}/stories/…` + `published/families/{token}/{lang}/manifest.json`). `publish_story(..., family_token=…)` selects the lane; the family-token prefix is the tenancy boundary and is validated (`^[0-9a-f]{32}$`) before it becomes a key. The lanes never cross and there is no promotion of private → global. The audit (`audit_published_bucket`) enforces this: a manifest may reference only its own lane's assets — a cross-tenant URL is a violation.
 
+### Review binding and publish order
+
+A family can approve only the bytes it reviewed (B2, H1). Rendering the parent review page records a **staged digest** on the run record: SHA-256 over the staged `story.json` plus every staged asset's name and ETag (`publish.staged_digest`). Approve refuses a run that was never reviewed, or whose staged story has changed since. `publish_story(..., expected_digest=…)` then recomputes the digest before copying anything and raises `StagedContentChangedError` with nothing published, which closes the window between the route's check and the copy. Each workshop run's id is folded into its story id as a nonce, so no other run can stage over a reviewed story.
+
+The operator's approve (`/workshop/runs/{id}/approve`) publishes to the shared shelf **without** `expected_digest`: the digest binding guards the family lane only.
+
+Publishing copies, never regenerates. Assets go first, each skipped if its ETag already matches, with `Cache-Control: public, max-age=31536000, immutable`. Then `story.json`, then the language's prompts, and the manifest **last**, with `max-age=60`. So a manifest never lists an asset that is not yet in the bucket. Every manifest write (publish, unpublish, the repair script, publish-prompts) goes through one load–mutate–write path with `IfMatch` on the ETag and up to three attempts. Two concurrent approvals in the same lane therefore cannot drop each other's entry.
+
 ### Serving
 
 The player fetches published assets bucket-direct: the web service injects `ASSET_BASE` (the bucket's public URL plus the `/published` prefix) into the shell, and the player appends `/{lang}/manifest.json`. When a `family_token` is present in the child's IndexedDB, the player additionally fetches `/{ASSET_BASE}/families/{token}/{lang}/manifest.json` and merges its stories onto the shared shelf (dedupe by id, shared wins; overlay fetch failure falls back to the shared shelf and never blocks playback). No token → zero overlay requests. The overlay fetch is anonymous and bucket-direct — the child loads no auth SDK and sets no cookies. The bucket has **public read, access logs off, and CORS scoped to the player origin** (`deploy/r2-cors.json`) — nothing about the child ever leaves the browser, so there is nothing to log. Deploy steps and verification live in [`docs/setup.md`](setup.md).
@@ -263,10 +285,12 @@ Vanilla ES modules around a small finite state machine (hermano's `fsm.js`, port
 ```
 shelf → story-loading → playing ⇄ paused
                         playing → page-turn → playing
-                        playing → choice → (tap | nudge | auto) → playing
+                        playing → choice → tap → playing
                         playing → audio-error → (tap retries) → playing
                         playing → ended → (replay | shelf | goodnight)
 ```
+
+**Choice overlay, as built:** the overlay speaks each option's label and then waits for a tap; there is no time limit. The idle **Choice nudge** (30 seconds) and auto-continue on the first option (10 seconds later) specified in [product.md](product.md#the-picture-choice-pattern) are **not built** (AI-370). Neither is the spoken tap confirmation: the five prompts that exist are listed under [Spoken prompts](#spoken-prompts-as-first-class-assets). The Playwright auto-continue test is skipped until the timers land (`tests/e2e/branching.spec.js`).
 
 ### The audio engine
 
@@ -275,7 +299,7 @@ One module owns a single `AudioContext`. Everything else asks it to play things.
 - **Unlock on every activation, and on return to view.** Browsers block sound before a user gesture, and mobile browsers can drop a running context back to suspended or (Safari) `interrupted` with no event at all when the tab backgrounds or the device sleeps. `wake.js` re-arms unlock on every activation-triggering event (no `once`) and on a visible `visibilitychange`, so the shelf greeting fires once on the first successful unlock and playback recovers without a reload — the two-tap budget absorbs it (first tap wakes and greets, cover tap starts the story). A narration stall watchdog turns a frozen voice into the sleeping-bird audio-error state instead of dead air. See [ADR-010](adr/ADR-010-audio-wake-and-stall-recovery.md).
 - **Crossfades via gain nodes.** Two sources overlapping with gain ramps — works on iOS where media-element volume is read-only.
 - **Exact-position resume** from buffer offsets within a session. Across a reload, the page and branch choices persist in localStorage, and the resume offer reopens the story on that page.
-- **Priority ducking**: prompt playback (nudges, confirmations) and narration never overlap.
+- **Priority ducking**: prompt playback (the story-start line, spoken choice labels, the retry and end prompts) and narration never overlap.
 
 ### Whole-story prefetch
 
@@ -293,36 +317,37 @@ Narration is the app's spine — one warm narrator identity carries every story 
 
 ### Provider: Gemini TTS defaults via OpenRouter; Voxtral cloning via Mistral; Deepgram alongside
 
-Default narration for all shelf content is generated through **Gemini 3.1 Flash TTS** on OpenRouter's OpenAI-compatible speech endpoint — **one house voice**, selected from Gemini's roster at the AI-366 bake-off and pinned across every language ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)). **Voice cloning** (the family voices of [ADR-006](adr/ADR-006-family-voice-narration.md), and any bespoke narrator identity) runs exclusively through **Voxtral voice profiles on the Mistral API** — `MISTRAL_API_KEY` exists for that single capability and is used by no other code path. **Deepgram** keeps its two supporting roles from [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md): its STT (Nova family) reconstructs word timings from the narrated audio, and its Aura presets are the fallback voice bench for `it`, `es`, and `de` (including the English–Spanish codeswitching voices for mixed-language households).
+Default narration for all shelf content is generated through **Gemini 3.1 Flash TTS** on OpenRouter's OpenAI-compatible speech endpoint — **one house voice, Gemini's `Kore`**, pinned across all eight languages and finalized on 2026-10-10 ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md#outcome-2026-10-10)). **Voice cloning** (the family voices of [ADR-006](adr/ADR-006-family-voice-narration.md), and any bespoke narrator identity) runs exclusively through **Voxtral voice profiles on the Mistral API** — `MISTRAL_API_KEY` exists for that single capability and is used by no other code path. **Deepgram** keeps one supporting role from [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md): its STT (Nova family) will reconstruct word timings from the narrated audio (planned, slice 6). Its Aura presets were the fallback voice bench for `it`, `es` and `de`. That bench was **retired on 2026-10-10** once the Gemini house voice was finalized.
 
 | Aspect | Detail |
 |--------|--------|
 | Endpoint | OpenRouter `POST /api/v1/audio/speech`, OpenAI-compatible |
-| Request | `{ model, input, voice, response_format }` — `voice` is the single pinned house voice, `response_format` is `pcm` (Gemini rejects `mp3`) |
+| Request | `{ model, input, voice, response_format }` — `voice` is the single pinned house voice (`Kore`, `NARRATION_VOICES` in `config.py`), `response_format` is `pcm` (Gemini rejects `mp3`) |
 | Response | Raw PCM, wrapped into a WAV container at the transport boundary and stored as `.wav` — **no word or character timestamps** |
 | Model id | `google/gemini-3.1-flash-tts-preview`, pinned in config (verified live; the earlier slug guess cost a debugging round — speech models are absent from the public `/models` listing) |
 | Delivery steering | *Planned:* Gemini's inline audio tags (e.g. `[whispers]`) — the writer will emit them only when the target synthesis model is Gemini, stripped otherwise; not yet enforced in the write prompt |
 | Provenance | Gemini TTS output carries SynthID watermarking |
 | Key | The existing `OPENROUTER_API_KEY` for defaults; `MISTRAL_API_KEY` only for cloning |
 
-**Why Gemini for defaults (and why Voxtral left the default path).** Field testing showed OpenRouter exposes only **English and French** preset voices for Voxtral Mini TTS and **no cloning parameter**, while Mistral's model card supports nine languages via its own API. Deepgram Aura offers strong presets but no cloning and no Greek. Gemini 3.1 Flash TTS covers **70+ languages** including (**unverified**) Greek, with 200+ inline audio tags and SynthID watermarking — so it takes the default path under the existing OpenRouter key, and Voxtral's remit narrows to the one thing only its native API offers: voice cloning. The preview-model risk is accepted with eyes open: synthesized audio is stored, so model churn threatens regeneration, not playback ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)).
+**Why Gemini for defaults (and why Voxtral left the default path).** Field testing showed OpenRouter exposes only **English and French** preset voices for Voxtral Mini TTS and **no cloning parameter**, while Mistral's model card supports nine languages via its own API. Deepgram Aura offers strong presets but no cloning and no Greek. Gemini 3.1 Flash TTS covers **70+ languages** including Greek (which passed its listening test), with 200+ inline audio tags and SynthID watermarking — so it takes the default path under the existing OpenRouter key, and Voxtral's remit narrows to the one thing only its native API offers: voice cloning. The preview-model risk is accepted with eyes open: synthesized audio is stored, so model churn threatens regeneration, not playback ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)).
 
-**Why not ElevenLabs (the original choice).** The narration was originally settled on ElevenLabs multilingual_v2 for its native character-level timestamps, proven warmth, and single multilingual voice. The OpenRouter path costs roughly **10× less**. ElevenLabs is **retired entirely** ([ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)): its timestamp role passed to the Deepgram STT transcription pass, its fallback-voice role to Deepgram Aura. It remains the documented un-retirement option if cloning on Mistral disappoints ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), alongside Cartesia (unevaluated) and local Chatterbox; re-adding it would take a superseding ADR.
+**Why not ElevenLabs (the original choice).** The narration was originally settled on ElevenLabs multilingual_v2 for its native character-level timestamps, proven warmth, and single multilingual voice. The OpenRouter path costs roughly **10× less**. ElevenLabs is **retired entirely** ([ADR-004](adr/ADR-004-narration-deepgram-voxtral.md)): its timestamp role passed to the Deepgram STT transcription pass, and its fallback-voice role to Deepgram Aura, which has itself since been retired. It remains the documented un-retirement option if cloning on Mistral disappoints ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)), alongside Cartesia (unevaluated) and local Chatterbox; re-adding it would take a superseding ADR.
 
 ### The timestamp trade-off (timestamps paused)
 
 The `/audio/speech` endpoint returns audio without timings, so the earlier "timestamps from day one" design is **paused**. `story.json` page timings stay empty until **reading mode (slice 6)**, the first feature that needs them, reconstructs them via a **Deepgram STT transcription pass**: the narrated audio runs through Deepgram (Nova family), whose transcripts carry word-level start/end times as a first-class output. Timing the whole launch library this way is expected to cost well under a dollar, and — because the pass works on *any* narrator's audio — a future voice change never orphans reading mode (the ADR-008 narrator swap is the first dividend of that decision).
 
-This is acceptable now because **slice 1 does not use timings at all**, and reading mode already **downgrades missing timings to sentence-level highlighting** rather than failing. Alignment quality on synthetic speech is validated at AI-366; it is recorded as a risk in [Risks and Open Questions](#risks-and-open-questions).
+This is acceptable now because **slice 1 does not use timings at all**, and reading mode already **downgrades missing timings to sentence-level highlighting** rather than failing. Alignment quality on synthetic speech is still unvalidated; it is recorded as a risk in [Risks and Open Questions](#risks-and-open-questions).
 
-### Open questions, validated at AI-366
+### Narrator verdict (finalized 2026-10-10)
 
-Four narration properties are **unproven** and are resolved at issue AI-366 (the first Italian story — the designed "validate narration warmth" gate), re-scoped by [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) to a Gemini-roster-vs-Aura-bench bake-off that also pins the house voice:
+The narration gate that [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md#outcome-2026-10-10) set up (Gemini's roster against the Deepgram Aura bench, plus a Greek listening test) is closed:
 
-- **Warmth for bedtime** — not yet validated for any candidate; warmth is core to the product, and with ElevenLabs retired, every horse in this race is unproven.
-- **Cross-language voice consistency** — an **explicit bake-off criterion**: one Gemini voice is pinned as the house narrator across every language, and it must sound like one storyteller in all of them; the per-language Aura bench is the fallback shape if it does not.
-- **Greek support** — Gemini lists 70+ languages including Greek, but its Greek is **unverified** and gated on a listening test; MAI-Voice-2 via OpenRouter is the named fallback, and failing both, the Greek shelf launches later rather than worse. The Deepgram timing pass's Greek support is likewise unconfirmed.
-- **Timing alignment quality** — Deepgram STT word timings on synthetic narration must be validated against karaoke-highlighting quality.
+- **House voice**: Gemini 3.1 Flash TTS voice **`Kore`**, pinned for all eight languages (`it`, `es`, `en`, `el`, `de`, `bg`, `ru`, `mr`).
+- **Warmth and cross-language consistency**: accepted. One storyteller across every language.
+- **Greek**: passed the listening test. Greek ships on the house voice, and the MAI-Voice-2 fallback is not needed.
+- **Deepgram Aura bench**: retired. There is no longer a per-language fallback voice; a forced change of narrator would now take a new ADR.
+- **Still open: timing alignment quality.** Deepgram STT word timings on synthetic narration, including Greek STT support, remain to be validated when reading mode (slice 6) builds the timing pass.
 
 ### Playback
 
@@ -332,13 +357,15 @@ Playback mechanics live in [The Player → The audio engine](#the-audio-engine):
 
 ## The Parent Area
 
-Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision` mint-or-link) and the parent pages themselves (AI-411) — a sign-in home, story requests under a daily run cap (each run makes exactly one story, AI-480), and per-run progress polling. The gate and export/import are designed but not yet built; language and theme settings live in child-side dropdowns on the shelf, ungated.
+Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision` mint-or-link) and the parent pages themselves (AI-411) — a sign-in home, story requests under a daily run cap (each run makes exactly one story, AI-480), and per-run progress polling. Parents review a staged story on one page (every page, picture and sound) and approve or reject it; approval is bound to the reviewed bytes (see [Review binding and publish order](#review-binding-and-publish-order)). Export/import is designed but not yet built.
 
-- **The gate (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
-- **Settings**: language multi-select, reading mode toggle.
+- **The gate, as built (AI-444)** is a stand-in. The player's settings sheet has a "grown-ups" row that opens a modal asking for the sum `7 + 6` with three answer buttons. A wrong tap shows a message and keeps the modal open; Back or Escape closes it. The correct answer navigates to `/parent`, which has its own Clerk sign-in. There is no hold, no fresh random equation, and no failure count or lockout.
+- **The gate, as designed (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.
+- **Settings** (the player's settings sheet, ungated): language, light/dusk/auto, and the read-with-me toggle. Only the parent-area row sits behind the gate.
 - **Export/import (not yet built)**: the export file (schema pinned in slice 7) round-trips progress, settings, and the family token; invalid imports change nothing and name the failing field.
 - **Parent authentication**: parents sign in via **Clerk** (magic link / OAuth) — see [ADR-003](adr/ADR-003-parent-authentication-clerk.md) (Accepted, implemented). FastAPI verifies Clerk session JWTs via JWKS (PyJWT, no vendor SDK, async fetch). One parent account = one family; the family token is minted or linked at first sign-in and lives in Clerk `public_metadata`. Approved stories publish to `published/families/{family_token}/…` + a family overlay manifest (a family approving its run's staged story at `/parent/runs/{id}/approve`); the child player merges that overlay onto the shared shelf. The child player stays account-free — no Clerk script, no cookies on any child path.
 - **The workshop is Clerk-gated; the parent area is its sibling surface (AI-426, AI-430)**: `/workshop` no longer has an env-var secret. Every request resolves a `WorkshopScope` from the verified JWT (`role`, `family_token`). An **operator** (`public_metadata.role == "operator"`) works globally and publishes to the shared shelf; any other signed-in user is a **parent**, confined to their own `family_token` partition who publishes to their private overlay. The operator can also **see and delete** any family's private story from `/workshop/library` (moderation — never promotion). Parents work in their own `/parent` surface — sign-in, story requests, run tracking, approving a staged story to their private shelf — while operators author in `/workshop`; shared post-sign-in navigation (`src/api/routes/_nav.py`) dispatches each role to its home and 303-redirects the other, so neither role hits a dead end or a redirect loop. With Clerk unconfigured, both areas answer 404. ClerkJS loads on every workshop and parent page to keep the `__session` JWT refreshed for HTMX polling.
+- **How runs execute.** A request creates a `RunRecord` (`queued → running → staged → approved | rejected`, with `failed` re-queueable) saved to the private pending bucket under `pending/{family|operator}/runs/`. Saves are conditional on the record's ETag, so concurrent writers raise instead of overwriting each other. Parents are capped at one queued-or-running run and a daily count; the operator is exempt. `RunManager.execute` runs as a FastAPI background task and calls `generate_story` in a worker thread under one `asyncio.Lock`, so **one generation runs at a time per process**. A restart is not a state. At boot the app schedules, without awaiting, a task that first retires runs whose last update is older than the stale threshold, then re-enters the queued and running runs that remain. `/health` answers immediately. The reaper also runs, throttled, from each progress poll. Because of the content-addressed cache, a re-entered run pays only for the steps it had not finished.
 - **Phase 2** adds the dashboard (unpublish toggles, kill switch) and the review queue (full text, per-page audio, image strip, approve / reject / regenerate-with-cap) in front of the same pipeline step functions.
 
 ---
@@ -362,7 +389,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | Pipeline | pytest | Step functions with providers mocked (hermano's fixture pattern); cache-key behavior; safety-gate routing (pass / revise / reject); assembly validation |
 | API | pytest | Player page, parent routes, export/import validation |
 | Player modules | Vitest | FSM transitions, audio-engine state, storage round-trips, prefetch logic, choice timers |
-| Child flows | Playwright | Two taps to narration, page turns, choice overlay, retry state, resume offer, gate lockout |
+| Child flows | Playwright | Two taps to narration, page turns, choice overlay, retry state, resume offer, the stand-in gate (wrong answer stays, right answer passes; Escape is Back). Auto-continue is specified but skipped until AI-370 |
 | Safety | Audit script in CI | Zero unapproved assets reachable from any manifest |
 
 The content rules (page counts, word counts, sentence caps) are enforced twice: as pipeline validation in `assemble` and as pytest assertions against every published `story.json`.
@@ -377,7 +404,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 |-------|--------------|----------------|
 | 1 — One story plays | Shelf (one cover), playback, auto page turns, end screen | CLI core: write → safety → narrate → illustrate → publish; one Italian story (no timings — slice 1 does not use them) |
 | 2 — Survives real life | Retry & offline states, local progress (localStorage), resume, goodnight sign-off | — |
-| 3 — The story branches | Choice overlay, nudge, auto-continue, branch-following (`pagesFrom`/`extendPath`), resume across branches | Branching writer (`shape`), choice-card images, spoken labels |
+| 3 — The story branches | Choice overlay with spoken labels (nudge and auto-continue not yet built, AI-370), branch-following (`pagesFrom`/`extendPath`), resume across branches | Branching writer (`shape`), choice-card images, spoken labels |
 | 4 — Grown-ups arrive | Gate, settings, first-run rule, language chip | Second language (Spanish); all ten prompts per enabled language |
 | 5 — The full shelf | Empty-shelf state | Batch runs; 19 stories × 5 languages; audit script |
 | 6 — Reading mode | Text panel, karaoke, gloss bubbles | Gloss step; word timings reconstructed here via the Deepgram STT transcription pass (see [Narration / Audio](#narration--audio)), since narration ships without them |
@@ -394,11 +421,11 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 | **Kill-switch scope** (family vs. operator-global) | Deferred to Phase 2 design |
 | **Pending-bucket auth & story-request rate limiting** | Deferred to Phase 2 design |
 | **Export file schema** | Pinned in slice 7, not before |
-| **Narration warmth & voice consistency** (Gemini / Aura bench) | Unproven for all candidates; validated at AI-366 (first Italian story) via the [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md) bake-off — Gemini's roster vs the Deepgram Aura bench, pinning one house voice with cross-language consistency as an explicit criterion — before the library is built |
+| **Narration warmth & voice consistency** | **Resolved 2026-10-10.** Gemini voice `Kore` accepted as the house narrator for all eight languages; the Deepgram Aura bench is retired ([verdict](#narrator-verdict-finalized-2026-10-10)) |
 | **Deferred narration timestamps** | The narrator returns no timings, so `story.json` page timings stay empty until reading mode (slice 6) reconstructs them via the Deepgram STT transcription pass (well under a dollar for the launch library). Slice 1 does not use timings, so nothing is blocked now; reading mode downgrades missing/poor timings to sentence-level highlighting |
 | **Deepgram carriage on OpenRouter** | Verified at implementation (AI-391): OpenRouter does not carry Deepgram STT or Aura TTS models. The timing pass uses a pipeline-only `DEEPGRAM_API_KEY` (a bounded, flagged exception to one-key, used only at authoring time by the slice 6 timing step) |
 | **Gemini TTS is a preview model in the default path** | Accepted with eyes open ([ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md)): synthesized audio is stored, so model churn threatens regeneration, not playback; the model id lives in env, its exact OpenRouter id and token-based audio pricing are verified at T0, and any forced rename lands as a SPEC-DEVIATION note |
-| **Greek narration support** (Gemini / Deepgram) | Unverified — Gemini's language list includes Greek but its quality is gated on a listening test (MAI-Voice-2 via OpenRouter is the named fallback; failing both, the Greek shelf launches later rather than worse), and Deepgram's Greek STT support is likewise unconfirmed; confirm narration *and* timing support before any Greek content |
+| **Greek narration support** (Gemini / Deepgram) | **Narration resolved 2026-10-10:** Greek passed its listening test on the house voice, so the MAI-Voice-2 fallback is not needed. **Timing still open:** Deepgram's Greek STT support is unconfirmed, so check it before reading mode's timing pass runs on Greek |
 
 ---
 
@@ -408,6 +435,7 @@ Each slice ends with a child hearing something new; the pipeline grows exactly w
 |-----|---------|
 | [Product Spec](product.md) | Vision, behaviors, content rules, spoken prompts, decision log |
 | [System Overview](system-overview.md) | The code as built: module map, state machines, and seams |
+| [Architecture Whiteboard](whiteboards/architecture.md) | Module-by-module walkthrough with diagrams and line-level code permalinks, pinned to `35f3b29` |
 | [Setup & Deploy](setup.md) | R2 bucket, CORS, and the Render blueprint |
 | [ADR-001](adr/ADR-001-technology-stack.md) | Foundational technology stack (why this shape) |
 | [ADR-004](adr/ADR-004-narration-deepgram-voxtral.md) | Narration — Voxtral TTS plus Deepgram; ElevenLabs retired (supersedes [ADR-002](adr/ADR-002-narration-provider.md); amended by ADR-008) |

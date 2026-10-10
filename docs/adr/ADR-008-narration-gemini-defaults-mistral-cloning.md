@@ -6,6 +6,21 @@
 **Decider(s)**: Project Owner
 **Amends**: [ADR-004](ADR-004-narration-deepgram-voxtral.md) (narration: Voxtral TTS plus Deepgram)
 **Depends on**: [ADR-006](ADR-006-family-voice-narration.md) (Nonna Narrates)
+**Outcome recorded**: 2026-10-10 (see [Outcome](#outcome-2026-10-10))
+
+---
+
+## Outcome (2026-10-10)
+
+The voice gate this ADR set up is closed. The project owner finalized the narrator on 2026-10-10:
+
+- **House voice**: Gemini 3.1 Flash TTS (`google/gemini-3.1-flash-tts-preview`) voice **`Kore`**, pinned for all eight languages on the roster (`it`, `es`, `en`, `el`, `de`, `bg`, `ru`, `mr`), matching `narration_voices` in `src/config.py`.
+- **Warmth and cross-language consistency**: accepted. One storyteller across every language.
+- **Greek gate**: **passed**. Greek ships on the house voice; the MAI-Voice-2 fallback is not needed.
+- **Deepgram Aura fallback bench**: **retired**. This changes Decision item 3 below: Deepgram keeps only the planned Nova word-timing role. With no fallback voice on the bench, a forced narrator change now needs a new ADR; the rollback plan below is kept as history.
+- **Still open**: the Deepgram Nova timing pass and its alignment quality (including Greek STT) are unbuilt and unvalidated. They move to reading mode (slice 6).
+
+Everything below is the decision record as accepted on 2026-07-11, kept unchanged apart from ticking the checklist items this outcome settles.
 
 ---
 
@@ -276,13 +291,13 @@ ADR-004 bet that one provider through one gateway could narrate five languages a
 ### Phase 1: Re-scoped AI-366 bake-off
 
 - [ ] Narrate the first Italian story on Gemini roster candidates and on the Deepgram Aura bench
-- [ ] Judge bedtime warmth and **cross-language voice consistency** (explicit criterion); pin one house voice
-- [ ] Run the Greek listening test; record a go / MAI-Voice-2 / defer verdict
+- [x] Judge bedtime warmth and **cross-language voice consistency** (explicit criterion); pin one house voice — `Kore`, 2026-10-10
+- [x] Run the Greek listening test; record a go / MAI-Voice-2 / defer verdict — go, 2026-10-10
 - [ ] Run the Deepgram Nova timing pass over the winning narration; confirm alignment quality (unchanged mechanism from ADR-004)
 
 ### Phase 2: Provider switch (code)
 
-- [ ] Point `narration_model` (env-driven) at the verified Gemini TTS id; collapse `narration_voices` to the single pinned house voice
+- [x] Point `narration_model` (env-driven) at the verified Gemini TTS id; collapse `narration_voices` to the single pinned house voice
 - [ ] Confirm the content-addressed narration cache keys on the new model/voice (unchanged text re-synthesizes once, then never again)
 - [ ] Update `system-overview.md` when the code lands (it describes as-built and stays on Voxtral until then)
 
