@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import boto3
@@ -58,6 +58,13 @@ _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
 
 # Missing-object error codes across S3 dialects (as in src/pipeline/publish.py).
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
+# The global daily run counter (H4) lives beside the family folders under
+# pending/, in a folder no family token can be (tokens are hex).
+USAGE_DIR = "_usage"
+# Conditional-write attempts before an increment gives up under contention.
+_COUNTER_ATTEMPTS = 5
+# R2 answers a lost conditional write with 412, or 409 when two land at once.
+_CONFLICT_CODES = frozenset({"PreconditionFailed", "ConditionalRequestConflict", "412", "409"})
 
 
 def _as_legacy_id_list(value: Any, key: str) -> list[str]:
@@ -205,6 +212,10 @@ def _record_key(family_token: str, run_id: str) -> str:
     return f"{PENDING_PREFIX}/{family_token}/runs/{run_id}.json"
 
 
+def _usage_key(day: date) -> str:
+    return f"{PENDING_PREFIX}/{USAGE_DIR}/runs-{day.isoformat()}.json"
+
+
 def _build_client(settings: Settings) -> S3Client:
     return boto3.client(
         "s3",
@@ -263,6 +274,54 @@ class RunStore:
         record._etag = obj.get("ETag")
         return record
 
+    def daily_run_count(self, day: date) -> int:
+        """Runs submitted on this UTC day across every family (H4)."""
+        return self._read_usage(day)[0]
+
+    def increment_daily_runs(self, day: date) -> int:
+        """Count one more run for this UTC day and return the new total.
+
+        A conditional write (IfNoneMatch for the day's first run, IfMatch after),
+        so two concurrent submits each get their own total rather than one
+        overwriting the other. A lost race re-reads and tries again.
+        """
+        key = _usage_key(day)
+        for _ in range(_COUNTER_ATTEMPTS):
+            count, etag = self._read_usage(day)
+            body = json.dumps({"date": day.isoformat(), "runs": count + 1}).encode("utf-8")
+            try:
+                if etag is None:
+                    self._client.put_object(
+                        Bucket=self._bucket,
+                        Key=key,
+                        Body=body,
+                        ContentType="application/json",
+                        IfNoneMatch="*",
+                    )
+                else:
+                    self._client.put_object(
+                        Bucket=self._bucket,
+                        Key=key,
+                        Body=body,
+                        ContentType="application/json",
+                        IfMatch=etag,
+                    )
+            except ClientError as error:
+                if str(error.response.get("Error", {}).get("Code")) in _CONFLICT_CODES:
+                    continue
+                raise
+            return count + 1
+        raise ConcurrentModificationError(f"daily run counter for {day} kept conflicting")
+
+    def _read_usage(self, day: date) -> tuple[int, str | None]:
+        try:
+            obj = self._client.get_object(Bucket=self._bucket, Key=_usage_key(day))
+        except ClientError as error:
+            if str(error.response.get("Error", {}).get("Code")) in _MISSING_CODES:
+                return 0, None
+            raise
+        return int(json.loads(obj["Body"].read())["runs"]), obj.get("ETag")
+
     def delete(self, family_token: str, run_id: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=_record_key(family_token, run_id))
 
@@ -282,7 +341,7 @@ class RunStore:
             owners = [
                 name
                 for name in child_prefixes(self._client, self._bucket, f"{PENDING_PREFIX}/")
-                if name != staged_dir
+                if name not in (staged_dir, USAGE_DIR)
             ]
         keys = sorted(
             key for owner_keys in parallel_map(self._run_keys, owners) for key in owner_keys

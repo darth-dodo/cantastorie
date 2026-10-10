@@ -377,4 +377,15 @@ On a phone on **cellular** (not home wifi), open the Render URL and confirm:
 - **Render Starter**: ~$7/month, always-on (the cold-start decision — a bedtime app is opened cold nightly, and the free tier's spin-down would blow the 4-second first-open budget).
 - **Preview environments**: one extra Starter instance per open PR, prorated, and deleted after merge, close or 3 idle days.
 - **R2**: zero egress fees; storage for the launch library is pennies.
+- **Story runs**: the variable cost. Each run makes one story (text, safety checks, narration, illustrations), and the spend ceilings below bound how many run per day.
 - **Spoken prompts**: a one-off of about 35 TTS calls for the seven languages without them (unverified estimate: well under US$1). Reruns are free (see [Spoken prompts for every language](#spoken-prompts-for-every-language-h6-ai-481)).
+
+### Spend ceilings (H4)
+
+Generation runs on the provider account, so spend needs a ceiling that doesn't depend on any one family's behaviour. Three layers, from the code out:
+
+1. **Per-family caps (in code).** A family has one story in progress at a time and at most `PARENT_DAILY_RUN_CAP` runs per UTC day (default 3).
+2. **A service-wide daily cap (in code).** `GLOBAL_DAILY_RUN_CAP` (default 40) bounds runs per UTC day across every family and the operator, since per-family caps multiply with sign-ups. Past it, families see "the story workshop is resting for today" on the make screen and their submits are refused; operator runs still count but are never refused. The count lives in the private pending bucket at `pending/_usage/runs-YYYY-MM-DD.json` and is updated with a conditional write, so concurrent submits can't overshoot it. The operator is alerted once at 80% and once at the cap: a `global_run_cap_near` / `global_run_cap_reached` warning in the logs and a Sentry message, carrying the count and the cap but no family token. Raise or lower the cap with the env var in Render.
+3. **A hard limit on the provider account (operator step).** The real backstop, because it holds even if the code is wrong. In the OpenRouter dashboard, set a credit limit on the API key the app uses, sized to a month of expected runs plus headroom. If narration is billed by a separate provider, set its usage limit too. Without this, a bug that bypassed both caps could spend without bound.
+
+Bot sign-up protection in Clerk (see [Bot protection](#3-bot-protection)) keeps the number of accounts honest, which is what makes the per-family caps meaningful.

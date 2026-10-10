@@ -8,6 +8,8 @@ serves all S3 traffic here, zero network.
 
 import json
 from collections.abc import Iterator
+from datetime import date
+from typing import Any
 
 import boto3
 import pytest
@@ -502,3 +504,54 @@ def test_saving_an_upgraded_record_writes_the_v2_shape(s3: S3Client) -> None:
     assert records.V1_STORY_IDS_KEY not in raw
     assert records.V1_REVIEWED_IDS_KEY not in raw
     assert "count" not in raw["request"]
+
+
+# ── Global daily run counter (H4) ───────────────────────────────────────────
+
+
+def test_the_daily_run_counter_counts_up_per_day(s3: S3Client) -> None:
+    """H4: one counter object per UTC day in the private bucket. Each
+    increment returns the new total; another day starts from zero."""
+    store = RunStore(_settings(), client=s3)
+    day = date(2026, 10, 4)
+
+    assert store.daily_run_count(day) == 0
+    assert [store.increment_daily_runs(day) for _ in range(3)] == [1, 2, 3]
+    assert store.daily_run_count(day) == 3
+    assert store.daily_run_count(date(2026, 10, 5)) == 0
+    keys = [o["Key"] for o in s3.list_objects_v2(Bucket=PENDING_BUCKET)["Contents"]]
+    assert keys == ["pending/_usage/runs-2026-10-04.json"]
+
+
+def test_a_conflicting_counter_write_is_retried_not_lost(
+    s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H4: the counter is a conditional write. When another submit wins the
+    race, the increment re-reads and tries again, so neither run goes uncounted."""
+    store = RunStore(_settings(), client=s3)
+    day = date(2026, 10, 4)
+    store.increment_daily_runs(day)
+    real_put = s3.put_object
+    raced = {"done": False}
+
+    def racing_put(**kwargs: Any) -> Any:
+        if not raced["done"] and kwargs["Key"].startswith("pending/_usage/"):
+            raced["done"] = True
+            store.increment_daily_runs(day)  # another submit lands first
+        return real_put(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", racing_put)
+
+    assert store.increment_daily_runs(day) == 3
+    assert store.daily_run_count(day) == 3
+
+
+def test_listing_runs_skips_the_usage_folder(s3: S3Client) -> None:
+    """The counter lives beside the family folders under pending/; it is not
+    a family and holds no runs."""
+    store = RunStore(_settings(), client=s3)
+    store.increment_daily_runs(date(2026, 10, 4))
+    record = new_run("a" * 32, REQUEST)
+    store.save(record)
+
+    assert [r.id for r in store.list_runs()] == [record.id]

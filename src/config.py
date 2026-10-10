@@ -133,6 +133,12 @@ class Settings(BaseSettings):
     # per UTC day — each run makes one story (AI-480). Operator submissions
     # from /workshop are exempt.
     parent_daily_run_cap: int = 3
+    # A ceiling on runs started per UTC day across every family and the
+    # operator (H4): per-family caps multiply with sign-ups. Families are
+    # refused past it; operator runs count but are never refused. The operator
+    # is alerted at 80% and at the cap. The real spend backstop is still a hard
+    # limit on the provider account (docs/setup.md).
+    global_daily_run_cap: int = Field(default=40, ge=1)
 
     # Cloudflare R2 is S3-compatible; publish reaches it with boto3. The two
     # access keys follow the SecretStr pattern above — never logged, never
