@@ -1,0 +1,11 @@
+{
+  "language": "ja",
+  "prompts": {
+    "greeting": "/static/content/ja/prompts/greeting.wav",
+    "story_start": "/static/content/ja/prompts/story-start.wav",
+    "end": "/static/content/ja/prompts/end.wav",
+    "audio_retry": "/static/content/ja/prompts/audio-retry.wav",
+    "offline": "/static/content/ja/prompts/offline.wav"
+  },
+  "stories": []
+}

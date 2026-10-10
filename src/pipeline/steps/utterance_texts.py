@@ -1,8 +1,8 @@
 """The spoken-prompt lines for every roster language (H6, AI-481).
 
 Pure data, kept apart from the narration code so the RUF001 ignore (the
-Greek, Cyrillic and Devanagari lines are written in their own scripts on
-purpose) covers this file alone.
+Greek, Cyrillic, Devanagari and Japanese lines are written in their own
+scripts on purpose) covers this file alone.
 """
 
 from __future__ import annotations
@@ -89,5 +89,21 @@ UTTERANCE_TEXTS: Mapping[Language, Mapping[UtteranceName, str]] = {
         "end_prompt": "गोष्ट संपली! पुन्हा ऐकूया, की दुसरी गोष्ट?",
         "audio_retry": "अरे! गोष्ट डुलकी घेतेय. तिला उठवायला छोट्या पक्ष्याला हात लाव.",
         "offline": "ढगांनी गोष्टी नेल्या. थोड्या वेळाने पुन्हा प्रयत्न कर!",
+    },
+    # Machine-drafted, pending native review.
+    "hi": {
+        "shelf_greeting": "नमस्ते! आज हम कौन-सी कहानी सुनें?",
+        "story_start": "चलो, शुरू करते हैं!",
+        "end_prompt": "कहानी ख़त्म! फिर से सुनें, या कोई और कहानी?",
+        "audio_retry": "अरे! कहानी झपकी ले रही है। उसे जगाने के लिए चिड़िया को छुओ।",
+        "offline": "बादल कहानियाँ ले गए। थोड़ी देर बाद फिर कोशिश करो!",
+    },
+    # Machine-drafted, pending native review. Mostly kana, for a pre-reader's ear.
+    "ja": {
+        "shelf_greeting": "こんにちは！きょうは どの おはなしを きこうか？",
+        "story_start": "さあ、はじまるよ！",
+        "end_prompt": "おしまい！もういちど？それとも べつの おはなし？",
+        "audio_retry": "あれ？おはなしが おひるねしてるよ。ことりに さわって おこしてね。",
+        "offline": "くもが おはなしを もっていっちゃった。また すこししたら ためしてね！",
     },
 }

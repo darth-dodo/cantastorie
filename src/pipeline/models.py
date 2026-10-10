@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-Language = Literal["it", "es", "en", "el", "de", "bg", "ru", "mr"]
+Language = Literal["it", "es", "en", "el", "de", "bg", "ru", "mr", "hi", "ja"]
 
 # The one bound on a parent- or operator-supplied premise (AI-470): the
 # pipeline CLI, the workshop bench and the parent make-a-story form all import

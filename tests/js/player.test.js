@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAudioEngine } from "../../src/static/js/audio-engine.js";
-import { MANIFEST_FETCH_TIMEOUT_MS, init } from "../../src/static/js/main.js";
+import { LANGS, MANIFEST_FETCH_TIMEOUT_MS, init } from "../../src/static/js/main.js";
 
 // Vitest runs with cwd at the project root; import.meta.url is an http://
 // URL inside the jsdom environment, so resolve from cwd instead. The FastAPI
@@ -571,8 +571,8 @@ describe("shelf settings (language + light)", () => {
     gear.click();
     const sheet = document.querySelector(".settings-sheet");
     expect(sheet).not.toBeNull();
-    // 8 language tiles
-    expect([...sheet.querySelectorAll(".settings-lang-tile")]).toHaveLength(8);
+    // one tile per roster language
+    expect([...sheet.querySelectorAll(".settings-lang-tile")]).toHaveLength(LANGS.length);
     // 3 light tiles
     expect([...sheet.querySelectorAll(".settings-light-tile")]).toHaveLength(3);
   });

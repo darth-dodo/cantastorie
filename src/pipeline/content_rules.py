@@ -4,14 +4,20 @@ docs/product.md "Content Rules" (**Linear stories**): 10 pages, 30-70 words
 per page, 250-600 total, a 20-word sentence cap. Choice labels count as
 story text for every limit (**Branching stories**). The writer's prompt
 carries the same rules, but only these pure functions decide.
+
+Japanese does not separate words with spaces, so it is measured in characters
+(spaces and punctuation excluded) against the word limits scaled by
+CHARACTERS_PER_WORD (AI-508). Every other roster language counts words.
 """
 
 import re
+import unicodedata
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel
 
-from src.pipeline.models import Page, Story
+from src.pipeline.models import Language, Page, Story
 
 PAGE_COUNT = 10
 PAGE_WORDS_MIN = 30
@@ -20,6 +26,51 @@ STORY_WORDS_MIN = 250
 STORY_WORDS_MAX = 600
 SENTENCE_WORDS_MAX = 20
 ARM_PAGES = 4  # pages per branch arm; shared prefix = PAGE_COUNT - ARM_PAGES
+
+# Characters of Japanese story text that stand in for one English word. A
+# children's register leans on kana, so it runs longer than adult prose.
+CHARACTERS_PER_WORD = 2.5
+
+LengthUnit = Literal["words", "characters"]
+
+
+@dataclass(frozen=True)
+class LengthLimits:
+    """One language's length limits, all in the same unit."""
+
+    unit: LengthUnit
+    page_min: int
+    page_max: int
+    story_min: int
+    story_max: int
+    sentence_max: int
+
+
+WORD_LIMITS = LengthLimits(
+    unit="words",
+    page_min=PAGE_WORDS_MIN,
+    page_max=PAGE_WORDS_MAX,
+    story_min=STORY_WORDS_MIN,
+    story_max=STORY_WORDS_MAX,
+    sentence_max=SENTENCE_WORDS_MAX,
+)
+
+
+def _scaled(words: int) -> int:
+    return round(words * CHARACTERS_PER_WORD)
+
+
+CHARACTER_LIMITS = LengthLimits(
+    unit="characters",
+    page_min=_scaled(PAGE_WORDS_MIN),
+    page_max=_scaled(PAGE_WORDS_MAX),
+    story_min=_scaled(STORY_WORDS_MIN),
+    story_max=_scaled(STORY_WORDS_MAX),
+    sentence_max=_scaled(SENTENCE_WORDS_MAX),
+)
+
+# Languages written without spaces between words.
+CHARACTER_LANGUAGES: frozenset[Language] = frozenset({"ja"})
 
 ContentRule = Literal[
     "page_count",
@@ -30,7 +81,17 @@ ContentRule = Literal[
     "path_length",
 ]
 
-_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
+# A sentence ends on . ! ? … or the Devanagari danda (U+0964) followed by a
+# space, or on a Japanese full stop, exclamation or question mark (U+3002,
+# U+FF01, U+FF1F) with no space needed. A closing bracket or quote after a
+# Japanese stop (U+300D, U+300F, U+FF09) stays with its sentence.
+_JA_STOPS = "".join(map(chr, (0x3002, 0xFF01, 0xFF1F)))
+_JA_CLOSERS = "".join(map(chr, (0x300D, 0x300F, 0xFF09)))
+_SENTENCE_BOUNDARY = re.compile(
+    r"(?<=[.!?…।])\s+"
+    rf"|(?<=[{_JA_STOPS}])(?![{_JA_CLOSERS}])\s*"
+    rf"|(?<=[{_JA_STOPS}][{_JA_CLOSERS}])\s*"
+)
 
 
 class ContentViolation(BaseModel):
@@ -49,11 +110,40 @@ def sentences(text: str) -> list[str]:
     return [part for part in _SENTENCE_BOUNDARY.split(text.strip()) if part]
 
 
-def page_word_count(page: Page) -> int:
-    """Words on a page; choice labels count as story text for every limit."""
-    count = len(words(page.text))
+def limits_for(language: Language) -> LengthLimits:
+    return CHARACTER_LIMITS if language in CHARACTER_LANGUAGES else WORD_LIMITS
+
+
+def text_length(text: str, language: Language) -> int:
+    """Length in the language's unit: words, or characters without spaces and punctuation."""
+    if language in CHARACTER_LANGUAGES:
+        return sum(
+            1
+            for char in text
+            if not char.isspace() and not unicodedata.category(char).startswith("P")
+        )
+    return len(words(text))
+
+
+def length_note(language: Language) -> str:
+    """The length rules restated in characters, for prompts; empty for word languages."""
+    if language not in CHARACTER_LANGUAGES:
+        return ""
+    limits = limits_for(language)
+    return (
+        "Length is measured in characters for this language, not words "
+        "(spaces and punctuation do not count): "
+        f"{limits.page_min}-{limits.page_max} characters per page; "
+        f"{limits.story_min}-{limits.story_max} characters in total; "
+        f"no sentence over {limits.sentence_max} characters."
+    )
+
+
+def page_word_count(page: Page, language: Language = "en") -> int:
+    """Length of a page in the language's unit; choice labels count as story text."""
+    count = text_length(page.text, language)
     if page.choice is not None:
-        count += sum(len(words(option.label)) for option in page.choice.options)
+        count += sum(text_length(option.label, language) for option in page.choice.options)
     return count
 
 
@@ -98,31 +188,33 @@ def heard_paths(story: Story) -> list[list[Page]]:
 
 
 def _check_pages(story: Story) -> list[ContentViolation]:
-    """Per-page limits (words with labels, sentence cap), unchanged by shape."""
+    """Per-page limits (length with labels, sentence cap), unchanged by shape."""
     violations: list[ContentViolation] = []
+    limits = limits_for(story.language)
+    unit = limits.unit
     for page in story.pages:
-        count = page_word_count(page)
-        if not PAGE_WORDS_MIN <= count <= PAGE_WORDS_MAX:
+        count = page_word_count(page, story.language)
+        if not limits.page_min <= count <= limits.page_max:
             violations.append(
                 ContentViolation(
                     rule="page_words",
                     page_id=page.id,
                     detail=(
-                        f"page {page.id} has {count} words; "
-                        f"{PAGE_WORDS_MIN}-{PAGE_WORDS_MAX} required"
+                        f"page {page.id} has {count} {unit}; "
+                        f"{limits.page_min}-{limits.page_max} required"
                     ),
                 )
             )
         for sentence in _page_sentences(page):
-            length = len(words(sentence))
-            if length > SENTENCE_WORDS_MAX:
+            length = text_length(sentence, story.language)
+            if length > limits.sentence_max:
                 violations.append(
                     ContentViolation(
                         rule="sentence_cap",
                         page_id=page.id,
                         detail=(
-                            f"page {page.id} sentence has {length} words, over the "
-                            f"{SENTENCE_WORDS_MAX}-word cap: {sentence!r}"
+                            f"page {page.id} sentence has {length} {unit}, over the "
+                            f"{limits.sentence_max}-{unit[:-1]} cap: {sentence!r}"
                         ),
                     )
                 )
@@ -149,13 +241,15 @@ def _check_linear(story: Story) -> list[ContentViolation]:
             )
         )
 
-    total_words = sum(page_word_count(page) for page in story.pages)
-    if not STORY_WORDS_MIN <= total_words <= STORY_WORDS_MAX:
+    limits = limits_for(story.language)
+    total = sum(page_word_count(page, story.language) for page in story.pages)
+    if not limits.story_min <= total <= limits.story_max:
         violations.append(
             ContentViolation(
                 rule="story_words",
                 detail=(
-                    f"story has {total_words} words; {STORY_WORDS_MIN}-{STORY_WORDS_MAX} required"
+                    f"story has {total} {limits.unit}; "
+                    f"{limits.story_min}-{limits.story_max} required"
                 ),
             )
         )
@@ -164,8 +258,9 @@ def _check_linear(story: Story) -> list[ContentViolation]:
 
 
 def _check_branching(story: Story) -> list[ContentViolation]:
-    """Per-path structure, length, and total-word limits for a branching story."""
+    """Per-path structure, length, and total-length limits for a branching story."""
     violations: list[ContentViolation] = []
+    limits = limits_for(story.language)
 
     for page in story.pages:
         if page.choice is not None and page.next_page is not None:
@@ -209,14 +304,14 @@ def _check_branching(story: Story) -> list[ContentViolation]:
                     ),
                 )
             )
-        path_words = sum(page_word_count(page) for page in path)
-        if not STORY_WORDS_MIN <= path_words <= STORY_WORDS_MAX:
+        path_length = sum(page_word_count(page, story.language) for page in path)
+        if not limits.story_min <= path_length <= limits.story_max:
             violations.append(
                 ContentViolation(
                     rule="story_words",
                     detail=(
-                        f"heard path ending at {terminal} has {path_words} words; "
-                        f"{STORY_WORDS_MIN}-{STORY_WORDS_MAX} required"
+                        f"heard path ending at {terminal} has {path_length} {limits.unit}; "
+                        f"{limits.story_min}-{limits.story_max} required"
                     ),
                 )
             )

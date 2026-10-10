@@ -16,6 +16,7 @@ from pydantic_ai.settings import ModelSettings
 
 from src.config import Settings
 from src.pipeline.cache import ArtifactCache, run_step
+from src.pipeline.content_rules import length_note
 from src.pipeline.models import SafetyReport, Story
 from src.pipeline.providers import build_model
 
@@ -80,7 +81,11 @@ def safety_gate(
     }
 
     def produce() -> bytes:
-        report = build_safety_agent(llm).run_sync(story.model_dump_json()).output
+        prompt = story.model_dump_json()
+        if note := length_note(story.language):
+            # within_limits is stated in words; a character language reads it in characters.
+            prompt += f"\n\nFor within_limits: {note}"
+        report = build_safety_agent(llm).run_sync(prompt).output
         return report.model_dump_json().encode()
 
     return SafetyReport.model_validate_json(run_step(cache, "safety", inputs, produce))

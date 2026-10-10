@@ -49,7 +49,7 @@ CALL_MS = 30
 HANDSHAKE_MS = 60
 ISSUER = "https://bench.clerk.test"
 FAMILY = "0123456789abcdef0123456789abcdef"  # pragma: allowlist secret
-LANGS = ["it", "es", "en", "el", "de", "bg", "ru", "mr"]
+LANGS = ["it", "es", "en", "el", "de", "bg", "ru", "mr", "hi", "ja"]
 
 CALLS: Counter[str] = Counter()
 OBJECTS: dict[str, bytes] = {}
