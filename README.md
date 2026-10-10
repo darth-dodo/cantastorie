@@ -15,12 +15,6 @@
 
 ![A cantastorie storyteller in a moonlit piazza](docs/assets/cantastorie-hero.png)
 
-<p align="center">
-  <img src="docs/assets/screenshots/walkthrough.gif" width="220" alt="Walkthrough: the dusk shelf, a cover tap, watercolor pages turning, and a child choosing between two picture cards">
-  <br>
-  <sub><i>A real story on the live site: shelf → cover tap → pages turn → the child picks a puddle.</i></sub>
-</p>
-
 ---
 
 ## Once upon a time, in a piazza…
