@@ -15,6 +15,12 @@
 
 ![A cantastorie storyteller in a moonlit piazza](docs/assets/cantastorie-hero.png)
 
+<p align="center">
+  <img src="docs/assets/screenshots/walkthrough.gif" width="220" alt="Walkthrough: the dusk shelf, a cover tap, watercolor pages turning, and a child choosing between two picture cards">
+  <br>
+  <sub><i>A real story on the live site: shelf → cover tap → pages turn → the child picks a puddle.</i></sub>
+</p>
+
 ---
 
 ## Once upon a time, in a piazza…
@@ -41,7 +47,18 @@ Cantastorie is built on one belief: **a bedtime app should wind a child down.** 
 A tap wakes the shelf, and it greets your child aloud: *"Ciao! Quale storia ascoltiamo oggi?"* Tap a cover and the story begins. Pages turn on their own as the narration ends, with a slow, gentle crossfade between them.
 
 ### 🌿 Your child steers
-At the story's turning point the page dims and two watercolor cards appear: a lantern or a rowboat? Each card says its name aloud, and your child taps one. The story follows that path to its own ending. Tomorrow night, the other one.
+At the story's turning point the page dims and two watercolor cards appear: the swirly puddle or the round one? Each card says its name aloud, and your child taps one. The story follows that path to its own ending. Tomorrow night, the other one.
+
+<p align="center">
+  <img src="docs/assets/screenshots/story-page.jpg" width="240" alt="A watercolor story page: a child in pajamas watching the rain from bed">
+  &nbsp;&nbsp;
+  <img src="docs/assets/screenshots/choice.jpg" width="240" alt="The choice overlay: two picture cards, the swirly puddle and the round puddle">
+  &nbsp;&nbsp;
+  <img src="docs/assets/screenshots/branch-page.jpg" width="240" alt="The chosen branch continues with its own watercolor page">
+</p>
+
+### 🎙️ One warm narrator
+Every story and every spoken line is told by one house voice, the same storyteller in all eight languages, so a bilingual child hears one familiar narrator whichever language tonight's story is in.
 
 ### 🎨 Watercolor, not cartoons
 Soft palettes, rounded characters, nothing frightening, no text in the pictures. Every image is checked by a separate AI judge before it can reach the shelf, and every story ends on comfort or sleepiness.
@@ -54,6 +71,12 @@ Wi-Fi drops and tablets go to sleep. Cantastorie loads the whole story before pa
 
 ### 🌆 Dusk mode
 Pages default to a warm dusk palette, or switch on their own from 7 p.m. to 7 a.m.
+
+<p align="center">
+  <img src="docs/assets/screenshots/shelf-light.jpg" width="240" alt="The story shelf in light mode">
+  &nbsp;&nbsp;
+  <img src="docs/assets/screenshots/shelf-dusk.jpg" width="240" alt="The same shelf in dusk mode">
+</p>
 
 ---
 
@@ -79,16 +102,6 @@ Every story passes an AI safety check run by a *different* model from the one th
 - Your child's progress and settings stay in the browser on their device.
 - Stories stream straight from storage. Nothing about your child ever passes through our server.
 - Error reporting is server-side only, with no data from the child's device.
-
----
-
-## What's next
-
-- 🎙️ **Nonna narrates.** Stories read in a grandparent's own cloned voice ([proposal](docs/adr/ADR-006-family-voice-narration.md)).
-- 📖 **Reading mode.** Karaoke-style word highlighting and tap-a-word translations for emerging readers.
-- 💤 **Sleepy choices.** A gentle spoken nudge if a choice sits untouched, then the story carries on by itself, so a child who drifts off still gets a whole story.
-- 🔐 **The full parent gate.** A press-and-hold plus a quick sum, with a lockout after repeated wrong answers.
-- 📚 **The launch library.** A curated shelf of stories in every language, once the narrator's voice is finalized.
 
 ---
 
@@ -128,9 +141,14 @@ Story generation needs an `OPENROUTER_API_KEY` in `.env` (copy `.env.example`). 
 
 ---
 
-## Built with
+## How it was built
 
-Cantastorie is a sibling of [habla-hermano](https://github.com/darth-dodo/habla-hermano) and was built in collaboration with [Claude](https://claude.ai).
+Cantastorie is a sibling of [habla-hermano](https://github.com/darth-dodo/habla-hermano), built in close collaboration with [Claude](https://claude.ai). The way of working is as much a part of the project as the code:
+
+- **Decide before building.** Every significant choice (stack, narration provider, auth, image safety) is written up as an [Architecture Decision Record](docs/adr/) with the alternatives and trade-offs, before code lands.
+- **Small, tracked changes.** Each change starts as a Linear issue and lands as a focused pull request on its own branch, with conventional commits.
+- **Audit before release.** A [release-readiness audit](docs/audits/release-readiness.md) ran five parallel review streams (security and tenancy, operations and cost, child safety, frontend, code quality) and verified every finding by hand. Each blocker became an issue and a fix, from narration that could stall silently to images no one had checked.
+- **Trust, but verify the AI.** Story text and pictures are each judged by a *different* model family from the one that made them, and the docs are checked against the code. The [architecture whiteboard](docs/whiteboards/architecture.md) links every claim to the line that implements it.
 
 ## License
 
