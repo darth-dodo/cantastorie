@@ -1,6 +1,6 @@
 # Cantastorie
 
-> Bedtime stories your child steers, in the languages your family speaks. Told aloud, painted in watercolor, and approved by you before a single word reaches little ears.
+> Bedtime stories your child steers, in ten languages, including the ones your family speaks. Told aloud, painted in watercolor, and approved by you before a single word reaches little ears.
 
 [![CI](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml/badge.svg)](https://github.com/darth-dodo/cantastorie/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/darth-dodo/cantastorie/graph/badge.svg)](https://codecov.io/gh/darth-dodo/cantastorie)

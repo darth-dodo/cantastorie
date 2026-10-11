@@ -1,8 +1,11 @@
 """The landing page owns `/`; the child player moves to `/play`."""
 
+from typing import get_args
+
 from fastapi.testclient import TestClient
 
 from src.api.main import app
+from src.pipeline.models import Language
 
 client = TestClient(app)
 
@@ -40,3 +43,10 @@ def test_root_no_longer_serves_the_player_shell() -> None:
     # marketing page.
     response = client.get("/")
     assert "/static/css/player.css" not in response.text
+
+
+def test_the_language_count_follows_the_roster() -> None:
+    # The trust pill once said 8 after the roster grew to 10: the number now
+    # comes from the Language roster, so adding a language updates it.
+    response = client.get("/")
+    assert f"{len(get_args(Language))} languages" in response.text
