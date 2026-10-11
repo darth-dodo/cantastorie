@@ -44,7 +44,7 @@ Every Blocker and High finding has been re-checked against `origin/main` as of t
 | H1 | Staged content is keyed globally; approved bytes need not be reviewed bytes | Fixed in code (AI-493): each run stages under its own story id, and a parent approve publishes only the bytes the review page showed |
 | H2 | `premise` is unbounded server-side | Fixed in code (#108, AI-470) |
 | H3 | Deploy pipeline is not gated, and production dependencies are unpinned | Fixed in code (#112, AI-479); the deploy hook secret is set and Auto-Deploy is off (#116, AI-486), and the first CI-triggered deploy ran 2026-10-03. Operator step pending: rehearse one rollback. |
-| H4 | No global spend ceiling | Open |
+| H4 | No global spend ceiling | Fixed in code (AI-506): a service-wide daily run cap with alerts at 80% and at the cap. Operator steps pending: a hard credit limit on the provider account, and confirming bot sign-up protection. |
 | H5 | Manifest deletes bypass the concurrency and cache-control discipline | Fixed in code (#106, AI-474) |
 | H6 | The default language ships zero spoken prompts | Fixed in code (#115, AI-481); production prompts were published 2026-10-03 for all 8 languages (35 TTS calls), and the `--local` WAV fixtures landed in #117. Operator step pending: native review of the machine-drafted el/de/bg/ru/mr lines. |
 | H7 | The unauthenticated content proxy has no path validation and no tests | Fixed in code (#105, AI-471) |
@@ -56,7 +56,7 @@ Every Blocker and High finding has been re-checked against `origin/main` as of t
 - **H3**: rehearse one rollback (the deploy hook secret and Auto-Deploy-off are already done).
 - **H6**: get native review on the machine-drafted el/de/bg/ru/mr prompt lines (production publish and the `--local` fixtures are already done).
 
-**Updated verdict: Go pending B6 and the remaining operator steps.** All four of the original no-go grounds (B1, B2, B4, and the B7/B8/B9/H6 group) are fixed in code, and B1, B3, and H3 are now also closed operationally. B6 (no logging) is the one blocker still outstanding, in review as AI-485. H1 is now fixed in code (AI-493). H4 remains open — a real gap worth tracking — but this audit places it under **High**, not **Blocker**; by the audit's own severity categorization it does not reopen the no-go verdict on its own.
+**Updated verdict: Go pending B6 and the remaining operator steps.** All four of the original no-go grounds (B1, B2, B4, and the B7/B8/B9/H6 group) are fixed in code, and B1, B3, and H3 are now also closed operationally. B6 (no logging) is the one blocker still outstanding, in review as AI-485. H1 is now fixed in code (AI-493). H4 is fixed in code (AI-506); its provider credit limit and bot-protection check are operator steps.
 
 **Update (2026-10-04):** B6 merged as #121 (AI-485), so no Blocker is open in code. The verdict is now Go pending the operator steps above.
 
@@ -338,6 +338,8 @@ Positively, and worth stating: **no unauthenticated path triggers spend.** Every
 
 **Fix**: a hard spend limit on the provider account is the real backstop; add a global daily run counter and alerting.
 
+Fixed in code (AI-506). `GLOBAL_DAILY_RUN_CAP` (default 40) bounds runs per UTC day across every family and the operator. The count is a conditional-write counter in the private pending bucket, so concurrent submits can't overshoot it; families are refused past the cap and told on the make screen, while operator runs count but are never refused. The operator is alerted once at 80% and once at the cap, in the logs and in Sentry, with no family token. The provider credit limit and Clerk's bot sign-up protection remain operator steps ([setup.md](../setup.md#spend-ceilings-h4)).
+
 ### H5 — Manifest deletes bypass the concurrency and cache-control discipline
 
 ```
@@ -516,7 +518,7 @@ Ordered by risk reduction per unit of effort.
 - [ ] Native review of the machine-drafted el/de/bg/ru/mr prompt lines; any edit re-publishes on the next run (H6)
 - [x] Path allowlist and tests on `/published/{path}` (H7)
 - [x] Parametrised 403 test across the six unguarded workshop routes; traversal test made to exercise its guard (H8)
-- [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4)
+- [ ] Hard spend limit set on the provider account; bot sign-up protection verified enabled (H4) — the global daily run cap and its alerts are done in code (AI-506); both of these are operator steps
 - [x] `premise` capped server-side on `PackRequest` (H2)
 - [ ] Docker installs from `uv.lock`; `autoDeploy: false` with deployment gated on CI; rollback rehearsed once (H3) — lockfile install and CI-gated deploys done (AI-479, #112; first CI-triggered deploy on 2026-10-03); the rollback rehearsal is the remaining operator step
 - [x] Staging keyed by tenant, with a content hash bound to the approval (H1) — staging is keyed per run and a parent approve is bound to the reviewed digest (AI-493)
