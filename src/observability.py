@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import dataclasses
 import hashlib
 import logging
 import os
@@ -22,10 +23,13 @@ import time
 import traceback
 from typing import TYPE_CHECKING, Any, ParamSpec, TextIO, TypeVar, cast
 
+import langsmith
 import sentry_sdk
+from langsmith import Client as LangSmithClient
 from langsmith import traceable
 from langsmith.wrappers import wrap_openai
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI
+from pydantic import BaseModel
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 if TYPE_CHECKING:
@@ -224,12 +228,92 @@ def timed_step(step: str, **fields: object) -> Iterator[None]:
     _step_logger.info("step_finished", extra=extra)
 
 
+# Strings longer than this are replaced too: nothing the pipeline traces as
+# text (prompts, story pages, verdicts) comes near it, so a string this long is
+# encoded binary that slipped past the data-URL check.
+_MAX_TRACED_TEXT = 100_000
+
+_MAGIC_TYPES = (
+    (b"\x89PNG", "image/png"),
+    (b"RIFF", "audio/wav"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"ID3", "audio/mpeg"),
+    (b"OggS", "audio/ogg"),
+)
+
+
+def _size(n: int) -> str:
+    return f"{n / 1_000_000:.2f} MB" if n >= 100_000 else f"{n / 1000:.1f} KB"
+
+
+def _bytes_placeholder(data: bytes | bytearray) -> str:
+    kind = next((mime for magic, mime in _MAGIC_TYPES if data.startswith(magic)), "bytes")
+    if kind == "audio/wav" and data[8:12] == b"WEBP":
+        kind = "image/webp"
+    return f"<{kind} {_size(len(data))} sha256:{hashlib.sha256(data).hexdigest()[:12]}>"
+
+
+def scrub_trace_payload(value: Any) -> Any:
+    """A trace-safe copy of a run's inputs or outputs.
+
+    Audio, images and their base64 copies become a short placeholder naming
+    their type and size; text, numbers and structure are kept. Installed as
+    the LangSmith client's hide_inputs/hide_outputs, so it runs on every
+    traced call before the SDK serializes it into its upload queue. Binary
+    payloads there once held about 128 MB at the peak of one story run.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        return _bytes_placeholder(value)
+    if isinstance(value, str):
+        return _scrub_text(value)
+    if isinstance(value, dict):
+        return {key: scrub_trace_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [scrub_trace_payload(item) for item in value]
+    fields = _object_fields(value)
+    if fields is None:
+        return value
+    return {name: scrub_trace_payload(item) for name, item in fields.items()}
+
+
+def _scrub_text(text: str) -> str:
+    if text.startswith("data:") and ";base64," in text[:100]:
+        return f"<data:{text[5 : text.index(';')]};base64 {_size(len(text))}>"
+    if len(text) > _MAX_TRACED_TEXT:
+        return f"<text {len(text)} chars>"
+    return text
+
+
+def _object_fields(value: Any) -> dict[str, Any] | None:
+    """A model's or dataclass's fields, read in place (no copy of any bytes)."""
+    if isinstance(value, BaseModel):
+        return {name: getattr(value, name) for name in type(value).model_fields}
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {field.name: getattr(value, field.name) for field in dataclasses.fields(value)}
+    return None
+
+
+def build_trace_client(settings: Settings, **client_kwargs: Any) -> LangSmithClient:
+    """The one LangSmith client every traced run uses, scrubbing each run's
+    inputs and outputs before they are queued for upload."""
+    return LangSmithClient(
+        api_url=settings.langsmith_endpoint,
+        api_key=settings.langsmith_api_key.get_secret_value(),
+        hide_inputs=scrub_trace_payload,
+        hide_outputs=scrub_trace_payload,
+        **client_kwargs,
+    )
+
+
 def init_observability(settings: Settings) -> None:
     if settings.langsmith_tracing and settings.langsmith_api_key.get_secret_value():
         os.environ["LANGSMITH_TRACING"] = "true"
         os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key.get_secret_value()
         os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
         os.environ["LANGSMITH_ENDPOINT"] = settings.langsmith_endpoint
+        # Every @traceable run and wrap_openai call goes through this client,
+        # so no traced function, present or future, uploads binary payloads.
+        langsmith.configure(client=build_trace_client(settings))
     else:
         os.environ.pop("LANGSMITH_TRACING", None)
         os.environ.pop("LANGSMITH_API_KEY", None)

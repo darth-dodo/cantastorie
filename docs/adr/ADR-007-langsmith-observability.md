@@ -1,7 +1,8 @@
 # ADR-007: LangSmith App-Wide Observability
 
 **Date**: 2026-07-12
-**Status**: Accepted
+**Status**: Accepted — amended 2026-10-18 (traces carry no binary payloads; see below)
+**Amended**: 2026-10-18 — every traced run's inputs and outputs are scrubbed before upload. With tracing on in production, each narration WAV, generated PNG and base64 image sent to the judge rode along as a run input or output, and the SDK held them in its upload queue: about 400 MB of trace data across three runs in a measurement, enough to push the 512 MB web service into out-of-memory kills. `init_observability` now installs one LangSmith client (`langsmith.configure`) whose `hide_inputs`/`hide_outputs` is `scrub_trace_payload` (`src/observability.py`): bytes and base64 data URLs become a placeholder naming their type, size and a short hash; step names, timings, models, token usage, prompts and story text are kept. Every `@traceable` and `wrap_openai` run goes through it, so a traced function added later is covered too. The decision to use LangSmith is unchanged.
 **Context**: The app and pipeline need observability — tracing for LLM calls, HTTP requests, narration, and image generation
 **Decider(s)**: Project Owner
 
