@@ -438,6 +438,11 @@ async def parent_approve_run(
     record = manager.store.load(ctx.family_token, run_id)  # family-scoped load
     if record is None:
         raise HTTPException(status_code=404)
+    if record.state == "approved":
+        # A second approve of a published story (a double tap while the first
+        # publishes, or Back and resubmit) lands where the first did, not on a
+        # raw JSON error.
+        return _approved_response(request)
     if record.state != "staged":
         raise HTTPException(
             status_code=400,
@@ -462,7 +467,18 @@ async def parent_approve_run(
         publisher(story_id, ctx.family_token, record.reviewed_digest)
     except StagedContentChangedError:
         raise HTTPException(status_code=409, detail=_CHANGED_SINCE_REVIEW) from None
-    manager.store.save(record.advance("approved"))
+    try:
+        manager.store.save(record.advance("approved"))
+    except ConcurrentModificationError:
+        # Two approves raced through the checks above; the other one saved
+        # first. Publishing is idempotent, so a run now approved is a success.
+        fresh = manager.store.load(ctx.family_token, run_id)
+        if fresh is None or fresh.state != "approved":
+            raise
+    return _approved_response(request)
+
+
+def _approved_response(request: Request) -> Response:
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent/stories", status_code=303)
