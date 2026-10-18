@@ -9,6 +9,7 @@ a refusal.
 Runs on moto end to end; the staged story JSON lives in the pending bucket.
 """
 
+import asyncio
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -340,3 +341,28 @@ def test_two_approves_racing_through_the_publish_both_land_on_your_stories(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/parent/stories"
+
+
+def test_approve_publishes_off_the_event_loop(tmp_path: Path, s3: S3Client) -> None:
+    """Publishing copies every asset and rewrites a manifest, which takes
+    seconds. Run on the event loop, it stalls every other request in the
+    process for that long (and invites the double tap). It must run in a
+    worker thread, where no event loop is running."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+    loops: list[bool] = []
+
+    def publish(story_id: str, family_token: str, expected_digest: str) -> None:
+        try:
+            asyncio.get_running_loop()
+            loops.append(True)
+        except RuntimeError:
+            loops.append(False)
+
+    harness.publish = publish  # type: ignore[method-assign]
+
+    assert _approve(harness, record.id) == 303
+    assert loops == [False]
