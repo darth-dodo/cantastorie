@@ -63,9 +63,7 @@ export function sortShelf(entries) {
 }
 
 export const LANG_CODES = ['it', 'es', 'en', 'el', 'de', 'bg', 'ru', 'mr', 'hi', 'ja'];
-// Spanish is Latin American Spanish (AI-509), which has no single flag: the
-// globe showing the Americas stands in for it.
-const LANG_FLAGS = { it: '🇮🇹', es: '🌎', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺', mr: '🇮🇳', hi: '🇮🇳', ja: '🇯🇵' };
+const LANG_FLAGS = { it: '🇮🇹', es: '🇪🇸', en: '🇬🇧', el: '🇬🇷', de: '🇩🇪', bg: '🇧🇬', ru: '🇷🇺', mr: '🇮🇳', hi: '🇮🇳', ja: '🇯🇵' };
 const LANG_LABELS = { it: 'IT', es: 'ES', en: 'EN', el: 'EL', de: 'DE', bg: 'БГ', ru: 'РУ', mr: 'मरा', hi: 'हिं', ja: '日本' };
 const LANG_NAMES = { it: 'Italiano', es: 'Español', en: 'English', el: 'Ελληνικά', de: 'Deutsch', bg: 'Български', ru: 'Русский', mr: 'मराठी', hi: 'हिन्दी', ja: '日本語' };
 
