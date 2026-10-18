@@ -12,7 +12,7 @@ from __future__ import annotations
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Protocol, get_args
+from typing import TYPE_CHECKING, Annotated, Any, Protocol, get_args
 
 from botocore.exceptions import ClientError
 from fastapi import (
@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, ValidationError
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
 from src.api.routes._nav import fapi_host, home_path
+from src.api.routes._streaming import stream_object
 from src.api.routes._templates import templates
 from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     _checkpointed_steps,
@@ -61,6 +62,7 @@ from src.workshop.records import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import datetime
 
 router = APIRouter(prefix="/parent")
@@ -589,26 +591,20 @@ async def parent_staged_asset(
     manager: Manager,
     run: str | None = None,
 ) -> Response:
-    """Serve a staged asset (image/audio) family-scoped.
+    """Serve a staged asset (image/audio) family-scoped, streamed in chunks.
 
-    The review page passes ``?run=`` so ownership is one family-scoped record
-    read instead of a scan of every run the family has — per asset, that is
-    the difference between one R2 call and a dozen (AI-465).
+    Ownership is one family-scoped record read of ``?run=``, which every asset
+    URL on the review page carries (AI-465); a URL without it is a 404 rather
+    than a scan of every run the family has. The body streams so a review
+    page's ~34 parallel requests hold a chunk each, not a whole WAV each.
     """
-    if "/" in name or ".." in name:
+    if not run or "/" in name or ".." in name:
         raise HTTPException(status_code=404)
 
-    def read_owned_asset() -> bytes | None:
-        # Tenancy: load() and list_runs() are both scoped to the session's family.
-        if run:
-            record = manager.store.load(ctx.family_token, run)
-            owned = record is not None and record.story_id == story_id
-        else:
-            owned = any(
-                r.story_id == story_id
-                for r in manager.store.list_runs(family_token=ctx.family_token)
-            )
-        if not owned:
+    def open_owned_asset() -> Mapping[str, Any] | None:
+        # Tenancy: load() is scoped to the session's family.
+        record = manager.store.load(ctx.family_token, run)
+        if record is None or record.story_id != story_id:
             return None
         try:
             obj = _build_client(settings).get_object(
@@ -616,13 +612,13 @@ async def parent_staged_asset(
             )
         except Exception:
             return None
-        return obj["Body"].read()
+        return obj
 
-    body = await run_in_threadpool(read_owned_asset)
-    if body is None:
+    obj = await run_in_threadpool(open_owned_asset)
+    if obj is None:
         raise HTTPException(status_code=404)
-    return Response(
-        content=body,
+    return stream_object(
+        obj,
         media_type=_content_type(name),
         # Asset names embed a content hash, so a name's bytes never change:
         # the browser may keep them (privately) instead of refetching each visit.

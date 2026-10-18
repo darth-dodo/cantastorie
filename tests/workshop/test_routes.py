@@ -13,6 +13,7 @@ import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import boto3
 import pytest
@@ -20,6 +21,7 @@ from fastapi.testclient import TestClient
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
+import src.api.routes.workshop as workshop_module
 from src.api import auth as auth_mod
 from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
@@ -36,6 +38,7 @@ from tests.api.clerk_jwt import (
     mint_token,
     now,
 )
+from tests.api.streaming_body import ChunkOnlyBody, chunk_only_object
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
@@ -490,6 +493,44 @@ def test_staged_assets_are_served_and_traversal_is_blocked(tmp_path: Path, s3: S
     # the guard itself has to reject it.
     escape = harness.client.get(f"/workshop/staged/{story_id}/assets/%2e%2e")
     assert escape.status_code == 404
+
+
+def test_staged_assets_stream_in_chunks_instead_of_reading_them_whole(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The operator review page fires one request per image and narration at
+    once; each body is iterated in chunks and closed, never buffered whole."""
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    wav = bytes(range(256)) * 1024  # 256 KB: several 64 KB chunks
+    s3.put_object(Bucket=PENDING_BUCKET, Key=f"{STAGED_PREFIX}/{story_id}/p1.wav", Body=wav)
+    bodies: list[ChunkOnlyBody] = []
+
+    class _ChunkOnlyClient:
+        def get_object(self, **kwargs: Any) -> dict[str, Any]:
+            data = s3.get_object(**kwargs)["Body"].read()
+            obj = chunk_only_object(data)
+            bodies.append(obj["Body"])
+            return obj
+
+    monkeypatch.setattr(workshop_module, "_build_client", lambda settings: _ChunkOnlyClient())
+
+    r = harness.client.get(f"/workshop/staged/{story_id}/assets/p1.wav")
+
+    assert r.status_code == 200
+    assert r.content == wav
+    assert r.headers["content-type"] == "audio/wav"
+    assert r.headers["content-length"] == str(len(wav))
+    assert r.headers["cache-control"] == "private, max-age=86400, immutable"
+    assert [body.was_closed for body in bodies] == [True]
+
+
+def test_a_missing_staged_asset_is_404(tmp_path: Path, s3: S3Client) -> None:
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    story_id = _stage_fake_story(harness.settings, s3)
+    assert harness.client.get(f"/workshop/staged/{story_id}/assets/p9.wav").status_code == 404
 
 
 NON_OPERATOR_CLAIMS = {"sub": "user_fam", "family_token": "fam_1"}

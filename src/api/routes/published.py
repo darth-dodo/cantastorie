@@ -15,14 +15,13 @@ including dot segments in any encoding, is a 404 before R2 is asked.
 
 import logging
 import re
-from collections.abc import Iterator
-from typing import Annotated, Any
+from typing import Annotated
 
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from starlette.background import BackgroundTask
 
+from src.api.routes._streaming import stream_object
 from src.config import Settings, get_settings
 from src.observability import family_hash
 from src.pipeline.publish import CONTENT_TYPES, PUBLISHED_PREFIX, _build_client
@@ -40,7 +39,6 @@ PUBLISHED_PATH = re.compile(
     rf"|stories/{_SEGMENT}/{_FILE}\.(?:json|mp3|wav|webp)"
     rf"|prompts/{_LANG}/{_FILE}\.(?:mp3|wav))"
 )
-CHUNK_SIZE = 64 * 1024
 
 _FAMILY_SEGMENT = re.compile(r"^families/([0-9a-f]{32})/")
 
@@ -53,13 +51,6 @@ def _log_fields(path: str, code: str) -> dict[str, str]:
         fields["path"] = "families/<family>/" + path[match.end() :]
         fields["family"] = family_hash(match.group(1))
     return fields
-
-
-def _stream(body: Any) -> Iterator[bytes]:
-    try:
-        yield from body.iter_chunks(CHUNK_SIZE)
-    finally:
-        body.close()
 
 
 @router.get("/published/{path:path}")
@@ -79,19 +70,7 @@ def published_asset(
             logger.warning("published_proxy_error", extra=_log_fields(path, code or "error"))
         raise HTTPException(status_code=404) from exc
 
-    upstream = {
-        "Cache-Control": response.get("CacheControl"),
-        "ETag": response.get("ETag"),
-        "Content-Length": response.get("ContentLength"),
-    }
+    upstream = {"Cache-Control": response.get("CacheControl"), "ETag": response.get("ETag")}
     headers = {name: str(value) for name, value in upstream.items() if value is not None}
     suffix = path[path.rfind(".") :]
-    body = response["Body"]
-    # The background close covers a client that disconnects before the first
-    # chunk, when the generator never starts and its finally never runs.
-    return StreamingResponse(
-        _stream(body),
-        media_type=CONTENT_TYPES[suffix],
-        headers=headers,
-        background=BackgroundTask(body.close),
-    )
+    return stream_object(response, media_type=CONTENT_TYPES[suffix], headers=headers)
