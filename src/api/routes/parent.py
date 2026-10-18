@@ -435,9 +435,16 @@ async def parent_approve_run(
     There is no shared shelf here — every story lands under the family's own
     overlay (published/families/{token}/…), reaching only that family's child.
     """
-    record = manager.store.load(ctx.family_token, run_id)  # family-scoped load
+    # Family-scoped load. R2 calls and the publish are blocking, so each runs
+    # in a worker thread: on the event loop they stall every other request.
+    record = await run_in_threadpool(manager.store.load, ctx.family_token, run_id)
     if record is None:
         raise HTTPException(status_code=404)
+    if record.state == "approved":
+        # A second approve of a published story (a double tap while the first
+        # publishes, or Back and resubmit) lands where the first did, not on a
+        # raw JSON error.
+        return _approved_response(request)
     if record.state != "staged":
         raise HTTPException(
             status_code=400,
@@ -459,10 +466,21 @@ async def parent_approve_run(
     if current != record.reviewed_digest:
         raise HTTPException(status_code=409, detail=_CHANGED_SINCE_REVIEW)
     try:
-        publisher(story_id, ctx.family_token, record.reviewed_digest)
+        await run_in_threadpool(publisher, story_id, ctx.family_token, record.reviewed_digest)
     except StagedContentChangedError:
         raise HTTPException(status_code=409, detail=_CHANGED_SINCE_REVIEW) from None
-    manager.store.save(record.advance("approved"))
+    try:
+        await run_in_threadpool(manager.store.save, record.advance("approved"))
+    except ConcurrentModificationError:
+        # Two approves raced through the checks above; the other one saved
+        # first. Publishing is idempotent, so a run now approved is a success.
+        fresh = await run_in_threadpool(manager.store.load, ctx.family_token, run_id)
+        if fresh is None or fresh.state != "approved":
+            raise
+    return _approved_response(request)
+
+
+def _approved_response(request: Request) -> Response:
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent/stories", status_code=303)

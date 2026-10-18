@@ -9,6 +9,7 @@ a refusal.
 Runs on moto end to end; the staged story JSON lives in the pending bucket.
 """
 
+import asyncio
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -291,3 +292,77 @@ def test_the_review_template_has_no_next_story_path() -> None:
     review = (Path(TEMPLATES_DIR) / "parent" / "review.html").read_text()
     assert "unreviewed_story_ids" not in review
     assert "Review the next story" not in review
+
+
+def test_approving_an_already_approved_story_lands_on_your_stories(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """A second approve (a double tap while the first publishes, or Back and
+    resubmit) reaches a run that is already approved. It must land on the
+    stories page like the first did, not a raw JSON error, and publish nothing
+    more."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+    assert _approve(harness, record.id) == 303
+
+    again = harness.client.post(f"/parent/runs/{record.id}/approve", follow_redirects=False)
+
+    assert again.status_code == 303
+    assert again.headers["location"] == "/parent/stories"
+    assert harness.published == [("story-one", FAMILY)]
+
+
+def test_two_approves_racing_through_the_publish_both_land_on_your_stories(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """Both taps pass the checks while the run is still staged; the other one
+    saves approved first, so this save sees a stale record. Publishing is
+    idempotent, so that is a success, not a 500."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+
+    def publish_while_the_other_tap_wins(
+        story_id: str, family_token: str, expected_digest: str
+    ) -> None:
+        harness.published.append((story_id, family_token))
+        winner = harness.store.load(FAMILY, record.id)
+        assert winner is not None
+        harness.store.save(winner.advance("approved"))
+
+    harness.publish = publish_while_the_other_tap_wins  # type: ignore[method-assign]
+
+    response = harness.client.post(f"/parent/runs/{record.id}/approve", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/parent/stories"
+
+
+def test_approve_publishes_off_the_event_loop(tmp_path: Path, s3: S3Client) -> None:
+    """Publishing copies every asset and rewrites a manifest, which takes
+    seconds. Run on the event loop, it stalls every other request in the
+    process for that long (and invites the double tap). It must run in a
+    worker thread, where no event loop is running."""
+    harness = Harness(tmp_path, s3)
+    _stage_story(s3, "story-one")
+    record = _staged_run(harness.store, "story-one")
+    harness.sign_in(PARENT)
+    harness.client.get(f"/parent/staged/story-one?run={record.id}")
+    loops: list[bool] = []
+
+    def publish(story_id: str, family_token: str, expected_digest: str) -> None:
+        try:
+            asyncio.get_running_loop()
+            loops.append(True)
+        except RuntimeError:
+            loops.append(False)
+
+    harness.publish = publish  # type: ignore[method-assign]
+
+    assert _approve(harness, record.id) == 303
+    assert loops == [False]
