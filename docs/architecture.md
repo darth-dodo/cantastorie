@@ -348,6 +348,7 @@ The narration gate that [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-
 - **Greek**: passed the listening test. Greek ships on the house voice, and the MAI-Voice-2 fallback is not needed.
 - **Deepgram Aura bench**: retired. There is no longer a per-language fallback voice; a forced change of narrator would now take a new ADR.
 - **Still open: timing alignment quality.** Deepgram STT word timings on synthetic narration, including Greek STT support, remain to be validated when reading mode (slice 6) builds the timing pass.
+- **Spanish accent** (AI-509): Spanish text is written in neutral Latin American Spanish, but OpenRouter's `/audio/speech` takes no locale, so whether `Kore` reads it with a Latin American accent is **unverified** until a listening test.
 - **Hindi and Japanese** (added 2026-10-10, AI-508) narrate on the same `Kore` voice. The verdict above covered the original eight languages; a listening test for `hi` and `ja` is still to be done.
 
 ### Playback

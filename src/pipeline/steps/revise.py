@@ -26,6 +26,7 @@ from src.pipeline.steps.write import (
     BranchingStoryDraft,
     StoryDraft,
     branching_story_from_draft,
+    dialect_note,
     story_from_draft,
     write_story,
 )
@@ -95,6 +96,8 @@ def revise_story(
             f"Failures to fix:\n{failure_lines}"
         )
         if note := length_note(story.language):
+            prompt += f"\n\n{note}"
+        if note := dialect_note(story.language):
             prompt += f"\n\n{note}"
         if story.shape == "branching":
             branching_draft = build_branching_revise_agent(llm).run_sync(prompt).output

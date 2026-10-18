@@ -33,7 +33,7 @@ PROMPT_VERSION = 1
 
 LANGUAGE_NAMES: dict[Language, str] = {
     "it": "Italian",
-    "es": "Spanish",
+    "es": "Latin American Spanish",
     "en": "English",
     "el": "Greek",
     "de": "German",
@@ -43,6 +43,24 @@ LANGUAGE_NAMES: dict[Language, str] = {
     "hi": "Hindi",
     "ja": "Japanese",
 }
+
+# The variety a language is written in, where the roster picks one (AI-509).
+# Spanish is neutral Latin American Spanish: understood from Mexico to Chile,
+# without Spain's vosotros or Rioplatense voseo.
+DIALECT_NOTES: dict[Language, str] = {
+    "es": (
+        "Write in neutral Latin American Spanish: tú for one child and ustedes "
+        "for several (never vosotros), no voseo, and vocabulary common across "
+        "Latin America (jugo, pasto, techo, carro, cola) rather than words used "
+        "only in Spain (zumo, tejado, coche, rabo)."
+    ),
+}
+
+
+def dialect_note(language: Language) -> str:
+    """The language variety to write in, for prompts; empty when the roster names none."""
+    return DIALECT_NOTES.get(language, "")
+
 
 # The content rules from docs/product.md "Content Rules", verbatim as limits.
 WRITE_INSTRUCTIONS = f"""\
@@ -231,6 +249,8 @@ def write_story(
         if premise is not None:
             prompt += f"\nFollow this premise closely:\n{premise}"
         if note := length_note(language):
+            prompt += f"\n{note}"
+        if note := dialect_note(language):
             prompt += f"\n{note}"
         if shape == "branching":
             agent = Agent(
