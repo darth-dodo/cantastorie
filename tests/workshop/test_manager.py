@@ -394,3 +394,98 @@ def test_other_family_runs_do_not_count(s3: S3Client) -> None:
     asyncio.run(manager.submit("a" * 32, REQUEST))
     record = asyncio.run(manager.submit("c" * 32, REQUEST))
     assert record.state == "queued"
+
+
+# ── Global daily run cap (H4) ───────────────────────────────────────────────
+
+
+def _capped(s3: S3Client, cap: int) -> tuple[RunStore, RunManager]:
+    settings = _settings().model_copy(update={"global_daily_run_cap": cap})
+    store = RunStore(settings, client=s3)
+    return store, RunManager(store, settings, generate=lambda req, st, run_id: "stub")
+
+
+def test_the_global_cap_refuses_a_family_once_the_day_is_spent(s3: S3Client) -> None:
+    """H4: per-family caps multiply with sign-ups, so the whole service gets a
+    daily ceiling too. Each family here is under its own cap; the third run
+    across all of them is refused, and nothing is recorded for it."""
+    store, manager = _capped(s3, cap=2)
+    asyncio.run(manager.submit("a" * 32, REQUEST))
+    asyncio.run(manager.submit("b" * 32, REQUEST))
+
+    with pytest.raises(RunCapExceeded) as excinfo:
+        asyncio.run(manager.submit("c" * 32, REQUEST))
+
+    assert excinfo.value.active is None
+    assert str(excinfo.value) == "the story workshop is resting for today — tomorrow brings more"
+    assert store.list_runs(family_token="c" * 32) == []
+
+
+def test_operator_runs_count_toward_the_global_cap_but_are_never_refused(
+    s3: S3Client,
+) -> None:
+    """H4: operator runs spend money too, so they count; the operator is
+    still never refused, and their runs can use up the day for families."""
+    store, manager = _capped(s3, cap=2)
+    for _ in range(3):
+        asyncio.run(manager.submit(OPERATOR_TOKEN, REQUEST))
+
+    assert store.daily_run_count(datetime.now(UTC).date()) == 3
+    with pytest.raises(RunCapExceeded):
+        asyncio.run(manager.submit("a" * 32, REQUEST))
+
+
+def test_a_family_refused_by_its_own_cap_does_not_use_up_the_global_day(
+    s3: S3Client,
+) -> None:
+    """A submit refused by the per-family cap never reached generation, so it
+    must not count toward the service's daily total."""
+    store, manager = _capped(s3, cap=10)
+    asyncio.run(manager.submit("a" * 32, REQUEST))
+    with pytest.raises(RunCapExceeded):
+        asyncio.run(manager.submit("a" * 32, REQUEST))  # one active run per family
+
+    assert store.daily_run_count(datetime.now(UTC).date()) == 1
+
+
+def test_global_cap_reports_up_front(s3: S3Client) -> None:
+    """The make screen asks before the form is filled in, without counting a run."""
+    store, manager = _capped(s3, cap=1)
+    assert manager.global_cap() is None
+    asyncio.run(manager.submit("a" * 32, REQUEST))
+
+    cap = manager.global_cap()
+
+    assert cap is not None
+    assert store.daily_run_count(datetime.now(UTC).date()) == 1
+
+
+def test_the_global_cap_alerts_once_near_it_and_once_at_it(
+    s3: S3Client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """H4: the operator hears about it before the day runs out (80%) and when
+    it does, once each — not on every submit — with no family token in it."""
+    alerts: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        manager_module.sentry_sdk,
+        "capture_message",
+        lambda message, level=None: alerts.append((message, level)),
+    )
+    _, manager = _capped(s3, cap=5)
+    caplog.set_level("INFO", logger="src.workshop.manager")
+
+    for token in ["a" * 32, "b" * 32, "c" * 32, "d" * 32, "e" * 32]:
+        asyncio.run(manager.submit(token, REQUEST))
+    with pytest.raises(RunCapExceeded):
+        asyncio.run(manager.submit("f" * 32, REQUEST))
+
+    assert alerts == [
+        ("Global daily run cap nearly reached: 4 of 5", "warning"),
+        ("Global daily run cap reached: 5 of 5", "warning"),
+    ]
+    events = [getattr(r, "event", None) for r in caplog.records]
+    assert events.count("global_run_cap_near") == 1
+    assert events.count("global_run_cap_reached") == 1
+    assert events.count("global_run_cap_rejected") == 1
+    for record in caplog.records:
+        assert "a" * 32 not in str(vars(record))

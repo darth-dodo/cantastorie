@@ -280,7 +280,10 @@ async def _make_ctx(
 ) -> dict[str, object]:
     # One story at a time: show the cap up front, not after the form is filled.
     runs = await run_in_threadpool(manager.store.list_runs, family_token=family_token)
-    cap = blocking_cap(runs, settings.parent_daily_run_cap)
+    # The family's own caps first, then the service-wide daily one (H4).
+    cap = blocking_cap(runs, settings.parent_daily_run_cap) or await run_in_threadpool(
+        manager.global_cap
+    )
     return {
         "door": "parent",
         "fapi_host": fapi_host(settings),
