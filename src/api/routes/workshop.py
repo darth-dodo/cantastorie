@@ -20,7 +20,7 @@ import json as _json
 import shutil
 from datetime import UTC, datetime
 from functools import lru_cache
-from typing import Annotated, Protocol, get_args
+from typing import TYPE_CHECKING, Annotated, Any, Protocol, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from src.api.auth import verify_clerk_session
 from src.api.routes._nav import fapi_host, home_path
+from src.api.routes._streaming import stream_object
 from src.api.routes._templates import TEMPLATES_DIR, templates  # noqa: F401 — re-exported for tests
 from src.config import Settings, get_settings
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Story, Theme
@@ -54,6 +55,9 @@ from src.workshop.records import (
     story_request_error_message,
 )
 from src.workshop.scope import WorkshopScope, resolve_scope
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 LIVE_STATES = frozenset({"queued", "running"})
 
@@ -547,20 +551,22 @@ async def staged_asset(
     if "/" in name or ".." in name:
         raise HTTPException(status_code=404)
 
-    def read_asset() -> bytes | None:
+    def open_asset() -> Mapping[str, Any] | None:
         try:
             obj = _build_client(settings).get_object(
                 Bucket=settings.pending_bucket, Key=f"{STAGED_PREFIX}/{story_id}/{name}"
             )
         except Exception:
             return None
-        return obj["Body"].read()
+        return obj
 
-    body = await run_in_threadpool(read_asset)
-    if body is None:
+    # Opened in a thread, streamed in chunks: the review page requests every
+    # image and narration at once, and none of them is held in memory whole.
+    obj = await run_in_threadpool(open_asset)
+    if obj is None:
         raise HTTPException(status_code=404)
-    return Response(
-        content=body,
+    return stream_object(
+        obj,
         media_type=_content_type(name),
         # Content-hashed names never change bytes: cache privately (AI-465).
         headers={"Cache-Control": "private, max-age=86400, immutable"},
