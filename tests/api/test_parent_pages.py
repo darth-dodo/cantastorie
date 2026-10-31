@@ -62,9 +62,8 @@ def _signed_in_client(
 
 
 def test_anonymous_gets_sign_in_page_with_clerk_script() -> None:
-    # issuer set explicitly: the route derives the FAPI host from it, and
-    # clerk_settings() defaults clerk_issuer to "" (pk fallback would decode
-    # the dummy key's suffix into garbage).
+    # issuer set explicitly: the route derives the FAPI host from it (the pk
+    # fallback would decode the dummy key's suffix into garbage).
     client = TestClient(_make_app(clerk_settings(clerk_issuer="https://test.clerk.test")))
     response = client.get("/parent")
     assert response.status_code == 200
