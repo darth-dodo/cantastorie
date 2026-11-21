@@ -1,6 +1,6 @@
 ---
 name: factory:release
-description: Use right after factory:improve closes a factory:retro batch, or when Abhishek asks for a Cantastorie release, a version, a tag, release notes, or to split unreleased changes into several releases.
+description: Use right after factory:improve closes a factory:retro batch, or when Abhishek asks for a Cantastorie release, a version, a tag, release notes, or asks to split unreleased changes into several releases (answered with one release at a time).
 ---
 
 # factory:release
@@ -13,7 +13,7 @@ Run `TZ=Europe/Berlin date`. Monday to Friday, 08:00 to 17:59: do not push, open
 
 ## 1. Is a release due?
 
-Last tag: `git tag --sort=-v:refname` (first line; version order, because split tags are created out of order). Due when either holds:
+Last tag: `git tag --sort=-v:refname` (first line, in version order). Due when either holds:
 
 - a `feat:` PR merged since that tag: `git log <tag>..origin/main --format=%s`, a subject starting `feat` (`feat:`, `feat(scope):`, `feat!:`)
 - an epic closed since that tag's date: `gh issue list --repo darth-dodo/cantastorie --label epic --state closed --json number,title,closedAt`
@@ -33,35 +33,29 @@ Covers: #first to #last
 
 - Version comes from `release-manager` step 2 (commitizen with `major_version_zero = true`, so pre-1.0 bumps stay in 0.x). Never pick 1.0.0 unless he said so.
 - The theme is Abhishek's. Offer one short suggestion from what shipped (like "Ten languages" for a release that adds the last languages); use his name if he gives one. Never "proof", never "premium".
-- Asked to split ("up to #150 as one release"): propose one version and theme per range, each range's version from its own commits.
+- Asked to split ("up to #150 as one release"): one release at a time. Commitizen scopes a section only between existing tags (`cz changelog` takes a version or a tag range, not a commit; a commit end fails with "Could not find a valid revision range"), so an older untagged range cannot get its own section reliably. Say so, and propose one version covering everything since the last tag; to cut earlier next time, run `factory:release` when that range is the newest.
 
 ## 3. Release PR
 
-Hand off to `release-manager` step 3 with the confirmed version(s). Its preconditions are not optional. On branch `chore/release-v<version>` from `origin/main`:
+Hand off to `release-manager` step 3 with the confirmed version. Its preconditions are not optional. On branch `chore/release-v<version>` from `origin/main`:
 
-- `uvx --from commitizen cz bump --files-only --yes` updates the version in `pyproject.toml` (and `uv.lock`, through the `uv` version provider) and creates no tag.
-- `uvx --from commitizen cz changelog` writes the `CHANGELOG.md` section from the Conventional Commit titles; never hand-write or reorder its entries.
+- `uvx --from commitizen cz bump --files-only --yes` updates `pyproject.toml`, `uv.lock` (through the `uv` version provider) and `CHANGELOG.md` (`update_changelog_on_bump = true` writes the `## v<version> (<date>)` section from the Conventional Commit titles), and creates no tag. Run no separate `cz changelog`: with no tag yet it would rewrite the section as `## Unreleased`. Never hand-write or reorder its entries.
 - Commit, push the branch, open the release PR titled `chore(release): v<version>`.
 
-Split: one PR, not one per release. On one branch `chore/release-vLAST`, still with `--files-only` (no tags):
-
-- `CHANGELOG.md` gets one commitizen section per version (`## vX.Y.Z (<date>)`), newest on top, each built from the commits of its own range only; `release-manager` step 3 owns the commands.
-- `pyproject.toml` (and `uv.lock`, through commitizen's `uv` version provider) gets only the newest version.
-- Title `chore(release): vA.B.C and vX.Y.Z`; body has each section.
+One release per PR and per tag: no split PRs (step 2).
 
 ## 4. After Abhishek merges
 
-Run `release-manager` step 4: tag main's merge commit of the release PR (`gh pr view <release pr> --json mergeCommit --jq .mergeCommit.oid`) as `v<version>` with `git tag v<version> <sha>`, push the tag (`git push origin v<version>`), then `gh release create v<version> --title "v<version> <Theme>" --notes-file <file>`. Factory specifics:
+Run `release-manager` step 4: take the release PR's merge commit on main, `<merge sha>` (`gh pr view <release pr> --json mergeCommit --jq .mergeCommit.oid`), and tag it with `git tag v<version> <merge sha>`, push the tag (`git push origin v<version>`), then `gh release create v<version> --title "v<version> <Theme>" --notes-file <file>`. Factory specifics:
 
 - Release title `vX.Y.Z <Theme>`; the notes file starts `# vX.Y.Z <Theme>`, then one sentence, then the changelog section.
-- Split: tag the newest version on the release PR's merge commit. Tag each earlier version on the squash merge commit of the last PR in its range on main (`gh pr view <last> --json mergeCommit --jq .mergeCommit.oid`), and start its notes with: "Tagged on the merge of #<last>; `pyproject.toml` at this commit still shows <previous version>."
-- Deploy check once, for the newest version: the CI `deploy` job ran after `CI Success` on the release merge, `https://cantastorie.onrender.com/health/version` reports that commit, and the next "Post-deploy smoke check" run is green.
+- Deploy check: the CI `deploy` job ran after `CI Success` on the release merge, `https://cantastorie.onrender.com/health/version` reports that commit, and the next "Post-deploy smoke check" run is green.
 
 ## 5. Report
 
 ```
-Released: vA.B.C <Theme> <release url>, vX.Y.Z <Theme> <release url>
-Tags: vA.B.C at <sha7> (#<last>), vX.Y.Z at <sha7> (#<release pr>)
+Released: vX.Y.Z <Theme> <release url>
+Tag: vX.Y.Z at <sha7> (merge of #<release pr>)
 Deploy: <result>  Smoke: <run url>
 ```
 
@@ -72,8 +66,8 @@ When stopped early, say what is ready locally and the next command to run.
 | Mistake | Instead |
 |---|---|
 | Naming the theme and carrying on | Suggest one, wait for Abhishek |
-| Two release PRs for a split | One PR with several CHANGELOG sections |
-| Every split tag on the newest merge commit | Earlier tags on the last merge of their range, with the `pyproject.toml` note |
+| Splitting unreleased changes into several versions | One release at a time, covering everything since the last tag (step 2) |
+| Running `cz changelog` after the bump | The bump already wrote `CHANGELOG.md`; a second run rewrites it as `## Unreleased` |
 | Letting `cz bump` tag the release branch (a squash merge strands that tag) | `uvx --from commitizen cz bump --files-only --yes` on the branch; after the merge, `git tag v<version> <merge sha>`, push the tag, `gh release create` (step 4) |
 | `uv run cz ...` | Commitizen is not in the venv: `uvx --from commitizen cz ...` |
 | Pushing because the PR "is just a release" | Check the Berlin time before each write |
