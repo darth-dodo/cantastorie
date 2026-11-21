@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -117,6 +118,11 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/health/version")
+    async def health_version() -> dict[str, str]:
+        # The deployed commit, so the factory dashboard can show deploy lag. Render sets it.
+        return {"commit": os.environ.get("RENDER_GIT_COMMIT", "")}
 
     # Browsers request /favicon.ico whether or not a page links it (AI-467).
     @app.get("/favicon.ico", include_in_schema=False)
