@@ -4,6 +4,8 @@ run row's polling contract, and the language filter."""
 from __future__ import annotations
 
 import io
+import json
+import re
 from typing import Any
 
 import pytest
@@ -11,6 +13,7 @@ import pytest
 import src.api.routes.parent as parent_module
 from src.pipeline.publish import PublishedStory
 from src.workshop.records import RunRecord, StoryRequest, new_run
+from tests.api.streaming_body import ChunkOnlyBody, chunk_only_object
 from tests.test_parent_redesign import (
     VALID_TOKEN,
     _FakeManager,
@@ -28,12 +31,21 @@ def _staged_run(family_token: str = VALID_TOKEN, story_id: str = "story-abc") ->
 
 
 class _FakeS3:
+    """Serves ``objects`` by key (default b"RIFF-bytes") as boto3 would: a body
+    that streams in chunks and refuses a whole read()."""
+
     def __init__(self) -> None:
         self.keys: list[str] = []
+        self.objects: dict[str, bytes] = {}
+        self.bodies: list[ChunkOnlyBody] = []
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
         self.keys.append(Key)
-        return {"Body": io.BytesIO(b"RIFF-bytes")}
+        if Key.endswith("/story.json"):  # the review page parses it whole
+            return {"Body": io.BytesIO(self.objects[Key])}
+        obj = chunk_only_object(self.objects.get(Key, b"RIFF-bytes"))
+        self.bodies.append(obj["Body"])
+        return obj
 
 
 @pytest.fixture
@@ -49,12 +61,79 @@ def s3(monkeypatch: pytest.MonkeyPatch) -> _FakeS3:
 def test_own_staged_asset_is_served_privately(monkeypatch: pytest.MonkeyPatch, s3: _FakeS3) -> None:
     run = _staged_run()
     client = _make_client(monkeypatch, _FakeManager({run.id: run}))
-    r = client.get("/parent/staged/story-abc/assets/p1.wav")
+    r = client.get(f"/parent/staged/story-abc/assets/p1.wav?run={run.id}")
     assert r.status_code == 200
     assert r.content == b"RIFF-bytes"
+    assert r.headers["content-type"] == "audio/wav"
+    assert r.headers["content-length"] == str(len(b"RIFF-bytes"))
     # Content-hashed names never change bytes: cache privately, don't refetch.
     assert r.headers["cache-control"] == "private, max-age=86400, immutable"
     assert s3.keys == ["pending/staged/story-abc/p1.wav"]
+
+
+def test_staged_asset_streams_in_chunks_instead_of_reading_it_whole(
+    monkeypatch: pytest.MonkeyPatch, s3: _FakeS3
+) -> None:
+    """A review page fires ~34 of these at once; buffering each 1-2 MB WAV
+    whole held tens of MB per page. The body is iterated in chunks and closed."""
+    run = _staged_run()
+    wav = bytes(range(256)) * 1024  # 256 KB: several 64 KB chunks
+    s3.objects["pending/staged/story-abc/p1.wav"] = wav
+    client = _make_client(monkeypatch, _FakeManager({run.id: run}))
+    r = client.get(f"/parent/staged/story-abc/assets/p1.wav?run={run.id}")
+    assert r.status_code == 200
+    assert r.content == wav
+    assert r.headers["content-length"] == str(len(wav))
+    assert [body.was_closed for body in s3.bodies] == [True]
+
+
+def test_asset_without_run_param_is_404_and_never_scans_runs(
+    monkeypatch: pytest.MonkeyPatch, s3: _FakeS3
+) -> None:
+    """Every asset URL the review page emits carries ?run=, so ownership is
+    always one family-scoped load(); a bare URL is refused, not scanned for."""
+    run = _staged_run()
+    manager = _CountingManager({run.id: run})
+    client = _make_client(monkeypatch, manager)
+    r = client.get("/parent/staged/story-abc/assets/p1.wav")
+    assert r.status_code == 404
+    assert manager.scans == 0
+    assert s3.keys == []
+
+
+def test_every_asset_url_on_the_review_page_carries_its_run(
+    monkeypatch: pytest.MonkeyPatch, s3: _FakeS3
+) -> None:
+    run = _staged_run()
+    story = {
+        "id": "story-abc",
+        "title": "La barchetta",
+        "language": "it",
+        "theme": "the_sleepy_sea",
+        "shape": "linear",
+        "pages": [
+            {
+                "id": f"p{n}",
+                "text": "La barca dorme sul mare calmo.",
+                "image": f"p{n}.webp",
+                "audio": {"file": f"p{n}.wav", "timings": []},
+            }
+            for n in (1, 2)
+        ],
+    }
+    s3.objects["pending/staged/story-abc/story.json"] = json.dumps(story).encode()
+    monkeypatch.setattr(parent_module, "staged_digest", lambda *a, **k: "digest")
+    manager = _CountingManager({run.id: run})
+    client = _make_client(monkeypatch, manager)
+    page = client.get(f"/parent/staged/story-abc?run={run.id}")
+    assert page.status_code == 200
+    urls = re.findall(r'src="(/parent/staged/[^"]*/assets/[^"]*)"', page.text)
+    assert len(urls) == 4  # two images, two narrations
+    assert all(url.endswith(f"?run={run.id}") for url in urls)
+    manager.scans = 0
+    for url in urls:
+        assert client.get(url).status_code == 200
+    assert manager.scans == 0
 
 
 class _CountingManager(_FakeManager):
