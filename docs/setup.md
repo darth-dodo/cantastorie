@@ -291,6 +291,10 @@ later build a custom sign-up form it must include the
 | `CLERK_JWKS_URL` | `https://<frontend-api>/.well-known/jwks.json` |
 | `CLERK_ISSUER` | `https://<frontend-api>` |
 
+`CLERK_ISSUER` is required whenever `CLERK_JWKS_URL` is set: the app refuses
+to boot without it, and every session token must carry exactly that `iss`
+(plus `exp`, `iat` and `sub`).
+
 Leaving `CLERK_PUBLISHABLE_KEY` or `CLERK_JWKS_URL` unset disables both the
 parent surface **and** the workshop (routes 404) — the safe default for
 deploys that don't want Clerk yet. The workshop also needs
