@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -10,11 +12,14 @@ from scripts.factory.migrate_linear import (
     MAX_CHARS,
     TRUNCATION_NOTE,
     GhError,
+    _gh,
     is_security_sensitive,
     link_epics,
+    main,
     migrate,
     preflight_labels,
     render_body,
+    resolve,
     security_term,
 )
 
@@ -372,11 +377,31 @@ def test_a_create_that_failed_after_github_made_the_issue_is_found_not_duplicate
     second.existing = [{"number": 150, "body": render_body(issue)}]
     migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
     assert not second.of("create") and _numbers(mapping) == {"AI-1": 150}
-    search = next(c for c in second.of("list"))
-    assert "--state" in search and "all" in search and "number,body" in search
+    search = second.of("list")[0]
+    assert "--search" not in search
+    assert (
+        search[search.index("--limit") + 1] == "100" and "number,body" in search and "all" in search
+    )
 
 
-def test_a_create_that_failed_before_the_issue_existed_is_created_once_on_rerun(
+def test_a_moved_linear_url_still_matches_on_the_prefix(tmp_path: Path) -> None:
+    mapping, issue = tmp_path / "m.json", _issue(1)
+    gh = FakeGh()
+    gh.failures["create"] = ["timeout"]
+    with pytest.raises(GhError):
+        migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
+    second = FakeGh()
+    second.existing = [
+        {
+            "number": 150,
+            "body": "Migrated from Linear AI-1 (https://linear.app/new/issue/AI-1)\n\nx",
+        }
+    ]
+    migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert _numbers(mapping) == {"AI-1": 150}
+
+
+def test_an_attempted_create_that_is_not_found_goes_to_manual_check_not_recreated(
     tmp_path: Path,
 ) -> None:
     mapping, issue = tmp_path / "m.json", _issue(1)
@@ -385,11 +410,9 @@ def test_a_create_that_failed_before_the_issue_existed_is_created_once_on_rerun(
     with pytest.raises(GhError):
         migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
     second = FakeGh()
-    migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
-    assert len(second.of("create")) == 1
-    third = FakeGh()
-    migrate([issue], mapping, third, dry_run=False, sleep=_no_sleep)
-    assert not third.of("create")
+    report = migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert not second.of("create") and report.needs_manual_check == ["AI-1"]
+    assert json.loads(mapping.read_text())["needs_manual_check"][0]["identifier"] == "AI-1"
 
 
 def test_a_body_that_only_looks_similar_is_not_a_match(tmp_path: Path) -> None:
@@ -402,8 +425,8 @@ def test_a_body_that_only_looks_similar_is_not_a_match(tmp_path: Path) -> None:
     second.existing = [
         {"number": 150, "body": "Migrated from Linear AI-10 (https://linear.app/x/issue/AI-10)"}
     ]
-    migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
-    assert len(second.of("create")) == 1
+    report = migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert not second.of("create") and report.needs_manual_check == ["AI-1"]
 
 
 def test_a_failed_search_goes_to_manual_check(tmp_path: Path) -> None:
@@ -416,7 +439,53 @@ def test_a_failed_search_goes_to_manual_check(tmp_path: Path) -> None:
     second.failures["list"] = ["search is down"]
     report = migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
     assert not second.of("create") and report.needs_manual_check == ["AI-1"]
-    assert json.loads(mapping.read_text())["needs_manual_check"][0]["identifier"] == "AI-1"
+
+
+def test_gh_timeouts_and_failures_become_gh_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def timing_out(cmd: list[str], **kwargs: object) -> object:
+        seen.update(kwargs)
+        raise subprocess.TimeoutExpired(cmd, 120)
+
+    monkeypatch.setattr(subprocess, "run", timing_out)
+    with pytest.raises(GhError, match="timed out"):
+        _gh(["issue", "create"])
+    assert seen["timeout"] == 120
+
+    def failing(cmd: list[str], **kwargs: object) -> object:
+        raise subprocess.CalledProcessError(1, cmd, stderr="HTTP 502\n")
+
+    monkeypatch.setattr(subprocess, "run", failing)
+    with pytest.raises(GhError, match="HTTP 502"):
+        _gh(["issue", "create"])
+
+
+def test_resolve_records_the_number_and_clears_both_lists(tmp_path: Path) -> None:
+    mapping, issue = tmp_path / "m.json", _issue(1, status="Done")
+    gh = FakeGh()
+    gh.failures["create"] = ["502"]
+    with pytest.raises(GhError):
+        migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
+    migrate(
+        [issue], mapping, FakeGh(), dry_run=False, sleep=_no_sleep
+    )  # lands in needs_manual_check
+    resolve(mapping, "AI-1", 42)
+    data = json.loads(mapping.read_text())
+    assert data["AI-1"] == {"number": 42, "commented": False, "closed": False, "comment_chunks": 0}
+    assert "needs_manual_check" not in data and "create_attempted" not in data
+    after = FakeGh()
+    migrate([issue], mapping, after, dry_run=False, sleep=_no_sleep)
+    assert not after.of("create") and len(after.of("close")) == 1
+
+
+def test_resolve_cli_option(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    mapping = tmp_path / "m.json"
+    monkeypatch.setattr(
+        sys, "argv", ["migrate_linear", "--mapping", str(mapping), "--resolve", "AI-7=77"]
+    )
+    main()
+    assert _numbers(mapping) == {"AI-7": 77}
 
 
 @pytest.mark.parametrize("order", [[1, 2, 3], [3, 2, 1]])

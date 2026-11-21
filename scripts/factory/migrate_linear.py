@@ -3,6 +3,14 @@
 Dry run by default. Idempotent and resumable: a mapping file records, per issue, the
 GitHub number and whether the comment and close steps finished. It is rewritten after
 every step, so a rerun finishes whatever was left. Security-sensitive issues stay in Linear.
+
+Clearing the manual lists: an issue lands in `needs_manual_check` or `create_attempted`
+(both top-level keys of the mapping file) when a create may or may not have reached
+GitHub. Look the issue up on GitHub by hand, then either run
+`--resolve AI-N=<github number>` or edit the mapping file yourself: remove the identifier
+from those lists and add `"AI-N": {"number": <github number>, "commented": false,
+"closed": false}` (or just delete the entry if nothing was created). The next `--apply`
+then finishes the comment and close steps.
 """
 
 from __future__ import annotations
@@ -24,6 +32,7 @@ if TYPE_CHECKING:
 REPO = "darth-dodo/cantastorie"
 MAX_CHARS = 65536  # GitHub's limit for issue bodies and comments
 TRUNCATION_NOTE = "(truncated; see the Linear link above)"
+GH_TIMEOUT_S = 120
 BACKOFF_S = (60.0, 120.0, 240.0)
 RATE_LIMIT = re.compile(r"rate limit|secondary rate|HTTP 429|abuse", re.I)
 PRIORITY = {1: "priority:urgent", 2: "priority:high", 3: "priority:medium", 4: "priority:low"}
@@ -195,8 +204,13 @@ def _call(
 
 
 def _find_existing(issue: dict[str, Any], run: Callable[[list[str]], str]) -> int | None:
-    """Look for a GitHub issue whose body already starts with this issue's migration line."""
-    ident = issue["identifier"]
+    """Look in the 100 newest issues for one whose body starts with this issue's migration line.
+
+    A plain listing (no --search) reads straight from the database, so it has no index lag.
+    The prefix stops at the open parenthesis: it excludes AI-10 when looking for AI-1 and
+    survives a changed Linear URL.
+    """
+    prefix = f"Migrated from Linear {issue['identifier']} ("
     out = run(
         [
             "issue",
@@ -205,16 +219,15 @@ def _find_existing(issue: dict[str, Any], run: Callable[[list[str]], str]) -> in
             REPO,
             "--state",
             "all",
-            "--search",
-            f'"Migrated from Linear {ident} " in:body',
+            "--limit",
+            "100",
             "--json",
             "number,body",
         ]
     )
-    first_line = render_body(issue).splitlines()[0]
     for item in json.loads(out):
         lines = (item.get("body") or "").splitlines()
-        if lines and lines[0] == first_line:
+        if lines and lines[0].startswith(prefix):
             return int(item["number"])
     return None
 
@@ -234,11 +247,14 @@ def _create(
             state.manual.append({"identifier": ident, "output": f"search failed: {exc}"})
             state.save()
             return False
-        if existing is not None:
-            state.entries[ident] = _new_entry(existing)
-            state.attempted.remove(ident)
+        if existing is None:  # rare, and a human should look rather than risk a duplicate
+            state.manual.append({"identifier": ident, "output": "attempted create not found"})
             state.save()
-            return True
+            return False
+        state.entries[ident] = _new_entry(existing)
+        state.attempted.remove(ident)
+        state.save()
+        return True
     else:
         state.attempted.append(ident)
         state.save()
@@ -379,18 +395,51 @@ def preflight_labels(export: list[dict[str, Any]], gh: GhRunner) -> None:
 
 def _gh(args: list[str]) -> str:
     try:
-        return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
+        return subprocess.run(
+            ["gh", *args], check=True, capture_output=True, text=True, timeout=GH_TIMEOUT_S
+        ).stdout
     except subprocess.CalledProcessError as exc:
         raise GhError((exc.stderr or "").strip() or f"gh exited with {exc.returncode}") from None
+    except subprocess.TimeoutExpired:
+        raise GhError(f"gh timed out after {GH_TIMEOUT_S}s") from None
+
+
+def resolve(mapping_path: Path, ident: str, number: int) -> None:
+    """Record a hand-checked GitHub number and clear the identifier from both manual lists."""
+    state = _load(mapping_path)
+    state.entries[ident] = _new_entry(number)
+    state.manual = [m for m in state.manual if m["identifier"] != ident]
+    state.attempted = [a for a in state.attempted if a != ident]
+    state.save()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--export", type=Path, required=True)
+    parser = argparse.ArgumentParser(
+        description=__doc__.split("\n\n")[0],
+        epilog=__doc__.split("\n\n", 2)[2],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--export", type=Path)
     parser.add_argument("--mapping", type=Path, required=True)
     parser.add_argument("--apply", action="store_true", help="create issues (default: dry run)")
     parser.add_argument("--link-epics", action="store_true", help="second pass: fill epic links")
+    parser.add_argument(
+        "--resolve",
+        action="append",
+        default=[],
+        metavar="AI-N=NUMBER",
+        help="record a hand-checked GitHub number and clear the manual lists for AI-N",
+    )
     args = parser.parse_args()
+    if args.resolve:
+        for item in args.resolve:
+            ident, _, number = item.partition("=")
+            if not number.isdigit():
+                parser.error(f"--resolve expects AI-N=<number>, got {item!r}")
+            resolve(args.mapping, ident, int(number))
+        return
+    if args.export is None:
+        parser.error("--export is required unless --resolve is used")
     export = json.loads(args.export.read_text())
     if args.link_epics:
         link_epics(export, load_numbers(args.mapping), _gh)
