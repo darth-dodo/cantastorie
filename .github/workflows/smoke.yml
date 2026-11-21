@@ -1,0 +1,40 @@
+name: Post-deploy smoke check
+
+# Reports, never blocks: it runs on a schedule and after CI, never on push or pull_request,
+# and the check step cannot fail the job.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: post-deploy
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Render to roll out
+        if: github.event_name == 'workflow_run'
+        run: sleep 120
+
+      - name: Smoke check the head of main
+        continue-on-error: true
+        timeout-minutes: 4
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_URL: https://cantastorie.onrender.com
+        run: scripts/smoke_check.sh
