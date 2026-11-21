@@ -9,7 +9,7 @@ Flywheel step 2 (FACTORY.md "Flywheel"). Inputs: `~/cantastorie-factory/metrics.
 
 ## When
 
-Run right after each `factory:retro` batch (every 10 merged PRs, counted from the `Flywheel start` line in `experiments.md`). The trigger: `metrics.csv` has 5 rows with `merged_at` after the `Last improve run` line in `experiments.md` (`never`: the first 5 rows ever). Fewer than 5: stop and say how many are missing. Every run, including a close-only one, updates that line to the newest `merged_at` it used, in the same PR.
+Run right after each `factory:retro` batch (every 10 merged PRs, counted from the `Flywheel start` line in `experiments.md`, which `factory:retro` step 0 resolves to the merged `chore/factory-skills` PR). The trigger: `metrics.csv` has 5 rows with `merged_at` after the `Last improve run` line in `experiments.md` (`never`: the first 5 rows ever). Fewer than 5: stop and say how many are missing. Every run, including a close-only one, updates that line to the newest `merged_at` it used, in the same PR.
 
 ## 1. Close the running experiment
 

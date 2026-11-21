@@ -5,7 +5,7 @@ description: Use right after factory:improve closes a factory:retro batch, or wh
 
 # factory:release
 
-Flywheel step 3 (FACTORY.md "Flywheel"), after `factory:improve`, before `factory:recap`. A thin station: `release-manager` owns the mechanics (preconditions, SemVer, commitizen `cz bump` via `uv run`, `CHANGELOG.md`, the `v$version` tag, the GitHub Release, the deploy check), all per `[tool.commitizen]` in `pyproject.toml`. This skill decides whether a release is due, gets Abhishek's names, and hands off. Never merge.
+Flywheel step 3 (FACTORY.md "Flywheel"), after `factory:improve`, before `factory:recap`. A thin station: `release-manager` owns the mechanics (preconditions, SemVer, commitizen run with `uvx --from commitizen cz ...` because commitizen is a pre-commit hook and not in the project venv, `CHANGELOG.md`, the `v<version>` tag, the GitHub Release, the deploy check), all per `[tool.commitizen]` in `pyproject.toml` (`tag_format = "v$version"`). The tagging model: the release branch only changes files, and the tag goes on main's merge commit after Abhishek merges; `cz bump` never creates a tag, because a squash merge strands a tag made on the branch. This skill decides whether a release is due, gets Abhishek's names, and hands off. Never merge.
 
 ## Before every GitHub write
 
@@ -37,9 +37,13 @@ Covers: #first to #last
 
 ## 3. Release PR
 
-Hand off to `release-manager` step 3 with the confirmed version(s). Its preconditions are not optional. Commitizen writes `CHANGELOG.md` from the Conventional Commit titles; never hand-write or reorder its entries.
+Hand off to `release-manager` step 3 with the confirmed version(s). Its preconditions are not optional. On branch `chore/release-v<version>` from `origin/main`:
 
-Split: one PR, not one per release. On one branch `chore/release-vLAST`:
+- `uvx --from commitizen cz bump --files-only --yes` updates the version in `pyproject.toml` (and `uv.lock`, through the `uv` version provider) and creates no tag.
+- `uvx --from commitizen cz changelog` writes the `CHANGELOG.md` section from the Conventional Commit titles; never hand-write or reorder its entries.
+- Commit, push the branch, open the release PR titled `chore(release): v<version>`.
+
+Split: one PR, not one per release. On one branch `chore/release-vLAST`, still with `--files-only` (no tags):
 
 - `CHANGELOG.md` gets one commitizen section per version (`## vX.Y.Z (<date>)`), newest on top, each built from the commits of its own range only; `release-manager` step 3 owns the commands.
 - `pyproject.toml` (and `uv.lock`, through commitizen's `uv` version provider) gets only the newest version.
@@ -47,7 +51,7 @@ Split: one PR, not one per release. On one branch `chore/release-vLAST`:
 
 ## 4. After Abhishek merges
 
-Run `release-manager` step 4, with these factory specifics:
+Run `release-manager` step 4: tag main's merge commit of the release PR (`gh pr view <release pr> --json mergeCommit --jq .mergeCommit.oid`) as `v<version>` with `git tag v<version> <sha>`, push the tag (`git push origin v<version>`), then `gh release create v<version> --title "v<version> <Theme>" --notes-file <file>`. Factory specifics:
 
 - Release title `vX.Y.Z <Theme>`; the notes file starts `# vX.Y.Z <Theme>`, then one sentence, then the changelog section.
 - Split: tag the newest version on the release PR's merge commit. Tag each earlier version on the squash merge commit of the last PR in its range on main (`gh pr view <last> --json mergeCommit --jq .mergeCommit.oid`), and start its notes with: "Tagged on the merge of #<last>; `pyproject.toml` at this commit still shows <previous version>."
@@ -70,6 +74,7 @@ When stopped early, say what is ready locally and the next command to run.
 | Naming the theme and carrying on | Suggest one, wait for Abhishek |
 | Two release PRs for a split | One PR with several CHANGELOG sections |
 | Every split tag on the newest merge commit | Earlier tags on the last merge of their range, with the `pyproject.toml` note |
-| Letting `cz bump` tag the release branch | Tag only after the merge, on main's merge commit (`release-manager` step 4) |
+| Letting `cz bump` tag the release branch (a squash merge strands that tag) | `uvx --from commitizen cz bump --files-only --yes` on the branch; after the merge, `git tag v<version> <merge sha>`, push the tag, `gh release create` (step 4) |
+| `uv run cz ...` | Commitizen is not in the venv: `uvx --from commitizen cz ...` |
 | Pushing because the PR "is just a release" | Check the Berlin time before each write |
 | Hand-editing `CHANGELOG.md` entries | Commitizen builds them from the commit titles (`release-manager` step 3) |

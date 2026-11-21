@@ -14,7 +14,7 @@ Rerunning for the same Issue replaces its row and file; never add a second row.
 
 ## 0. Batch
 
-Retros run in batches of 10 merged PRs (FACTORY.md "Flywheel"), not after each merge. Counting starts at the first PR merged after the factory skills PR: the `Flywheel start` line in `docs/factory/experiments.md` names it, and older PRs are never backfilled. List merged PRs (`gh pr list --state merged --limit 50 --json number,mergedAt`), drop those at or before the `Flywheel start` PR, and drop those whose number is in the `pr` column of `metrics.csv`. Fewer than 10 left: stop and say how many more merges the batch needs. 10 or more: run steps 1 to 4 for every one of them, oldest first, in this run.
+Retros run in batches of 10 merged PRs (FACTORY.md "Flywheel"), not after each merge. Counting starts after the factory skills PR: the `Flywheel start` line in `docs/factory/experiments.md` names its branch (`chore/factory-skills`), and older PRs are never backfilled. Resolve the branch to its merged PR: `gh pr list --repo darth-dodo/cantastorie --state merged --head chore/factory-skills --json number,mergedAt` (no result: the factory skills PR has not merged, so stop; nothing counts yet). List merged PRs (`gh pr list --state merged --limit 50 --json number,mergedAt`), drop those whose `mergedAt` is at or before that PR's `mergedAt` (and that PR itself), and drop those whose number is in the `pr` column of `metrics.csv`. Fewer than 10 left: stop and say how many more merges the batch needs. 10 or more: run steps 1 to 4 for every one of them, oldest first, in this run.
 
 ## 1. Gather
 
