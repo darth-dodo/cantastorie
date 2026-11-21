@@ -1,0 +1,12 @@
+schema: spec-driven
+
+context: |
+  Cantastorie: bedtime stories a child steers, in ten languages, told aloud and painted in watercolour.
+  A parent approves every story before a child hears it; the child never meets an unreviewed story.
+  The settled stack is in docs/architecture.md, docs/adr/ and the settled-architecture skill; follow it.
+  Privacy: no child accounts, no cookies on child paths, child state stays on the device.
+  Build with Superpowers (plan, TDD). Never use openspec-apply-change; it is denied in .claude/settings.json.
+
+rules:
+  proposal:
+    - Name the safety and review-gate impact when generation, review or publishing changes.
