@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make check *)",
+      "Bash(make test *)",
+      "Bash(make lint *)",
+      "Bash(make format-check *)",
+      "Bash(make typecheck *)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run ruff *)",
+      "Bash(uv run mypy *)",
+      "Bash(npx vitest run *)",
+      "Bash(npx playwright test *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr create *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(openspec list *)",
+      "Bash(openspec status *)",
+      "Bash(openspec validate *)",
+      "Bash(openspec show *)",
+      "Bash(openspec archive *)"
+    ],
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push origin main *)",
+      "Read(./.env)",
+      "Skill(skill:mattpocock-skills:tdd)",
+      "Skill(skill:mattpocock-skills:diagnosing-bugs)",
+      "Skill(skill:mattpocock-skills:to-spec)",
+      "Skill(skill:mattpocock-skills:to-tickets)",
+      "Skill(skill:openspec-apply-change)"
+    ]
+  }
+}

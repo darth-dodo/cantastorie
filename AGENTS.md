@@ -109,3 +109,17 @@ Proposing a framework, bundler, direct provider SDK, or a second narration key c
 ## Sibling Project
 
 `../habla-hermano/` is the pattern source for docs structure and conventions. Cantastorie's own `docs/architecture.md` overrides any sibling-project guidance.
+
+## Definition of done
+
+Every PR proves each item with evidence (a command and its result, or a screenshot) in the PR's "How verified" list:
+
+- `make check` passes (lint, format-check, typecheck)
+- `uv run pytest` passes, with coverage at or above the floor in `pyproject.toml`
+- `npx vitest run` passes
+- `E2E_PORT=<free port> npx playwright test` passes when the player, parent area or workshop changed
+- The OpenSpec change is archived (`openspec-archive-change`) when the Issue has one
+- The PR title is a Conventional Commit (`feat:`, `fix:` ...); commitizen builds the changelog from it
+- Anything touching generation, review or publishing shows the review gate still holds
+
+The factory that enforces this is described in `FACTORY.md`.
