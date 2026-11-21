@@ -20,14 +20,14 @@ label "priority:low" "c2e0c6" "Low"
 
 # The board: create it once, if no project titled "Cantastorie" exists.
 board_number() {
-  gh project list --owner "$OWNER" --format json \
+  gh project list --owner "$OWNER" --limit 100 --format json \
     --jq ".projects[]|select(.title==\"$BOARD\")|.number"
 }
 number="$(board_number)"
 if [[ -z "$number" ]]; then
-  gh project create --owner "$OWNER" --title "$BOARD"
-  number="$(board_number)"
+  number="$(gh project create --owner "$OWNER" --title "$BOARD" --format json --jq .number)"
 fi
+[[ -n "$number" ]] || { echo "Cantastorie board not found" >&2; exit 1; }
 
 # Board fields: skip any that exist. GitHub ships a built-in "Status" field, so it is
 # usually already there and is left alone.
@@ -42,8 +42,8 @@ if ! has_field "Estimate"; then
   gh project field-create "$number" --owner "$OWNER" --name "Estimate" --data-type NUMBER
 fi
 
-read -r -p "Protect main (require 'CI Success', no force pushes, admins included)? [y/N] " answer
-if [[ "$answer" == "y" ]]; then
+read -r -p "Protect main (require 'CI Success', no force pushes, admins included)? [y/N] " answer || answer=""
+if [[ "$answer" =~ ^[yY]$ ]]; then
   gh api -X PUT "repos/$REPO/branches/main/protection" --input - <<'JSON'
 {"required_status_checks":{"strict":false,"contexts":["CI Success"]},
  "enforce_admins":true,"required_pull_request_reviews":null,"restrictions":null,
