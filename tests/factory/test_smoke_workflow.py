@@ -117,3 +117,9 @@ def test_a_commit_mismatch_notices_but_still_checks_health_and_play(tmp_path: Pa
     assert "::notice::deploy in progress" in out
     assert "::warning::" not in out
     assert "/health" in calls and "/play" in calls
+
+
+def test_the_poll_step_can_never_stop_the_check_from_running() -> None:
+    steps = _workflow()["jobs"]["smoke"]["steps"]
+    poll = next(s for s in steps if s.get("name") == "Wait for Render to roll out")
+    assert poll["continue-on-error"] is True
