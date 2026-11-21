@@ -70,6 +70,9 @@ class _FakeManager:
     def reap_stale(self, runs: Any = None) -> list[RunRecord]:
         return []
 
+    def global_cap(self) -> None:
+        return None
+
 
 def _make_queued_run(family_token: str = VALID_TOKEN) -> RunRecord:
     req = StoryRequest(theme="the_sleepy_sea", language="it")

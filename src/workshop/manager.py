@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -74,17 +75,28 @@ def _safety_rejection_fields(error: Exception) -> dict[str, object] | None:
     return fields
 
 
+GLOBAL_CAP_MESSAGE = "the story workshop is resting for today — tomorrow brings more"
+# Share of the global daily cap at which the operator is warned (H4).
+GLOBAL_CAP_ALERT_RATIO = 0.8
+
+
 class RunCapExceeded(Exception):
     """A non-operator family hit a run cap. `active` is the blocking run when
-    the one-active-run rule fired, None when the daily cap fired."""
+    the one-active-run rule fired, None when a daily cap fired; `service_wide`
+    marks the global daily cap (H4) rather than the family's own."""
 
-    def __init__(self, message: str, *, active: RunRecord | None = None) -> None:
+    def __init__(
+        self, message: str, *, active: RunRecord | None = None, service_wide: bool = False
+    ) -> None:
         super().__init__(message)
         self.active = active
+        self.service_wide = service_wide
 
     @property
     def reason(self) -> str:
-        return "active_run" if self.active is not None else "daily_cap"
+        if self.active is not None:
+            return "active_run"
+        return "global_cap" if self.service_wide else "daily_cap"
 
 
 def blocking_cap(runs: list[RunRecord], daily_cap: int) -> RunCapExceeded | None:
@@ -154,8 +166,10 @@ class RunManager:
         return self._store
 
     async def submit(self, family_token: str, request: StoryRequest) -> RunRecord:
-        if family_token != OPERATOR_TOKEN:
+        is_operator = family_token == OPERATOR_TOKEN
+        if not is_operator:
             self._enforce_caps(family_token)
+        self._count_global_run(refuse=not is_operator)
         record = new_run(family_token, request)
         self._store.save(record)
         logger.info(
@@ -187,6 +201,44 @@ class RunManager:
                 },
             )
             raise cap
+
+    def global_cap(self) -> RunCapExceeded | None:
+        """The service-wide daily cap, if today's runs have reached it (H4).
+        A read only: the make screen asks this up front without counting."""
+        count = self._store.daily_run_count(datetime.now(UTC).date())
+        if count >= self._settings.global_daily_run_cap:
+            return RunCapExceeded(GLOBAL_CAP_MESSAGE, service_wide=True)
+        return None
+
+    def _count_global_run(self, *, refuse: bool) -> None:
+        """Count this submit toward today's service-wide total (H4).
+
+        The increment comes first and is a conditional write, so concurrent
+        submits each see their own total and the cap cannot be overshot by a
+        race. A refused family submit stays counted, but it only happens once
+        the day is already spent. The operator is warned once at 80% and once
+        at the cap: exactly one submit sees each total.
+        """
+        cap = self._settings.global_daily_run_cap
+        count = self._store.increment_daily_runs(datetime.now(UTC).date())
+        near = math.ceil(cap * GLOBAL_CAP_ALERT_RATIO)
+        if count == near and near < cap:
+            self._alert_global_cap("global_run_cap_near", "nearly reached", count, cap)
+        if count == cap:
+            self._alert_global_cap("global_run_cap_reached", "reached", count, cap)
+        if refuse and count > cap:
+            logger.info(
+                "global_run_cap_rejected",
+                extra={"event": "global_run_cap_rejected", "count": count, "cap": cap},
+            )
+            raise RunCapExceeded(GLOBAL_CAP_MESSAGE, service_wide=True)
+
+    @staticmethod
+    def _alert_global_cap(event: str, state: str, count: int, cap: int) -> None:
+        logger.warning(event, extra={"event": event, "count": count, "cap": cap})
+        sentry_sdk.capture_message(
+            f"Global daily run cap {state}: {count} of {cap}", level="warning"
+        )
 
     async def execute(self, record: RunRecord) -> RunRecord:
         async with self._lock:
