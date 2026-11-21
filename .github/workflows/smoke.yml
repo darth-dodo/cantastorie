@@ -1,0 +1,52 @@
+name: Post-deploy smoke check
+
+# Reports, never blocks: it runs on a schedule and after CI, never on push or pull_request,
+# and the check step cannot fail the job.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: post-deploy
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Render to roll out
+        if: github.event_name == 'workflow_run'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          want="$(git rev-parse origin/main || true)"
+          for _ in $(seq 20); do
+            live="$(curl -s --max-time 10 "$BASE_URL/health/version" | jq -r '.commit // empty' 2>/dev/null || true)"
+            [ "$live" = "$want" ] && exit 0
+            sleep 15
+          done
+          echo "::notice::deploy still not live after the polling window"
+        env:
+          BASE_URL: https://cantastorie.onrender.com
+
+      - name: Smoke check the head of main
+        continue-on-error: true
+        timeout-minutes: 4
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_URL: https://cantastorie.onrender.com
+        run: scripts/smoke_check.sh
