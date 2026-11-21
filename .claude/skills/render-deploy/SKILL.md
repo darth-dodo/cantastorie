@@ -24,7 +24,7 @@ Cantastorie runs as one Docker web service on Render (Frankfurt, Starter plan, a
 - `autoDeploy: false` stays. Main deploys only through the CI `deploy` job after `CI Success`. Never switch Render to auto-deploy on commit.
 - Secrets are `sync: false`. Abhishek sets them in the Render dashboard. Never put a value in `render.yaml`, a commit or chat, and never read `.env`.
 - The `render` CLI v2 has no env-var command. Env vars are set in the dashboard or through the Render REST API, never with the CLI.
-- New env var: add it to `render.yaml` (with `sync: false` if secret, and a `previewValue` that keeps previews read-only), `src/config.py`, `.env.example`, the secrets table in `FACTORY.md` and the variable table in `docs/setup.md`.
+- New env var: add it to `render.yaml` (with `sync: false` if secret, and a `previewValue` that keeps previews read-only), `src/config.py`, `.env.example`, `docs/setup.md` and the FACTORY.md secrets table (the same list `factory:review` checks).
 - Keep `/health` cheap and free of R2, OpenRouter and Clerk calls, so a vendor outage never restarts the app.
 - Previews are read-only by construction (blank Clerk and R2 values). Never give a preview a live key.
 - After changing a dashboard env var, redeploy with the hook (`curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}"`, which Abhishek runs; the URL is a secret) or Manual Deploy.

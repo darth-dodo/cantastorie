@@ -15,7 +15,7 @@ Mirrors the CI jobs behind `CI Success` (Lint & Format Check, Type Check, Python
 | Python tests + coverage floor | `uv run pytest --cov=src` (fails below `fail_under = 70` in `pyproject.toml`) |
 | JS tests | `npx vitest run` |
 | E2E | `E2E_PORT=<free port> npx playwright test` (a free port per worktree, so parallel builders do not collide) |
-| Security scan | CI's Security Scan job: `uv pip install bandit`, then `uv run bandit -r src/ -ll` |
+| Security scan | CI's Security Scan job: `uvx bandit -r src/ -ll` (same flags as ci.yml's security job) |
 | Spec coverage | Every scenario in the change's `specs/` has a test that asserts it; list scenario -> test file:line |
 | Changed changes | `openspec validate <change-id> --strict` for each change the branch touches |
 
@@ -23,7 +23,7 @@ R2 Bucket Audit runs on `main` only, with secrets PRs do not get: not a local ga
 
 ## When the branch touches deploy files
 
-`render.yaml`, `Dockerfile`, `.github/workflows/ci.yml`: run `docker build .` (CI's Build Docker Image, which also compiles Tailwind in stage 1), then the `render-deploy` skill's "Before opening a deploy PR" smoke test.
+`render.yaml`, `Dockerfile`, `.github/workflows/ci.yml`, `pyproject.toml`, `uv.lock`, `package.json`, `package-lock.json`: run `docker build .` (CI's Build Docker Image, which also compiles Tailwind in stage 1), then the `render-deploy` skill's "Before opening a deploy PR" smoke test.
 
 ## When the branch touches generation, review or publishing
 

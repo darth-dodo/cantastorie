@@ -13,15 +13,23 @@ The visual version of `factory:recap`. Read only (apart from `git fetch` updatin
 |---|---|
 | Open PRs and CI | `gh pr list --state open --json number,title,headRefName,isDraft,statusCheckRollup,reviewDecision` |
 | Open Issues | `gh issue list --state open --limit 100 --json number,title,labels` (epics are the `epic` label) |
-| Board | The "Cantastorie" project: its number from `gh project list --owner darth-dodo --format json --jq '.projects[] \| select(.title=="Cantastorie") \| .number'`, then `gh project item-list <number> --owner darth-dodo --format json --limit 200` (Status, Estimate per item) |
+| Board | The "Cantastorie" project: find its number, then list its items (Status, Estimate per item); commands under the table |
 | Merged per day | `gh pr list --state merged --limit 100 --json number,mergedAt`, counted per day for the last 7 days |
 | Main CI | `gh run list --branch main --workflow CI --limit 1 --json databaseId,conclusion,createdAt,url` |
-| Smoke | `gh run list --workflow "Post-deploy smoke check" --limit 3 --json databaseId,conclusion,status,createdAt,url`, then `gh run view <id> --log` and keep only the lines naming each checked path (`/health`, `/play`, `/health/version`) with its HTTP code or failure |
-| Missing secrets | `RENDER_DEPLOY_HOOK_URL is not set` in the `Deploy to Render` step of the main CI log; a token error in the `codecov/codecov-action` steps of the main CI log (`gh run view <id> --log \| grep -i codecov \| grep -i token`) |
+| Smoke | `gh run list --workflow "Post-deploy smoke check" --limit 3 --json databaseId,conclusion,status,createdAt,url`, then read the run log (`gh run view <id> --log`) and keep only the lines naming each checked path (`/health`, `/play`, `/health/version`) with its HTTP code or failure |
+| Missing secrets | `RENDER_DEPLOY_HOOK_URL is not set` in the `Deploy to Render` step of the main CI log; a token error in the `codecov/codecov-action` steps of the main CI log (command under the table) |
 | Deploy lag | `curl -s --max-time 10 https://cantastorie.onrender.com/health/version` (its `commit`) vs `git rev-parse origin/main` (after `git fetch origin`), and `git log --oneline <live>..origin/main` |
 | Flywheel | `~/cantastorie-factory/metrics.csv`: medians of `lead_time_h`, `ci_red_runs`, `review_blockers`, `denied_calls`, `review_precision`, share of `first_pass_green`, sums of `escaped_defects` and `review_misses`, last 5 rows vs the 5 before ("n/a" under 10 rows; skip empty cells) |
 | Experiment | The `running` row of `docs/factory/experiments.md` (id, change, metric, baseline, target) |
 | Running builders | `git worktree list`; a worktree on a `feature/`, `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/` or `spec/` branch with no PR (`gh pr list --head <branch> --state all`) is a running builder; skip `main`, detached heads and other branches |
+
+Commands too long for a table cell:
+
+```bash
+gh project list --owner darth-dodo --format json --jq '.projects[] | select(.title=="Cantastorie") | .number'
+gh project item-list <number> --owner darth-dodo --format json --limit 200
+gh run view <id> --log | grep -i codecov | grep -i token
+```
 
 A failed command does not stop the page: its panel says what failed and the command, the rest still render. Until `/health/version` or the smoke workflow exists on `main`, their panels say "not deployed yet" with the command that failed.
 

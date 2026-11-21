@@ -11,10 +11,14 @@ The factory runs this skill through `factory:release`, which adds the release-du
 
 Commitizen config is `[tool.commitizen]` in `pyproject.toml` (`tag_format = "v$version"`, `version_provider = "uv"`, `update_changelog_on_bump = true`, `major_version_zero = true`). Commitizen is a pre-commit hook only: it is not in the project venv and no dependency may be added. Always run it as `uvx --from commitizen cz ...`, never through `uv run`.
 
+## 0. Before every GitHub write
+
+Run `TZ=Europe/Berlin date`. Monday to Friday, 08:00 to 17:59: do not push, open a PR, tag, create a release or comment. Keep the work local and stop with: "Stopped: GitHub writes are paused on weekdays 08:00-17:59 Berlin; rerun after 18:00 or at the weekend." Check again before each later write.
+
 ## 1. Preconditions (stop if any fail)
 
 - `git fetch origin` and work from `origin/main`.
-- CI on latest main is green: `gh run list --branch main --limit 1 --json conclusion,headSha`.
+- CI on latest main is green: `gh run list --branch main --workflow CI --limit 1 --json conclusion,headSha`.
 - There is something to release: `git log $(git tag --sort=-v:refname | head -1)..origin/main --format=%s` lists at least one Conventional Commit title.
 
 ## 2. Pick the version (SemVer, pre-1.0)
@@ -26,7 +30,7 @@ Commitizen config is `[tool.commitizen]` in `pyproject.toml` (`tag_format = "v$v
 
 ## 3. Release PR
 
-1. `git worktree add ../cantastorie-release-vX.Y.Z -b chore/release-vX.Y.Z origin/main`
+1. `git worktree add .claude/worktrees/release-vX.Y.Z -b chore/release-vX.Y.Z origin/main`
 2. `uvx --from commitizen cz bump --files-only --yes`. It updates `pyproject.toml`, `uv.lock` and `CHANGELOG.md` (the `## vX.Y.Z (date)` section, generated from the commit titles) and creates no tag. Run no separate `cz changelog`: with no tag yet it rewrites the new section as `## Unreleased`. Never hand-write or reorder entries.
 3. `make check` green.
 4. Commit `chore(release): vX.Y.Z`, push the branch, open the PR titled `chore(release): vX.Y.Z` with that version's changelog section as the body.

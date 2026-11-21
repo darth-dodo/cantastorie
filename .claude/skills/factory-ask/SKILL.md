@@ -72,7 +72,7 @@ Question and Ambiguous (before the answer) record nothing.
 
 ## 5. Repo edits
 
-A PHASE_2.md line or Candidates row is a repo change. It needs no Issue, and it rides along in the next related open PR where one exists. Only when none exists: branch `docs/intake-<yyyy-mm-dd>` from `origin/main` (reuse it while its PR is open the same day), Conventional Commit (`docs: ...`, which commitizen later turns into the changelog), PR. Never edit `CHANGELOG.md` by hand, never push to `main`, never merge.
+A PHASE_2.md line or Candidates row is a repo change. It needs no Issue, and it rides along in the next related open PR where one exists. Only when none exists: worktree `.claude/worktrees/intake-<yyyy-mm-dd>` on branch `docs/intake-<yyyy-mm-dd>` (`git fetch origin && git worktree add .claude/worktrees/intake-<yyyy-mm-dd> -b docs/intake-<yyyy-mm-dd> origin/main`; reuse it while its PR is open the same day; never switch branches in the main checkout), Conventional Commit (`docs: ...`, which commitizen later turns into the changelog), PR. Never edit `CHANGELOG.md` by hand, never push to `main`, never merge.
 
 ## 6. Writing rules
 

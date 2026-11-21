@@ -9,7 +9,7 @@ Flywheel step 3 (FACTORY.md "Flywheel"), after `factory:improve`, before `factor
 
 ## Before every GitHub write
 
-Run `TZ=Europe/Berlin date`. Monday to Friday, 08:00 to 17:59: do not push, open a PR, tag, create a release or comment. Keep the work local and stop. Every message to Abhishek then says only what is ready locally and the next command; it never names the time, the day or a window.
+Run `TZ=Europe/Berlin date`. Monday to Friday, 08:00 to 17:59: do not push, open a PR, tag, create a release or comment. Keep the work local and stop with: "Stopped: GitHub writes are paused on weekdays 08:00-17:59 Berlin; rerun after 18:00 or at the weekend." Then say what is ready locally and the next command.
 
 ## 1. Is a release due?
 
@@ -70,5 +70,5 @@ When stopped early, say what is ready locally and the next command to run.
 | Running `cz changelog` after the bump | The bump already wrote `CHANGELOG.md`; a second run rewrites it as `## Unreleased` |
 | Letting `cz bump` tag the release branch (a squash merge strands that tag) | `uvx --from commitizen cz bump --files-only --yes` on the branch; after the merge, `git tag v<version> <merge sha>`, push the tag, `gh release create` (step 4) |
 | `uv run cz ...` | Commitizen is not in the venv: `uvx --from commitizen cz ...` |
-| Pushing because the PR "is just a release" | Check the Berlin time before each write |
+| Pushing because the PR "is just a release" | Check the Berlin time before each write; inside the window, stop with the reason |
 | Hand-editing `CHANGELOG.md` entries | Commitizen builds them from the commit titles (`release-manager` step 3) |

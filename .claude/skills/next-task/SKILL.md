@@ -17,7 +17,7 @@ Reads GitHub Issues and PRs, the git working tree and OpenSpec changes. Repo: `d
 
 ## 2. Rank (first match wins)
 
-1. **Stale loops:** an Issue still open whose PR is merged. Check its "done when" against the live app (`curl -sI https://cantastorie.onrender.com/health`), then close it with a link to the PR.
+1. **Stale loops:** an Issue still open whose PR is merged. Check its "done when" against the live app (`curl -fsS -o /dev/null -w '%{http_code}' https://cantastorie.onrender.com/health`), then close it with a link to the PR.
 2. **Green PRs waiting for merge:** tell Abhishek. Never merge yourself; merging is the human gate.
 3. **Uncommitted work** in any worktree: finish it or ask.
 4. **Red PRs:** fix CI first (use superpowers:systematic-debugging).

@@ -18,10 +18,10 @@ Invoke `mattpocock-skills:code-review` against `origin/main` (merge base). Its t
 | `Closes #N`, Issue "done when" each shown with evidence | Yes |
 | `factory:test` green, CI `CI Success` green | Yes |
 | OpenSpec change archived in this PR, `openspec/specs/` matches the code | Yes, if the Issue has a change |
-| No secrets, `.env` untouched, new env vars in `.env.example`, `render.yaml` and the FACTORY.md secrets table (names only) | Yes |
+| No secrets, `.env` untouched, a new env var is in `.env.example`, `src/config.py`, `render.yaml`, `docs/setup.md` and the FACTORY.md secrets table (names only) | Yes |
 | Settled stack respected (`settled-architecture`), or an ADR added in `docs/adr/` | Yes |
 | Generation, review or publishing touched: the PR's Safety section shows the parent review gate still holds, with the B2/H1 tests named and green (`factory:test`) | Yes |
-| Child paths (the player and `/play`): no cookie, no account, no Clerk or other third-party script added; child state stays in IndexedDB | Yes |
+| Child paths (the player and `/play`): no cookie, no account, no Clerk or other third-party script added; child state stays on the device (localStorage, IndexedDB); no server-side child state | Yes |
 | Player, parent area or workshop touched: Playwright green on this branch | Yes |
 | Conventional Commit title (commitizen builds `CHANGELOG.md` from it), no hand edit to `CHANGELOG.md` | No |
 | No em or en dashes, name written as "Cantastorie" | No |

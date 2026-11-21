@@ -23,7 +23,7 @@ FACTORY = [
     "dashboard",
 ]
 # Cantastorie's own skills, kept as they are: settled-architecture names Supabase as a rejected option.
-KEPT = {"settled-architecture", "documentation-conventions"}
+KEPT = {"settled-architecture"}
 FORBIDDEN = re.compile(
     r"\bmix\b|credo|sobelow|Pok[eé]mon|Supabase|\bEcto\b|Phoenix|maya-j56u|maya-factory|darth-dodo/maya|changelog\.d|Herdr|herdr",
     re.I,

@@ -20,7 +20,7 @@ Topics and where to read before asking:
 | Topic | Read first |
 |---|---|
 | `recent-prs` | Merged PRs since the last quiz: titles, diffs (`gh pr diff <n>`), CHANGELOG.md |
-| `specs-adrs` | `openspec/specs/`, open `openspec/changes/`, `docs/adr/` (ADR-001 to ADR-011) |
+| `specs-adrs` | `openspec/specs/`, open `openspec/changes/`, `docs/adr/` (all of `docs/adr/`) |
 | `code-structure` | `src/api/`, `src/pipeline/`, `src/workshop/`, `src/config.py`, `src/static/`, `tests/` |
 | `product-safety` | `docs/product.md`, `docs/architecture.md`, the parent review gate, the safety judges |
 | `factory-ops` | FACTORY.md, CLAUDE.md, `.claude/settings.json`, `.github/workflows/ci.yml`, `render.yaml`, the `render-deploy` failure table |

@@ -11,12 +11,12 @@ State lives on GitHub, never only in the chat. Run git commands one per call fro
 |---|---|---|
 | 1 | Locate: Issue number, feature branch (`git branch --show-current`), worktree path (`pwd`), the `factory:build` step reached, ticked and open boxes in the change's `tasks.md` | All known |
 | 2 | Evidence: run the current gate that matters (usually `uv run pytest`) and keep the exact failing lines, if any | Real status, not a guess |
-| 3 | Save: `git add -A`, `git commit -m "wip: #<n> paused at factory:build step <s>"`, `git push -u origin <branch>` | Branch on GitHub has every change |
+| 3 | Save: `git add -A`, `git commit -m "chore: wip #<n> paused at factory:build step <s>"` (commitizen rejects a `wip:` type; never `--no-verify`), `git push -u origin <branch>`. If the pre-commit hooks block the commit (half-built code), leave the diff uncommitted in the worktree, which persists, push any commits already made, and say "uncommitted work in the worktree" in the handoff | Branch on GitHub has every commit; any uncommitted diff is named in the handoff |
 | 4 | Handoff comment on the Issue (template below) via `gh issue comment <n> --body-file <file>` | Comment posted |
 | 5 | Label: `gh label create paused --color fbca04 --description "A builder stopped; see the handoff comment"` if missing, then `gh issue edit <n> --add-label paused` | Issue shows `paused` |
 | 6 | Report the Issue link and the one next action | Done |
 
-WIP commits are fine: squash merge removes them from `main`. Before `git add -A`, check `git status` for files that must not be committed (`.env`, `.serena/`, screenshots, scratch files); never commit them.
+WIP commits (`chore: wip ...`) are fine: squash merge removes them from `main`. Before `git add -A`, check `git status` for files that must not be committed (`.env`, `.serena/`, screenshots, scratch files); never commit them.
 
 ## Handoff template
 
@@ -24,7 +24,8 @@ WIP commits are fine: squash merge removes them from `main`. Before `git add -A`
 ## Paused: factory:build step <s> of 11
 
 - Branch: `<branch>` (pushed, last commit `<sha>`)
-- Worktree: `<path>` (may be gone; resume recreates it from the branch)
+- Uncommitted work: <none, or "yes, in the worktree: hooks blocked the commit">
+- Worktree: `<path>` (may be gone only when there is no uncommitted work; resume recreates it from the branch)
 - Tasks done: <ticked task ids>
 - Tasks open: <open task ids>
 - Gates: <green, or the failing command with its exact output lines>
