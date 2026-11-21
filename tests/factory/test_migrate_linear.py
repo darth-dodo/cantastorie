@@ -54,12 +54,15 @@ class FakeGh:
         self.next_number = 100
         self.failures: dict[str, list[str]] = {}  # subcommand -> queued error messages
         self.create_output = create_output
+        self.existing: list[dict[str, object]] = []  # what `gh issue list` finds
 
     def __call__(self, args: list[str]) -> str:
         self.calls.append(args)
         queue = self.failures.get(args[1], []) if len(args) > 1 else []
         if queue:
             raise GhError(queue.pop(0))
+        if args[:2] == ["issue", "list"]:
+            return json.dumps(self.existing)
         if args[:2] == ["issue", "create"]:
             if self.create_output is not None:
                 return self.create_output
@@ -282,7 +285,7 @@ def test_a_failed_close_is_finished_on_rerun(tmp_path: Path) -> None:
 
 def test_rate_limits_are_retried_with_backoff(tmp_path: Path) -> None:
     gh, sleeps = FakeGh(), []
-    gh.failures["create"] = ["HTTP 403: API rate limit exceeded", "429 too many requests"]
+    gh.failures["create"] = ["HTTP 403: API rate limit exceeded", "HTTP 429: too many requests"]
     migrate([_issue(1)], tmp_path / "m.json", gh, dry_run=False, sleep=sleeps.append)
     assert len(gh.of("create")) == 3
     assert sleeps == [60, 120]
@@ -355,3 +358,120 @@ def test_preflight_passes_when_all_labels_exist() -> None:
         return json.dumps([{"name": "priority:medium"}])
 
     preflight_labels([_issue(1)], gh)
+
+
+def test_a_create_that_failed_after_github_made_the_issue_is_found_not_duplicated(
+    tmp_path: Path,
+) -> None:
+    mapping, issue = tmp_path / "m.json", _issue(1)
+    gh = FakeGh()
+    gh.failures["create"] = ["502 Bad Gateway"]
+    with pytest.raises(GhError):
+        migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
+    second = FakeGh()
+    second.existing = [{"number": 150, "body": render_body(issue)}]
+    migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert not second.of("create") and _numbers(mapping) == {"AI-1": 150}
+    search = next(c for c in second.of("list"))
+    assert "--state" in search and "all" in search and "number,body" in search
+
+
+def test_a_create_that_failed_before_the_issue_existed_is_created_once_on_rerun(
+    tmp_path: Path,
+) -> None:
+    mapping, issue = tmp_path / "m.json", _issue(1)
+    gh = FakeGh()
+    gh.failures["create"] = ["502 Bad Gateway"]
+    with pytest.raises(GhError):
+        migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
+    second = FakeGh()
+    migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert len(second.of("create")) == 1
+    third = FakeGh()
+    migrate([issue], mapping, third, dry_run=False, sleep=_no_sleep)
+    assert not third.of("create")
+
+
+def test_a_body_that_only_looks_similar_is_not_a_match(tmp_path: Path) -> None:
+    mapping, issue = tmp_path / "m.json", _issue(1)
+    gh = FakeGh()
+    gh.failures["create"] = ["timeout"]
+    with pytest.raises(GhError):
+        migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
+    second = FakeGh()
+    second.existing = [
+        {"number": 150, "body": "Migrated from Linear AI-10 (https://linear.app/x/issue/AI-10)"}
+    ]
+    migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert len(second.of("create")) == 1
+
+
+def test_a_failed_search_goes_to_manual_check(tmp_path: Path) -> None:
+    mapping, issue = tmp_path / "m.json", _issue(1)
+    gh = FakeGh()
+    gh.failures["create"] = ["timeout"]
+    with pytest.raises(GhError):
+        migrate([issue], mapping, gh, dry_run=False, sleep=_no_sleep)
+    second = FakeGh()
+    second.failures["list"] = ["search is down"]
+    report = migrate([issue], mapping, second, dry_run=False, sleep=_no_sleep)
+    assert not second.of("create") and report.needs_manual_check == ["AI-1"]
+    assert json.loads(mapping.read_text())["needs_manual_check"][0]["identifier"] == "AI-1"
+
+
+@pytest.mark.parametrize("order", [[1, 2, 3], [3, 2, 1]])
+def test_a_three_level_epic_chain_edits_each_issue_once(order: list[int]) -> None:
+    gh = FakeGh()
+    items = {1: _issue(1), 2: _issue(2, parent="AI-1"), 3: _issue(3, parent="AI-2")}
+    link_epics([items[n] for n in order], {"AI-1": 101, "AI-2": 102, "AI-3": 103}, gh)
+    edits = gh.of("edit")
+    assert sorted(c[2] for c in edits) == ["101", "102", "103"]
+    bodies = {c[2]: c[c.index("--body") + 1] for c in edits}
+    assert "## Child issues\n- #102" in bodies["101"]
+    assert "Epic: #101" in bodies["102"] and "## Child issues\n- #103" in bodies["102"]
+    assert "Epic: #102" in bodies["103"]
+
+
+def test_legacy_bare_int_entries_are_not_reposted(tmp_path: Path) -> None:
+    mapping = tmp_path / "m.json"
+    mapping.write_text(json.dumps({"AI-1": 101}))
+    gh = FakeGh()
+    migrate([_issue(1, status="Done", comments=[_comment("hi")])], mapping, gh, dry_run=False)
+    assert not gh.calls
+
+
+def test_a_null_comment_body_is_treated_as_empty(tmp_path: Path) -> None:
+    issue = _issue(1, comments=[_comment("fine"), {"author": "A", "createdAt": "t", "body": None}])
+    assert not is_security_sensitive(issue)
+    gh = FakeGh()
+    migrate([issue], tmp_path / "m.json", gh, dry_run=False)
+    assert len(gh.of("comment")) == 1
+
+
+def test_an_already_public_issue_that_matches_security_still_finishes(tmp_path: Path) -> None:
+    mapping = tmp_path / "m.json"
+    issue = _issue(1, title="Auth bypass", status="Done")
+    mapping.write_text(json.dumps({"AI-1": {"number": 101, "commented": True, "closed": False}}))
+    gh = FakeGh()
+    report = migrate([issue, _issue(2, title="XSS in title")], mapping, gh, dry_run=False)
+    assert len(gh.of("close")) == 1 and not gh.of("create")
+    assert [r["identifier"] for r in report.already_public_but_matches_security] == ["AI-1"]
+    assert [r["identifier"] for r in report.kept_in_linear] == ["AI-2"]
+
+
+def test_a_403_that_is_not_a_rate_limit_is_not_retried(tmp_path: Path) -> None:
+    gh, sleeps = FakeGh(), []
+    gh.failures["create"] = ["HTTP 403: Resource not accessible by integration"]
+    with pytest.raises(GhError):
+        migrate([_issue(1)], tmp_path / "m.json", gh, dry_run=False, sleep=sleeps.append)
+    assert sleeps == []
+
+
+def test_abuse_and_secondary_rate_limits_are_retried(tmp_path: Path) -> None:
+    gh, sleeps = FakeGh(), []
+    gh.failures["create"] = [
+        "You have exceeded a secondary rate limit",
+        "abuse detection triggered",
+    ]
+    migrate([_issue(1)], tmp_path / "m.json", gh, dry_run=False, sleep=sleeps.append)
+    assert sleeps == [60, 120]

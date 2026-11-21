@@ -25,7 +25,7 @@ REPO = "darth-dodo/cantastorie"
 MAX_CHARS = 65536  # GitHub's limit for issue bodies and comments
 TRUNCATION_NOTE = "(truncated; see the Linear link above)"
 BACKOFF_S = (60.0, 120.0, 240.0)
-RATE_LIMIT = re.compile(r"rate limit|403|429", re.I)
+RATE_LIMIT = re.compile(r"rate limit|secondary rate|HTTP 429|abuse", re.I)
 PRIORITY = {1: "priority:urgent", 2: "priority:high", 3: "priority:medium", 4: "priority:low"}
 PRIORITY_NAME = {1: "Urgent", 2: "High", 3: "Medium", 4: "Low"}
 CLOSE_REASON = {"Done": "completed", "Canceled": "not planned", "Duplicate": "not planned"}
@@ -53,6 +53,7 @@ class MigrationReport:
     already_mapped: list[str] = field(default_factory=list)
     kept_in_linear: list[dict[str, str]] = field(default_factory=list)
     needs_manual_check: list[str] = field(default_factory=list)
+    already_public_but_matches_security: list[dict[str, str]] = field(default_factory=list)
 
 
 def _number(identifier: str) -> int:
@@ -62,7 +63,7 @@ def _number(identifier: str) -> int:
 def security_term(issue: dict[str, Any]) -> str | None:
     """The first security term found in the title, description, comments or labels."""
     texts = [issue.get("title", ""), issue.get("description") or ""]
-    texts += [c.get("body", "") for c in issue.get("comments", [])]
+    texts += [c.get("body") or "" for c in issue.get("comments", [])]
     for text in texts:
         match = SECURITY.search(text)
         if match:
@@ -115,7 +116,7 @@ def _comment_chunks(issue: dict[str, Any], limit: int = MAX_CHARS) -> list[str]:
     """Comments in order, packed into GitHub comments that each fit under the limit."""
     pieces: list[str] = []
     for c in issue.get("comments", []):
-        text = f"**{c['author']}** ({c['createdAt']}):\n\n{c['body']}"
+        text = f"**{c['author']}** ({c['createdAt']}):\n\n{c.get('body') or ''}"
         pieces += [text[i : i + limit] for i in range(0, len(text), limit)]
     chunks: list[str] = []
     for piece in pieces:
@@ -126,34 +127,57 @@ def _comment_chunks(issue: dict[str, Any], limit: int = MAX_CHARS) -> list[str]:
     return chunks
 
 
-def _load(mapping_path: Path) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+@dataclass
+class _State:
+    """The mapping file in memory: per-issue progress, manual-check notes, create attempts."""
+
+    path: Path
+    entries: dict[str, dict[str, Any]]
+    manual: list[dict[str, str]]
+    attempted: list[str]
+
+    def save(self) -> None:
+        data: dict[str, Any] = dict(self.entries)
+        if self.manual:
+            data["needs_manual_check"] = self.manual
+        if self.attempted:
+            data["create_attempted"] = self.attempted
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".mapping-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump(data, handle, indent=2, sort_keys=True)
+            Path(tmp).replace(self.path)  # atomic, same as os.replace
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+
+
+def _new_entry(number: int) -> dict[str, Any]:
+    return {"number": number, "commented": False, "closed": False, "comment_chunks": 0}
+
+
+def _load(mapping_path: Path, export: list[dict[str, Any]] | None = None) -> _State:
     raw: dict[str, Any] = json.loads(mapping_path.read_text()) if mapping_path.exists() else {}
     manual: list[dict[str, str]] = raw.pop("needs_manual_check", [])
+    attempted: list[str] = raw.pop("create_attempted", [])
+    by_id = {i["identifier"]: i for i in export or []}
     entries: dict[str, dict[str, Any]] = {}
     for ident, value in raw.items():
-        base = value if isinstance(value, dict) else {"number": value}
-        entries[ident] = {"commented": False, "closed": False, "comment_chunks": 0, **base}
-    return entries, manual
+        if isinstance(value, dict):
+            entries[ident] = {**_new_entry(value["number"]), **value}
+        else:  # legacy bare int: its steps ran before progress was tracked, so repost nothing
+            chunks = len(_comment_chunks(by_id[ident])) if ident in by_id else 0
+            entries[ident] = {
+                "number": value,
+                "commented": True,
+                "closed": True,
+                "comment_chunks": chunks,
+            }
+    return _State(mapping_path, entries, manual, attempted)
 
 
 def load_numbers(mapping_path: Path) -> dict[str, int]:
-    return {ident: int(e["number"]) for ident, e in _load(mapping_path)[0].items()}
-
-
-def _save(
-    mapping_path: Path, entries: dict[str, dict[str, Any]], manual: list[dict[str, str]]
-) -> None:
-    data: dict[str, Any] = dict(entries)
-    if manual:
-        data["needs_manual_check"] = manual
-    fd, tmp = tempfile.mkstemp(dir=mapping_path.parent, prefix=".mapping-", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as handle:
-            json.dump(data, handle, indent=2, sort_keys=True)
-        Path(tmp).replace(mapping_path)  # atomic, same as os.replace
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    return {ident: int(e["number"]) for ident, e in _load(mapping_path).entries.items()}
 
 
 def _call(
@@ -170,15 +194,54 @@ def _call(
     return gh(args)
 
 
+def _find_existing(issue: dict[str, Any], run: Callable[[list[str]], str]) -> int | None:
+    """Look for a GitHub issue whose body already starts with this issue's migration line."""
+    ident = issue["identifier"]
+    out = run(
+        [
+            "issue",
+            "list",
+            "--repo",
+            REPO,
+            "--state",
+            "all",
+            "--search",
+            f'"Migrated from Linear {ident} " in:body',
+            "--json",
+            "number,body",
+        ]
+    )
+    first_line = render_body(issue).splitlines()[0]
+    for item in json.loads(out):
+        lines = (item.get("body") or "").splitlines()
+        if lines and lines[0] == first_line:
+            return int(item["number"])
+    return None
+
+
 def _create(
     issue: dict[str, Any],
     epics: set[str],
-    entries: dict[str, dict[str, Any]],
-    manual: list[dict[str, str]],
+    state: _State,
     run: Callable[[list[str]], str],
-    save: Callable[[], None],
-) -> None:
+) -> bool:
+    """Make sure the issue has a GitHub number. False means it went to needs_manual_check."""
     ident = issue["identifier"]
+    if ident in state.attempted:  # an earlier create may have succeeded without our seeing it
+        try:
+            existing = _find_existing(issue, run)
+        except (GhError, ValueError) as exc:
+            state.manual.append({"identifier": ident, "output": f"search failed: {exc}"})
+            state.save()
+            return False
+        if existing is not None:
+            state.entries[ident] = _new_entry(existing)
+            state.attempted.remove(ident)
+            state.save()
+            return True
+    else:
+        state.attempted.append(ident)
+        state.save()
     args = [
         "issue",
         "create",
@@ -194,16 +257,13 @@ def _create(
     out = run(args)
     found = ISSUE_URL.search(out)
     if not found:
-        manual.append({"identifier": ident, "output": out})
-        save()
+        state.manual.append({"identifier": ident, "output": out})
+        state.save()
         raise RuntimeError(f"could not read the issue number for {ident} from gh output: {out!r}")
-    entries[ident] = {
-        "number": int(found.group(1)),
-        "commented": False,
-        "closed": False,
-        "comment_chunks": 0,
-    }
-    save()
+    state.entries[ident] = _new_entry(int(found.group(1)))
+    state.attempted.remove(ident)
+    state.save()
+    return True
 
 
 def _finish(
@@ -239,38 +299,39 @@ def migrate(
     sleep: Callable[[float], None] = time.sleep,
     backoff: tuple[float, ...] = BACKOFF_S,
 ) -> MigrationReport:
-    entries, manual = _load(mapping_path)
-    stuck = {m["identifier"] for m in manual}
+    state = _load(mapping_path, export)
+    stuck = {m["identifier"] for m in state.manual}
     epics = {i["parent"] for i in export if i.get("parent")}
     report = MigrationReport()
 
     def run(args: list[str]) -> str:
         return _call(gh, args, sleep, backoff)
 
-    def save() -> None:
-        _save(mapping_path, entries, manual)
-
     for issue in sorted(export, key=lambda i: _number(i["identifier"])):
         ident = issue["identifier"]
         term = security_term(issue)
-        if term:
-            report.kept_in_linear.append(
-                {"identifier": ident, "title": issue["title"], "term": term}
-            )
+        row = {"identifier": ident, "title": issue["title"], "term": term or ""}
+        mapped = ident in state.entries
+        if term and not mapped:
+            report.kept_in_linear.append(row)
             continue
-        if ident in stuck:
+        if term:  # already public: still finish its steps, but tell the owner
+            report.already_public_but_matches_security.append(row)
+        if ident in stuck and not mapped:
             report.needs_manual_check.append(ident)
             continue
-        created_now = ident not in entries
-        if created_now:
-            report.to_create.append({"identifier": ident, "title": issue["title"]})
-        else:
+        if mapped:
             report.already_mapped.append(ident)
+        else:
+            report.to_create.append({"identifier": ident, "title": issue["title"]})
         if dry_run:
             continue
-        if created_now:
-            _create(issue, epics, entries, manual, run, save)
-        _finish(issue, entries[ident], run, save)
+        created_now = not mapped
+        if created_now and not _create(issue, epics, state, run):
+            report.to_create.pop()
+            report.needs_manual_check.append(ident)
+            continue
+        _finish(issue, state.entries[ident], run, state.save)
         if created_now and pause_s:
             sleep(pause_s)  # stay well under GitHub's content-creation rate limit
     return report
@@ -288,22 +349,15 @@ def link_epics(export: list[dict[str, Any]], mapping: dict[str, int], gh: GhRunn
         parent = by_id[ident].get("parent")
         return f"#{mapping[parent]}" if parent in mapping else None
 
-    for epic, kids in children.items():
-        listing = "\n".join(f"- #{mapping[k]}" for k in sorted(kids, key=_number))
-        body = f"{render_body(by_id[epic], ref(epic))}\n\n## Child issues\n{listing}"
-        gh(["issue", "edit", str(mapping[epic]), "--repo", REPO, "--body", body])
-        for kid in kids:
-            gh(
-                [
-                    "issue",
-                    "edit",
-                    str(mapping[kid]),
-                    "--repo",
-                    REPO,
-                    "--body",
-                    render_body(by_id[kid], ref(kid)),
-                ]
-            )
+    for ident in sorted(
+        set(children) | {k for kids in children.values() for k in kids}, key=_number
+    ):
+        body = render_body(by_id[ident], ref(ident))
+        kids = children.get(ident, [])
+        if kids:
+            listing = "\n".join(f"- #{mapping[k]}" for k in sorted(kids, key=_number))
+            body = f"{body}\n\n## Child issues\n{listing}"
+        gh(["issue", "edit", str(mapping[ident]), "--repo", REPO, "--body", body])
 
 
 def preflight_labels(export: list[dict[str, Any]], gh: GhRunner) -> None:
