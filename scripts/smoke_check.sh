@@ -22,32 +22,36 @@ trap 'rm -f "$version_body"' EXIT
 version_status="$(curl -s --max-time 20 -o "$version_body" -w '%{http_code}' "$BASE_URL/health/version" || true)"
 echo "/health/version -> ${version_status:-none}"
 
-if [ "$version_status" != "200" ]; then
+live=""
+if [ "$version_status" = "404" ]; then
+  # The version endpoint is not live yet: the new build is still rolling out.
+  echo "::notice::deploy in progress: /health/version is not live yet"
+elif [ "$version_status" != "200" ]; then
   problem="$BASE_URL/health/version answered ${version_status:-no response}"
 else
   live="$(jq -r '.commit // empty' "$version_body" 2>/dev/null || true)"
   if [ -n "$head_sha" ] && [ "$live" != "$head_sha" ]; then
-    echo "deploy in progress: live=${live:-none} main=$head_sha"
-    exit 0
-  fi
-  body="$(curl -s --max-time 20 "$BASE_URL/health" || true)"
-  health_status="$(status_of /health)"
-  echo "/health -> $health_status"
-  if [ "$health_status" != "200" ] || ! printf '%s' "$body" | grep -q '"ok"'; then
-    problem="$BASE_URL/health answered $health_status: ${body:-empty}"
-  else
-    play_status="$(status_of /play)"
-    echo "/play -> $play_status"
-    [ "$play_status" = "200" ] || problem="$BASE_URL/play answered $play_status"
+    echo "::notice::deploy in progress: live=${live:-none} main=$head_sha"
   fi
 fi
 
+# Always check the site itself, whatever the version says.
+body="$(curl -s --max-time 20 "$BASE_URL/health" || true)"
+health_status="$(status_of /health)"
+echo "/health -> $health_status"
+if [ "$health_status" != "200" ] || ! printf '%s' "$body" | grep -q '"ok"'; then
+  problem="${problem:+$problem; }$BASE_URL/health answered $health_status: ${body:-empty}"
+fi
+play_status="$(status_of /play)"
+echo "/play -> $play_status"
+[ "$play_status" = "200" ] || problem="${problem:+$problem; }$BASE_URL/play answered $play_status"
+
 if [ -z "$problem" ]; then
-  echo "ok: ${live:-unknown} is live and healthy"
+  echo "ok: /health and /play are healthy (live commit: ${live:-unknown})"
   exit 0
 fi
 
-echo "problem: $problem"
+echo "::warning::smoke check problem: $problem"
 if [ -z "${GH_TOKEN:-}" ]; then
   echo "no GH_TOKEN, not opening an Issue"
   exit 0
@@ -63,7 +67,8 @@ existing="$(gh issue list --repo "$REPO" --label bug --state open \
 if [ "$existing" = "unknown" ]; then
   echo "could not check for an open Issue, skipping to avoid a duplicate"
 elif [ "${DRY_RUN:-}" = "1" ]; then
-  printf 'would %s:\n%s\n' "${existing:+comment on #$existing}${existing:-open an Issue titled \"$TITLE\"}" "$text"
+  if [ -n "$existing" ]; then action="comment on #$existing"; else action="open an Issue titled \"$TITLE\""; fi
+  printf 'would %s:\n%s\n' "$action" "$text"
 elif [ -n "$existing" ]; then
   gh issue comment "$existing" --repo "$REPO" --body "$text" || echo "could not comment on #$existing"
 else

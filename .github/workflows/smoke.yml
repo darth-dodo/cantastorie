@@ -22,13 +22,24 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - name: Wait for Render to roll out
         if: github.event_name == 'workflow_run'
-        run: sleep 120
+        timeout-minutes: 7
+        run: |
+          want="$(git rev-parse origin/main)"
+          for _ in $(seq 20); do
+            live="$(curl -s --max-time 20 "$BASE_URL/health/version" | jq -r '.commit // empty' 2>/dev/null || true)"
+            [ "$live" = "$want" ] && exit 0
+            sleep 15
+          done
+          echo "::notice::deploy still not live after 5 minutes"
+        env:
+          BASE_URL: https://cantastorie.onrender.com
 
       - name: Smoke check the head of main
         continue-on-error: true
