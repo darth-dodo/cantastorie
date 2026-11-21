@@ -13,7 +13,7 @@ Reads GitHub Issues and PRs, the git working tree and OpenSpec changes. Repo: `d
 - `gh pr list --state open --json number,title,headRefName,statusCheckRollup,reviewDecision`
 - `gh pr list --state merged --limit 5 --json number,title,closingIssuesReferences`
 - `gh issue list --state open --json number,title,labels`
-- `ls openspec/changes` (changes not yet archived; each should have an Issue)
+- `ls openspec/changes` (ignore `archive`, which is always there; every other entry is an unarchived change and should have an Issue)
 
 ## 2. Rank (first match wins)
 

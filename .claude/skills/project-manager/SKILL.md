@@ -33,7 +33,14 @@ One sentence.
 - The principle is "the child never meets an unreviewed story". Any Issue touching generation, review or publishing adds a "done when" safety and review-gate check: the parent approval gate is untouched, and nothing unreviewed can reach the shelf.
 - Labels: `feature` or `bug`, `epic` for a parent Issue, `priority:*`, `paused` (set by `factory:pause`), `cut`. Create a missing label with `gh label create`.
 - A change that belongs to an epic says `Part of #<epic>` in the body.
-- Board: every Issue is added to the "Cantastorie" project board with Status and Estimate set (`gh project item-add`, `gh project item-edit`; run `gh project list --owner darth-dodo` to find the board number).
+- Board: every Issue is added to the "Cantastorie" project board with Status (single select: Todo, In progress, Done) and Estimate (number, hours: 30m = 0.5) set. Recipe, with `<n>` the board number:
+  1. Board number: `gh project list --owner darth-dodo --format json --jq '.projects[]|select(.title=="Cantastorie")|.number'`
+  2. Project id: `gh project view <n> --owner darth-dodo --format json --jq .id`
+  3. Field and option ids: `gh project field-list <n> --owner darth-dodo --format json`
+  4. Add the Issue and capture the item id: `gh project item-add <n> --owner darth-dodo --url <issue url> --format json --jq .id`
+  5. Set Status: `gh project item-edit --id <item id> --project-id <project id> --field-id <Status field id> --single-select-option-id <option id>`
+  6. Set Estimate: `gh project item-edit --id <item id> --project-id <project id> --field-id <Estimate field id> --number <hours>`
+  - `gh project` needs the `project` token scope (`gh auth refresh -s project`). That is an owner action: ask Abhishek rather than run it.
 - Draft the full list first and show it to Abhishek. Create Issues, labels and board items only after his yes: `gh issue create --repo darth-dodo/cantastorie --title ... --body-file ... --label ...`.
 
 ## Progress check
