@@ -35,13 +35,12 @@ from src.api.routes._templates import TEMPLATES_DIR, templates  # noqa: F401 —
 from src.config import Settings, get_settings
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Story, Theme
 from src.pipeline.publish import (
-    FAMILIES_SEGMENT,
-    PUBLISHED_PREFIX,
     STAGED_PREFIX,
     STORY_FILE,
     PublishedStory,
     _build_client,
     _content_type,
+    _publish_root,
     delete_staged_story,
     list_orphan_story_dirs,
     publish_story,
@@ -308,25 +307,26 @@ async def private_story_cover(
     if scope is None or not scope.is_operator:
         raise HTTPException(status_code=404)
 
-    def open_cover() -> Mapping[str, Any] | None:
+    def open_cover() -> tuple[Mapping[str, Any], str] | None:
         rows = [story for story in _listed(settings, story_id) if story.family_token]
         if len(rows) != 1 or not rows[0].cover:
             return None
         name = rows[0].cover.rsplit("/", 1)[-1]
         if not _ASSET_NAME.fullmatch(name) or ".." in name:
             return None
-        key = f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/{rows[0].family_token}/stories/{story_id}/{name}"
+        key = f"{_publish_root(rows[0].family_token)}/stories/{story_id}/{name}"
         try:
-            return _build_client(settings).get_object(Bucket=settings.r2_bucket, Key=key)
+            return _build_client(settings).get_object(Bucket=settings.r2_bucket, Key=key), name
         except Exception:
             return None
 
-    obj = await run_in_threadpool(open_cover)
-    if obj is None:
+    opened = await run_in_threadpool(open_cover)
+    if opened is None:
         raise HTTPException(status_code=404)
+    obj, name = opened
     return stream_object(
         obj,
-        media_type="image/webp",
+        media_type=_content_type(name),
         headers={"Cache-Control": "private, max-age=3600"},
     )
 

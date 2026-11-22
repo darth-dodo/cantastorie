@@ -165,8 +165,27 @@ def test_provisioning_logs_the_family_hash_never_the_token(
     client = _signed_in_client(monkeypatch, spy)
     with caplog.at_level(logging.INFO, logger="src.api.routes.parent"):
         token = client.post("/parent/api/provision", json={}).json()["family_token"]
-    assert f"family={family_hash(token)}" in caplog.text
+    records = [r for r in caplog.records if getattr(r, "event", None) == "family_provisioned"]
+    assert len(records) == 1
+    assert records[0].family == family_hash(token)  # type: ignore[attr-defined]
     assert token not in caplog.text
+    assert token not in str(records[0].__dict__)
+
+
+def test_a_non_object_json_body_is_a_400_that_echoes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ClerkSpy()
+    client = _signed_in_client(monkeypatch, spy)
+    secret = "a" * 32
+    response = client.post(
+        "/parent/api/provision",
+        content=f'"{secret}"',
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert secret not in response.text
+    assert spy.calls == []
 
 
 def test_clerk_rest_failure_returns_502_no_partial_state(

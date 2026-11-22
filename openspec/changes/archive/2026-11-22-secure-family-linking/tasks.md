@@ -22,7 +22,7 @@
 ## 4. Docs and verify
 
 - [x] 4.1 Amend ADR-003 (mint only; joining a family comes with #179); in `docs/setup.md`, how to retire a leaked token by hand
-- [ ] 4.2 `make check`, `uv run pytest`, `npx vitest run`, Playwright green; parent onboarding E2E covers first sign-in
+- [x] 4.2 `make check`, `uv run pytest`, `npx vitest run`, Playwright green; parent onboarding E2E covers first sign-in
 
 ## Workflow follow-up
 

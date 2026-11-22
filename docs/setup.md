@@ -75,12 +75,12 @@ Do these in order, before merging the change that enforces the separate bucket (
 1. Create the bucket: `wrangler r2 bucket create cantastorie-pending -J eu`.
 2. Scope the R2 API token used by Render and CI to Object Read & Write on both `cantastorie` and `cantastorie-pending`.
 3. Inventory `pending/` in the **public** bucket. To list it, run `uv run python -m src.pipeline.cli audit` locally from the enforcing branch, with the live R2 vars and `R2_PENDING_BUCKET=cantastorie-pending` in `.env`. Every `pending/` key is reported. Copy in-flight run records and staged stories to `cantastorie-pending`, then delete them from the public bucket. Use `wrangler r2 object get` / `put` / `delete … -J eu` for single keys. Treat every family token found under `pending/{token}/` as leaked, and rotate or re-provision it.
-
-**Retiring a leaked token while there are no real families.** Delete its prefixes in both buckets (`published/families/{token}/` in the public bucket, `pending/{token}/` in the pending bucket), and clear `family_token` from the owning Clerk user's public metadata in the Clerk dashboard so the next sign-in mints a fresh one. Since AI-497 a token can no longer be used to join a family, so retiring it only removes content that is already exposed.
 4. Set `R2_PENDING_BUCKET=cantastorie-pending` in the Render dashboard.
 5. Add the GitHub Actions secret `R2_PENDING_BUCKET=cantastorie-pending`.
 6. Merge.
 7. Confirm the deploy is live and the `main` R2 Bucket Audit job is green.
+
+**Retiring a leaked token while there are no real families.** Delete its prefixes in both buckets (`published/families/{token}/` in the public bucket, `pending/{token}/` in the pending bucket), and clear `family_token` from the owning Clerk user's public metadata in the Clerk dashboard so the next sign-in mints a fresh one. Since AI-497 a token can no longer be used to join a family, so retiring it only removes content that is already exposed.
 
 ### Access logs OFF
 

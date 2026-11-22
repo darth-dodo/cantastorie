@@ -42,7 +42,7 @@ The family token appears in public-bucket URLs; unguessable but leakable (histor
 
 ### Amendment (2026-11-22, AI-497): provisioning mints only
 
-First sign-in only ever **mints** a new family token. `/parent/api/provision` no longer adopts a token the client posts (the earlier "link" path): any field in the request is refused with 400, and provisioning is limited to 5 attempts per account per 15 minutes. An account can therefore only belong to the family it started. Joining an existing family from a second grown-up account or device is deferred to the cross-device linking work (GitHub #179), which will use a short-lived, one-time code rather than the token. The operator library names a family by its hash, never its token. Same-device linking above is unchanged.
+First sign-in only ever **mints** a new family token. `/parent/api/provision` no longer adopts a token the client posts (the earlier "link" path): any field in the request is refused with 400, and provisioning is limited to 5 attempts per account per 15 minutes. The limit is held in process (one web instance, M11) and resets on deploy. An account can therefore only belong to the family it started. Joining an existing family from a second grown-up account or device is deferred to the cross-device linking work (GitHub #179), which will use a short-lived, one-time code rather than the token. The operator library names a family by its hash, never its token. Same-device linking above is unchanged.
 
 ### Account deletion policy
 

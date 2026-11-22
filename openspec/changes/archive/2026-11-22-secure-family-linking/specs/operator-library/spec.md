@@ -33,3 +33,7 @@ Deleting or hiding a story from the library SHALL identify the story by its id, 
 #### Scenario: A posted token is ignored
 - **WHEN** a library action request carries a family token field
 - **THEN** the field is ignored and the server uses the family it looked up for the story id
+
+#### Scenario: An id listed in more than one lane is refused and nothing changes
+- **WHEN** a library action names a story id that is listed in more than one lane
+- **THEN** the server refuses the request with 409 and no lane's content changes

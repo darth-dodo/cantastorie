@@ -293,6 +293,12 @@ def test_the_library_lists_family_overlays_tagged_by_owner(tmp_path: Path, s3: S
     # anywhere in the page: text, attributes or form values.
     assert family_hash(FAMILY) in page.text
     assert FAMILY not in page.text
+    # The shared-shelf row names no family at all.
+    shared_card = page.text.split('data-story-card="global-it-1"', 1)[1].split(
+        "data-story-card=", 1
+    )[0]
+    assert "shared shelf" in shared_card
+    assert "family" not in shared_card.replace("shared shelf", "")
 
 
 def test_an_operator_deletes_a_familys_private_story(tmp_path: Path, s3: S3Client) -> None:
@@ -325,6 +331,22 @@ def test_a_private_cover_is_served_through_the_workshop(tmp_path: Path, s3: S3Cl
     assert 'src="/workshop/stories/fam-it-1/cover"' in page.text
     assert cover.status_code == 200
     assert cover.content == b"webp:p1"
+
+
+def test_the_cover_route_404s_for_a_shared_shelf_story(tmp_path: Path, s3: S3Client) -> None:
+    _put_manifest(s3, "it", [("global-it-1", "Storia globale")])
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    assert harness.client.get("/workshop/stories/global-it-1/cover").status_code == 404
+
+
+def test_the_cover_route_404s_when_signed_out(tmp_path: Path, s3: S3Client) -> None:
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    _put_overlay_assets(s3, FAMILY, "fam-it-1")
+    harness = Harness(tmp_path, s3)
+
+    assert harness.client.get("/workshop/stories/fam-it-1/cover").status_code == 404
 
 
 def test_a_private_cover_is_operator_only(tmp_path: Path, s3: S3Client) -> None:

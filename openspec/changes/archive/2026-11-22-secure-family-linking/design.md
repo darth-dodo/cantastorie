@@ -21,6 +21,7 @@
 
 - [A family can have only one grown-up account until #179] → accepted: no real families yet, and multi-device is optional for now.
 - [In-memory limit resets on deploy] → a deploy grants at most a fresh window; acceptable at this scale.
+- [Stale session claims right after a mint can let a second provision re-mint the account's own token (predates this change)] → bounded by the rate limit; follow-up: read the user's Clerk metadata before minting.
 - [A story id found in more than one family in the library lookup] → story ids carry a content-hash suffix; the lookup refuses an ambiguous id rather than guessing.
 
 ## Migration Plan

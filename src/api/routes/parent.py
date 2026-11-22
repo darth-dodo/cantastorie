@@ -9,6 +9,7 @@ scoped to the session's family token.
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from concurrent.futures import ThreadPoolExecutor
@@ -19,7 +20,6 @@ from botocore.exceptions import ClientError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
-    Body,
     Depends,
     Form,
     HTTPException,
@@ -70,6 +70,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 router = APIRouter(prefix="/parent")
+logger = logging.getLogger(__name__)
 
 
 def _published_at(runs: list[RunRecord]) -> dict[str, datetime]:
@@ -153,8 +154,6 @@ LANGUAGES = get_args(Language)
 # Strict validation is a security boundary — the token becomes an R2 key
 # prefix (pending/{family_token}/…), so posted strings must never smuggle
 # path separators or casing variants into bucket keys.
-logger = logging.getLogger(__name__)
-
 FAMILY_TOKEN_PATTERN = r"^[0-9a-f]{32}$"
 
 
@@ -653,7 +652,7 @@ async def parent_reject_run(
 async def provision(
     ctx: Annotated[CandidateContext, Depends(require_parent_candidate)],
     settings: Annotated[Settings, Depends(get_settings)],
-    body: Annotated[dict[str, Any], Body()] = {},  # noqa: B006 (FastAPI copies the default)
+    request: Request,
 ) -> ProvisionResponse:
     """Start the account's family at first sign-in.
 
@@ -666,8 +665,16 @@ async def provision(
     # The onboarding page posts {}. Any field, a family token included, is
     # refused without echoing it, so an old cached page fails loudly instead of
     # quietly starting a second family.
-    if body:
-        raise HTTPException(status_code=400, detail="provisioning takes no fields")
+    # Read the raw body so a non-object JSON value is refused here too, rather
+    # than getting a 422 that echoes the input.
+    raw = await request.body()
+    if raw.strip():
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            body = None
+        if body != {}:
+            raise HTTPException(status_code=400, detail="provisioning takes no fields")
 
     if ctx.family_token is not None:
         return ProvisionResponse(family_token=ctx.family_token, action="already")
@@ -682,5 +689,8 @@ async def provision(
             status_code=502, detail="could not save the family token; try again"
         ) from None
 
-    logger.info("event=family_provisioned family=%s", family_hash(family_token))
+    logger.info(
+        "family_provisioned",
+        extra={"event": "family_provisioned", "family": family_hash(family_token)},
+    )
     return ProvisionResponse(family_token=family_token, action="minted")
