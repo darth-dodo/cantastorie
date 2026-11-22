@@ -14,6 +14,10 @@ For a family's private story, the operator library SHALL show the family's hash 
 - **WHEN** the operator opens the library and a family's private story is listed
 - **THEN** the page shows that family's hash and contains no family token
 
+#### Scenario: A private story's cover
+- **WHEN** a family's private story with a cover is listed
+- **THEN** its cover loads from an operator-only address that contains no family token
+
 #### Scenario: A shared-shelf story
 - **WHEN** a shared-shelf story is listed
 - **THEN** it is shown as shared, with no family identifier

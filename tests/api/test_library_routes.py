@@ -22,6 +22,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
 from src.api.routes.workshop import get_run_manager
 from src.config import get_settings
+from src.observability import family_hash
 from src.workshop.manager import RunManager
 from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
 from tests.api.clerk_jwt import (
@@ -288,9 +289,10 @@ def test_the_library_lists_family_overlays_tagged_by_owner(tmp_path: Path, s3: S
     assert page.status_code == 200
     assert "Storia globale" in page.text
     assert "Storia privata" in page.text
-    assert FAMILY in page.text  # the owning family is surfaced to the operator
-    # ...but never in a URL, where the access log would record it (B6)
-    assert f"family_token={FAMILY}" not in page.text
+    # The owning family is surfaced by its hash, never its token (AI-497, M5),
+    # anywhere in the page: text, attributes or form values.
+    assert family_hash(FAMILY) in page.text
+    assert FAMILY not in page.text
 
 
 def test_an_operator_deletes_a_familys_private_story(tmp_path: Path, s3: S3Client) -> None:
@@ -301,13 +303,76 @@ def test_an_operator_deletes_a_familys_private_story(tmp_path: Path, s3: S3Clien
 
     response = harness.client.post(
         "/workshop/stories/fam-it-1/delete",
-        data={"family_token": FAMILY},
         headers={"HX-Request": "true"},
     )
 
     assert response.status_code == 200
     assert _overlay_manifest(s3, FAMILY, "it")["stories"] == []
     assert _overlay_asset_keys(s3, FAMILY, "fam-it-1") == []
+
+
+def test_a_private_cover_is_served_through_the_workshop(tmp_path: Path, s3: S3Client) -> None:
+    """Private covers live under the family's token path, so the operator page
+    loads them through a workshop route that finds the family server-side."""
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    _put_overlay_assets(s3, FAMILY, "fam-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    page = harness.client.get("/workshop/library")
+    cover = harness.client.get("/workshop/stories/fam-it-1/cover")
+
+    assert 'src="/workshop/stories/fam-it-1/cover"' in page.text
+    assert cover.status_code == 200
+    assert cover.content == b"webp:p1"
+
+
+def test_a_private_cover_is_operator_only(tmp_path: Path, s3: S3Client) -> None:
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    _put_overlay_assets(s3, FAMILY, "fam-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(PARENT)
+
+    assert harness.client.get("/workshop/stories/fam-it-1/cover").status_code == 404
+
+
+def test_a_posted_family_token_is_ignored_by_the_library_delete(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """The server finds the story's family itself; a posted token changes nothing."""
+    other = "b" * 32
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-it-1", "Storia privata")])
+    _put_overlay_assets(s3, FAMILY, "fam-it-1")
+    _put_overlay_assets(s3, other, "fam-it-1")  # same id on disk in another lane, unlisted
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    response = harness.client.post(
+        "/workshop/stories/fam-it-1/delete",
+        data={"family_token": other},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert _overlay_manifest(s3, FAMILY, "it")["stories"] == []
+    assert _overlay_asset_keys(s3, FAMILY, "fam-it-1") == []
+    assert len(_overlay_asset_keys(s3, other, "fam-it-1")) == 2
+
+
+def test_a_story_id_listed_in_two_families_is_refused(tmp_path: Path, s3: S3Client) -> None:
+    other = "b" * 32
+    _put_overlay_manifest(s3, FAMILY, "it", [("dup-it-1", "Uno")])
+    _put_overlay_manifest(s3, other, "it", [("dup-it-1", "Due")])
+    _put_overlay_assets(s3, FAMILY, "dup-it-1")
+    _put_overlay_assets(s3, other, "dup-it-1")
+    harness = Harness(tmp_path, s3)
+    harness.sign_in(OPERATOR)
+
+    response = harness.client.post("/workshop/stories/dup-it-1/delete")
+
+    assert response.status_code == 409
+    assert len(_overlay_asset_keys(s3, FAMILY, "dup-it-1")) == 2
+    assert len(_overlay_asset_keys(s3, other, "dup-it-1")) == 2
 
 
 def test_a_parent_cannot_reach_the_operator_overlay_delete(tmp_path: Path, s3: S3Client) -> None:
