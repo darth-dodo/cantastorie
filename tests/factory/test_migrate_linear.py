@@ -15,6 +15,7 @@ from scripts.factory.migrate_linear import (
     _gh,
     is_security_sensitive,
     link_epics,
+    load_allow,
     main,
     migrate,
     preflight_labels,
@@ -544,3 +545,91 @@ def test_abuse_and_secondary_rate_limits_are_retried(tmp_path: Path) -> None:
     ]
     migrate([_issue(1)], tmp_path / "m.json", gh, dry_run=False, sleep=sleeps.append)
     assert sleeps == [60, 120]
+
+
+def _flagged(n: int) -> dict[str, object]:
+    return _issue(n, title="Auth bypass on /parent")
+
+
+def test_an_allowed_match_is_created_and_listed_for_the_owner(tmp_path: Path) -> None:
+    gh = FakeGh()
+    report = migrate(
+        [_flagged(2), _flagged(3)],
+        tmp_path / "m.json",
+        gh,
+        dry_run=False,
+        sleep=_no_sleep,
+        allow=frozenset({"AI-2"}),
+    )
+    assert [c["identifier"] for c in report.to_create] == ["AI-2"]
+    assert len(gh.of("create")) == 1
+    assert [r["identifier"] for r in report.allowed_by_owner] == ["AI-2"]
+    row = report.allowed_by_owner[0]
+    assert row["title"] == "Auth bypass on /parent" and row["term"]
+    assert [r["identifier"] for r in report.kept_in_linear] == ["AI-3"]
+    assert report.already_public_but_matches_security == []
+
+
+def test_an_allowed_issue_without_a_match_is_not_listed(tmp_path: Path) -> None:
+    report = migrate(
+        [_issue(1)], tmp_path / "m.json", FakeGh(), dry_run=True, allow=frozenset({"AI-1"})
+    )
+    assert report.allowed_by_owner == []
+    assert [c["identifier"] for c in report.to_create] == ["AI-1"]
+
+
+def test_the_allow_file_ignores_comments_blanks_and_spaces(tmp_path: Path) -> None:
+    allow = tmp_path / "allow.txt"
+    allow.write_text("# cleared on 2026-11-22\n\n  AI-2  \nAI-5 # reviewed\n\t\n")
+    assert load_allow(allow) == frozenset({"AI-2", "AI-5"})
+
+
+def test_an_unknown_allow_identifier_exits_with_a_clear_error(tmp_path: Path) -> None:
+    gh = FakeGh()
+    with pytest.raises(SystemExit, match="AI-99"):
+        migrate(
+            [_flagged(2)],
+            tmp_path / "m.json",
+            gh,
+            dry_run=True,
+            allow=frozenset({"AI-99"}),
+        )
+    assert gh.calls == []
+
+
+def test_the_dry_run_with_allow_makes_no_gh_calls(tmp_path: Path) -> None:
+    gh = FakeGh()
+    report = migrate(
+        [_flagged(2)], tmp_path / "m.json", gh, dry_run=True, allow=frozenset({"AI-2"})
+    )
+    assert gh.calls == []
+    assert [c["identifier"] for c in report.to_create] == ["AI-2"]
+    assert len(report.allowed_by_owner) == 1
+    json.dumps(report.__dict__)
+
+
+def test_allow_cli_option(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:  # type: ignore[no-untyped-def]
+    export = tmp_path / "e.json"
+    export.write_text(json.dumps([_flagged(2), _flagged(3)]))
+    allow = tmp_path / "allow.txt"
+    allow.write_text("AI-2\n")
+    argv = ["migrate_linear", "--export", str(export), "--mapping", str(tmp_path / "m.json")]
+    monkeypatch.setattr(sys, "argv", [*argv, "--allow", str(allow)])
+    main()
+    out = json.loads(capsys.readouterr().out)
+    assert [r["identifier"] for r in out["allowed_by_owner"]] == ["AI-2"]
+    assert [r["identifier"] for r in out["kept_in_linear"]] == ["AI-3"]
+
+
+def test_preflight_counts_labels_of_allowed_issues() -> None:
+    gh = FakeGh()
+    export = [_issue(2, title="Auth bypass", labels=["bug"])]
+    original = gh.__call__
+
+    def listing(args: list[str]) -> str:
+        if args[:2] == ["label", "list"]:
+            return json.dumps([{"name": "priority:medium"}])
+        return original(args)
+
+    with pytest.raises(SystemExit, match="bug"):
+        preflight_labels(export, listing, allow=frozenset({"AI-2"}))

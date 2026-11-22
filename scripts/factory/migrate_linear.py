@@ -11,6 +11,13 @@ GitHub. Look the issue up on GitHub by hand, then either run
 from those lists and add `"AI-N": {"number": <github number>, "commented": false,
 "closed": false}` (or just delete the entry if nothing was created). The next `--apply`
 then finishes the comment and close steps.
+
+Clearing security false positives: the security filter is deliberately broad. Review the
+dry run's `kept_in_linear` list, then put the identifiers you cleared in a text file, one
+per line (blank lines and `#` comments are ignored), and pass it with `--allow FILE`.
+Those issues skip the filter and migrate normally. The ones that had matched are listed
+under `allowed_by_owner` in the report so the decision stays visible. An identifier that is
+not in the export is an error.
 """
 
 from __future__ import annotations
@@ -61,6 +68,7 @@ class MigrationReport:
     to_create: list[dict[str, str]] = field(default_factory=list)
     already_mapped: list[str] = field(default_factory=list)
     kept_in_linear: list[dict[str, str]] = field(default_factory=list)
+    allowed_by_owner: list[dict[str, str]] = field(default_factory=list)
     needs_manual_check: list[str] = field(default_factory=list)
     already_public_but_matches_security: list[dict[str, str]] = field(default_factory=list)
 
@@ -82,6 +90,12 @@ def security_term(issue: dict[str, Any]) -> str | None:
         if match:
             return f"label: {label}"
     return None
+
+
+def load_allow(path: Path) -> frozenset[str]:
+    """Identifiers from the owner's allow file: one per line, `#` starts a comment."""
+    idents = (line.split("#", 1)[0].strip() for line in path.read_text().splitlines())
+    return frozenset(i for i in idents if i)
 
 
 def is_security_sensitive(issue: dict[str, Any]) -> bool:
@@ -314,7 +328,11 @@ def migrate(
     pause_s: float = 0.0,
     sleep: Callable[[float], None] = time.sleep,
     backoff: tuple[float, ...] = BACKOFF_S,
+    allow: frozenset[str] = frozenset(),
 ) -> MigrationReport:
+    unknown = sorted(allow - {i["identifier"] for i in export}, key=_number)
+    if unknown:
+        raise SystemExit(f"--allow lists identifiers not in the export: {', '.join(unknown)}")
     state = _load(mapping_path, export)
     stuck = {m["identifier"] for m in state.manual}
     epics = {i["parent"] for i in export if i.get("parent")}
@@ -325,8 +343,11 @@ def migrate(
 
     for issue in sorted(export, key=lambda i: _number(i["identifier"])):
         ident = issue["identifier"]
-        term = security_term(issue)
-        row = {"identifier": ident, "title": issue["title"], "term": term or ""}
+        found_term = security_term(issue)
+        row = {"identifier": ident, "title": issue["title"], "term": found_term or ""}
+        term = None if ident in allow else found_term
+        if found_term and term is None:
+            report.allowed_by_owner.append(row)
         mapped = ident in state.entries
         if term and not mapped:
             report.kept_in_linear.append(row)
@@ -376,10 +397,17 @@ def link_epics(export: list[dict[str, Any]], mapping: dict[str, int], gh: GhRunn
         gh(["issue", "edit", str(mapping[ident]), "--repo", REPO, "--body", body])
 
 
-def preflight_labels(export: list[dict[str, Any]], gh: GhRunner) -> None:
+def preflight_labels(
+    export: list[dict[str, Any]], gh: GhRunner, allow: frozenset[str] = frozenset()
+) -> None:
     """Exit clearly if the repo lacks any label the migration is about to use."""
     epics = {i["parent"] for i in export if i.get("parent")}
-    needed = {label for i in export if not is_security_sensitive(i) for label in _labels(i, epics)}
+    needed = {
+        label
+        for i in export
+        if i["identifier"] in allow or not is_security_sensitive(i)
+        for label in _labels(i, epics)
+    }
     existing = {
         item["name"]
         for item in json.loads(
@@ -430,6 +458,13 @@ def main() -> None:
         metavar="AI-N=NUMBER",
         help="record a hand-checked GitHub number and clear the manual lists for AI-N",
     )
+    parser.add_argument(
+        "--allow",
+        type=Path,
+        metavar="FILE",
+        help="text file of Linear identifiers (one per line, # comments) that skip the security "
+        "filter",
+    )
     args = parser.parse_args()
     if args.resolve:
         for item in args.resolve:
@@ -444,9 +479,10 @@ def main() -> None:
     if args.link_epics:
         link_epics(export, load_numbers(args.mapping), _gh)
         return
+    allow = load_allow(args.allow) if args.allow else frozenset()
     if args.apply:
-        preflight_labels(export, _gh)
-    report = migrate(export, args.mapping, _gh, dry_run=not args.apply, pause_s=3.0)
+        preflight_labels(export, _gh, allow)
+    report = migrate(export, args.mapping, _gh, dry_run=not args.apply, pause_s=3.0, allow=allow)
     print(json.dumps(report.__dict__, indent=2))
 
 
