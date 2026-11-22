@@ -23,7 +23,7 @@
 
 ## 4. Verify
 
-- [ ] 4.1 `make check`, `uv run pytest`, `npx vitest run` green
+- [x] 4.1 `make check`, `uv run pytest`, `npx vitest run` green
 - [ ] 4.2 After deploy: `curl https://cantastorie.onrender.com/health/ready` answers 200 `ready`, and the post-deploy smoke check stays green
 
 ## Workflow follow-up

@@ -1,20 +1,22 @@
 """Readiness (GitHub #183, M1): /health/ready says whether the service can reach R2.
 
-Spec: openspec/changes/add-health-ready/specs/service-health/spec.md.
+Spec: openspec/specs/service-health/spec.md.
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import boto3
 import pytest
-import yaml
+import yaml  # type: ignore[import-untyped]
 from botocore.exceptions import EndpointConnectionError
 from fastapi.testclient import TestClient
 from moto import mock_aws
+from pydantic import SecretStr
 
 from src.api.main import create_app
 from src.api.routes import health
@@ -34,11 +36,11 @@ PENDING = "ready-pending-bucket"
 
 
 def _r2_settings() -> Settings:
-    return Settings(
+    return Settings(  # type: ignore[call-arg]
         _env_file=None,
         r2_endpoint_url=ENDPOINT,
-        r2_access_key_id=KEY_ID,
-        r2_secret_access_key=SECRET,
+        r2_access_key_id=SecretStr(KEY_ID),
+        r2_secret_access_key=SecretStr(SECRET),
         r2_bucket=PUBLISHED,
         r2_public_base="https://pub.example.test/published",
         r2_pending_bucket=PENDING,
@@ -79,7 +81,7 @@ class _BrokenClient:
 
 class _HangingClient:
     def head_bucket(self, **kwargs: Any) -> None:
-        time.sleep(5)
+        time.sleep(1)
 
 
 def test_liveness_answers_even_when_r2_is_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -109,7 +111,8 @@ def test_not_ready_when_the_pending_bucket_is_missing(s3: S3Client) -> None:
 
 
 def test_ready_with_r2_skipped_when_r2_is_not_configured() -> None:
-    response = _client(Settings(_env_file=None)).get("/health/ready")
+    unconfigured = Settings(_env_file=None)  # type: ignore[call-arg]
+    response = _client(unconfigured).get("/health/ready")
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
@@ -117,20 +120,48 @@ def test_ready_with_r2_skipped_when_r2_is_not_configured() -> None:
     }
 
 
-def test_a_failing_check_leaks_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+LEAKS = (KEY_ID, SECRET, ENDPOINT, "r2.example.test", PUBLISHED, PENDING, "Could not connect")
+
+
+def test_a_failing_check_leaks_nothing(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     monkeypatch.setattr(health, "r2_client", lambda settings: _BrokenClient())
-    response = _client(_r2_settings()).get("/health/ready")
+    with caplog.at_level(logging.WARNING):
+        response = _client(_r2_settings()).get("/health/ready")
     assert response.status_code == 503
-    for leak in (
-        KEY_ID,
-        SECRET,
-        ENDPOINT,
-        "r2.example.test",
-        PUBLISHED,
-        PENDING,
-        "Could not connect",
-    ):
+    assert "readiness check r2_published failed: EndpointConnectionError" in caplog.text
+    for leak in LEAKS:
         assert leak not in response.text
+        assert leak not in caplog.text
+
+
+def test_a_client_that_cannot_be_built_is_not_ready_not_a_500(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def broken(settings: Settings) -> Any:
+        raise ValueError(f"Invalid endpoint: {ENDPOINT}")
+
+    monkeypatch.setattr(health, "r2_client", broken)
+    with caplog.at_level(logging.WARNING):
+        response = _client(_r2_settings()).get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"] == {
+        "settings": "ok",
+        "r2_published": "failed",
+        "r2_pending": "failed",
+    }
+    assert ENDPOINT not in response.text
+    assert ENDPOINT not in caplog.text
+
+
+def test_each_r2_call_is_one_attempt_with_short_timeouts() -> None:
+    config: Any = health.r2_client(
+        _r2_settings()
+    ).meta.config  # botocore stubs omit these attributes
+    assert config.retries["total_max_attempts"] == 1
+    assert config.connect_timeout == 2
+    assert config.read_timeout == 2
 
 
 def test_a_hanging_r2_call_fails_within_the_timeout(monkeypatch: pytest.MonkeyPatch) -> None:

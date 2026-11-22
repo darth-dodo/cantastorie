@@ -86,7 +86,9 @@ def test_a_preview_boots_with_r2_disabled(preview_client: TestClient) -> None:
     assert settings.r2_endpoint_url == ""
 
 
-@pytest.mark.parametrize("path", ["/", "/play", "/health", "/static/content/en/manifest.json"])
+@pytest.mark.parametrize(
+    "path", ["/", "/play", "/health", "/health/ready", "/static/content/en/manifest.json"]
+)
 def test_public_surfaces_work_in_a_preview(preview_client: TestClient, path: str) -> None:
     assert preview_client.get(path).status_code == 200
 

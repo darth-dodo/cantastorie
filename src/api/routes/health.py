@@ -38,13 +38,17 @@ CACHE_S = 10.0
 # Hard bound on one check, on top of boto3's own timeouts: a hung R2 call is
 # reported failed instead of holding the response.
 CHECK_TIMEOUT_S = 3.0
-_R2_CONFIG = Config(connect_timeout=2, read_timeout=2, retries={"max_attempts": 1})
+_R2_CONFIG = Config(connect_timeout=2, read_timeout=2, retries={"total_max_attempts": 1})
 
 # Its own small pool, not the event loop's default executor: a hung R2 call
-# then holds only one of these threads, and nothing waits for it on shutdown.
+# holds one of these threads for at most the boto3 timeouts, and a request
+# never waits on it past CHECK_TIMEOUT_S. Interpreter exit still joins the pool,
+# so a DNS hang (which connect_timeout does not cover) can delay shutdown.
 _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="readiness")
 
 _cache: dict[int, tuple[float, int, dict[str, object]]] = {}
+# One round of R2 calls at a time: concurrent cache misses wait for it.
+_refresh = asyncio.Lock()
 
 
 def clear_cache() -> None:
@@ -79,13 +83,19 @@ async def _readiness(settings: Settings) -> tuple[int, dict[str, object]]:
         checks["r2_published"] = "skipped"
         checks["r2_pending"] = "skipped"
     else:
-        client = r2_client(settings)
-        published, pending = await asyncio.gather(
-            _bucket_check(client, settings.r2_bucket, "r2_published"),
-            _bucket_check(client, settings.pending_bucket, "r2_pending"),
-        )
-        checks["r2_published"] = published
-        checks["r2_pending"] = pending
+        try:
+            client = r2_client(settings)
+        except Exception as error:  # a malformed endpoint must be a 503, not a 500
+            logger.warning("readiness R2 client failed: %s", type(error).__name__)
+            checks["r2_published"] = "failed"
+            checks["r2_pending"] = "failed"
+        else:
+            published, pending = await asyncio.gather(
+                _bucket_check(client, settings.r2_bucket, "r2_published"),
+                _bucket_check(client, settings.pending_bucket, "r2_pending"),
+            )
+            checks["r2_published"] = published
+            checks["r2_pending"] = pending
     ready = all(value != "failed" for value in checks.values())
     return (200 if ready else 503), {"status": "ready" if ready else "not_ready", "checks": checks}
 
@@ -103,11 +113,11 @@ async def health_version() -> dict[str, str]:
 
 @router.get("/health/ready")
 async def health_ready(settings: Annotated[Settings, Depends(get_settings)]) -> JSONResponse:
-    now = time.monotonic()
-    cached = _cache.get(id(settings))
-    if cached is not None and now - cached[0] < CACHE_S:
-        return JSONResponse(cached[2], status_code=cached[1])
-    status_code, body = await _readiness(settings)
-    _cache.clear()  # one live Settings in production; never let old instances pile up
-    _cache[id(settings)] = (now, status_code, body)
+    async with _refresh:
+        cached = _cache.get(id(settings))
+        if cached is not None and time.monotonic() - cached[0] < CACHE_S:
+            return JSONResponse(cached[2], status_code=cached[1])
+        status_code, body = await _readiness(settings)
+        _cache.clear()  # one live Settings in production; never let old instances pile up
+        _cache[id(settings)] = (time.monotonic(), status_code, body)
     return JSONResponse(body, status_code=status_code)

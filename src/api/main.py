@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.pending_bucket:
         manager = app.dependency_overrides.get(get_run_manager, get_run_manager)()
         # Scheduled, never awaited: resume_on_boot can take minutes, and
-        # awaiting it here would hold /health unresponsive until it finished —
+        # awaiting it here would hold /health/ready unresponsive until it finished —
         # Render would see a failed health check and roll the deploy back in
         # a loop (docs/audits/release-readiness.md → B5).
         resume_task = asyncio.create_task(_reap_and_resume(manager))

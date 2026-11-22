@@ -175,7 +175,7 @@ Revisit this if run volume grows enough that repeated deploys start re-buying re
 
 ### Rolling-deploy overlap and shutdown cancellation (B5, AI-477)
 
-Render's deploys are zero-downtime: the new instance starts, passes `/health/ready`, and only then is the old one terminated — so for a window during every deploy, **two instances of the app are alive at once**. Both run the boot `lifespan`. If a run is `running` when a deploy starts, both the outgoing and the incoming instance can call `resume_on_boot()` and pick up the *same* record — there is no distributed lock across instances, only the `RunStore`'s own optimistic-concurrency `save()` (`IfMatch` / `ConcurrentModificationError`).
+Render's deploys are zero-downtime: the new instance starts, passes `/health/ready`, and only then is the old one terminated, so for a window during every deploy, **two instances of the app are alive at once**. Both run the boot `lifespan`. If a run is `running` when a deploy starts, both the outgoing and the incoming instance can call `resume_on_boot()` and pick up the *same* record — there is no distributed lock across instances, only the `RunStore`'s own optimistic-concurrency `save()` (`IfMatch` / `ConcurrentModificationError`).
 
 **Accepted for now, not fixed:**
 
