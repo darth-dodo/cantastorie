@@ -11,10 +11,6 @@ The factory runs this skill through `factory:release`, which adds the release-du
 
 Commitizen config is `[tool.commitizen]` in `pyproject.toml` (`tag_format = "v$version"`, `version_provider = "uv"`, `update_changelog_on_bump = true`, `major_version_zero = true`). Commitizen is a pre-commit hook only: it is not in the project venv and no dependency may be added. Always run it as `uvx --from commitizen cz ...`, never through `uv run`.
 
-## 0. Before every GitHub write
-
-Run `TZ=Europe/Berlin date`. Monday to Friday, 08:00 to 17:59: do not push, open a PR, tag, create a release or comment. Keep the work local and stop with: "Stopped: GitHub writes are paused on weekdays 08:00-17:59 Berlin; rerun after 18:00 or at the weekend." Check again before each later write.
-
 ## 1. Preconditions (stop if any fail)
 
 - `git fetch origin` and work from `origin/main`.

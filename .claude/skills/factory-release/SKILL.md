@@ -7,10 +7,6 @@ description: Use right after factory:improve closes a factory:retro batch, or wh
 
 Flywheel step 3 (FACTORY.md "Flywheel"), after `factory:improve`, before `factory:recap`. A thin station: `release-manager` owns the mechanics (preconditions, SemVer, commitizen run with `uvx --from commitizen cz ...` because commitizen is a pre-commit hook and not in the project venv, `CHANGELOG.md`, the `v<version>` tag, the GitHub Release, the deploy check), all per `[tool.commitizen]` in `pyproject.toml` (`tag_format = "v$version"`). The tagging model: the release branch only changes files, and the tag goes on main's merge commit after Abhishek merges; `cz bump` never creates a tag, because a squash merge strands a tag made on the branch. This skill decides whether a release is due, gets Abhishek's names, and hands off. Never merge.
 
-## Before every GitHub write
-
-Run `TZ=Europe/Berlin date`. Monday to Friday, 08:00 to 17:59: do not push, open a PR, tag, create a release or comment. Keep the work local and stop with: "Stopped: GitHub writes are paused on weekdays 08:00-17:59 Berlin; rerun after 18:00 or at the weekend." Then say what is ready locally and the next command.
-
 ## 1. Is a release due?
 
 Last tag: `git tag --sort=-v:refname` (first line, in version order). Due when either holds:
@@ -70,5 +66,4 @@ When stopped early, say what is ready locally and the next command to run.
 | Running `cz changelog` after the bump | The bump already wrote `CHANGELOG.md`; a second run rewrites it as `## Unreleased` |
 | Letting `cz bump` tag the release branch (a squash merge strands that tag) | `uvx --from commitizen cz bump --files-only --yes` on the branch; after the merge, `git tag v<version> <merge sha>`, push the tag, `gh release create` (step 4) |
 | `uv run cz ...` | Commitizen is not in the venv: `uvx --from commitizen cz ...` |
-| Pushing because the PR "is just a release" | Check the Berlin time before each write; inside the window, stop with the reason |
 | Hand-editing `CHANGELOG.md` entries | Commitizen builds them from the commit titles (`release-manager` step 3) |
