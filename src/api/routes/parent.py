@@ -9,6 +9,8 @@ scoped to the session's family token.
 
 from __future__ import annotations
 
+import json
+import logging
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -26,10 +28,11 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 
 from src.api.auth import CandidateContext, ParentContext, require_parent, require_parent_candidate
 from src.api.clerk import ClerkAPIError, set_family_token
+from src.api.rate_limit import SlidingWindowLimiter
 from src.api.routes._nav import fapi_host, home_path
 from src.api.routes._streaming import stream_object
 from src.api.routes._templates import templates
@@ -39,6 +42,7 @@ from src.api.routes.workshop import (  # shared DI seam, overridable in tests
     get_run_manager,
 )
 from src.config import Settings, get_settings
+from src.observability import family_hash
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Story, Theme
 from src.pipeline.publish import (
     STAGED_PREFIX,
@@ -66,6 +70,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 router = APIRouter(prefix="/parent")
+logger = logging.getLogger(__name__)
 
 
 def _published_at(runs: list[RunRecord]) -> dict[str, datetime]:
@@ -157,19 +162,13 @@ def mint_family_token() -> str:
     return secrets.token_hex(16)
 
 
-class ProvisionRequest(BaseModel):
-    """Body posted by the onboarding page.
-
-    existing_token is the browser's IndexedDB family token if one exists
-    (same origin, so a child device's token is adoptable — the "link" path).
-    """
-
-    existing_token: str | None = Field(default=None, pattern=FAMILY_TOKEN_PATTERN)
+# Per Clerk account: 5 provisioning attempts per 15 minutes (AI-497).
+provision_limiter = SlidingWindowLimiter(limit=5, window_s=15 * 60)
 
 
 class ProvisionResponse(BaseModel):
     family_token: str
-    action: str  # "already" | "linked" | "minted"
+    action: str  # "already" | "minted"
 
 
 async def _page_identity(request: Request, settings: Settings) -> CandidateContext | None:
@@ -651,24 +650,36 @@ async def parent_reject_run(
 
 @router.post("/api/provision")
 async def provision(
-    body: ProvisionRequest,
     ctx: Annotated[CandidateContext, Depends(require_parent_candidate)],
     settings: Annotated[Settings, Depends(get_settings)],
+    request: Request,
 ) -> ProvisionResponse:
-    """Mint-or-link the family token at first sign-in.
+    """Start the account's family at first sign-in.
 
     Idempotent: if the session claims already carry a token, return it and
-    make no Clerk call — a provisioned account cannot overwrite its token
-    (rotation is a documented manual procedure, ADR-003).
+    make no Clerk call. An account can only belong to the family it started;
+    joining an existing family comes with cross-device linking (GitHub #179).
     """
+    if not provision_limiter.allow(ctx.user_id):
+        raise HTTPException(status_code=429, detail="too many tries; try again later")
+    # The onboarding page posts {}. Any field, a family token included, is
+    # refused without echoing it, so an old cached page fails loudly instead of
+    # quietly starting a second family.
+    # Read the raw body so a non-object JSON value is refused here too, rather
+    # than getting a 422 that echoes the input.
+    raw = await request.body()
+    if raw.strip():
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            body = None
+        if body != {}:
+            raise HTTPException(status_code=400, detail="provisioning takes no fields")
+
     if ctx.family_token is not None:
         return ProvisionResponse(family_token=ctx.family_token, action="already")
 
-    if body.existing_token is not None:
-        family_token, action = body.existing_token, "linked"
-    else:
-        family_token, action = mint_family_token(), "minted"
-
+    family_token = mint_family_token()
     try:
         await set_family_token(ctx.user_id, family_token, settings)
     except ClerkAPIError:
@@ -678,4 +689,8 @@ async def provision(
             status_code=502, detail="could not save the family token; try again"
         ) from None
 
-    return ProvisionResponse(family_token=family_token, action=action)
+    logger.info(
+        "family_provisioned",
+        extra={"event": "family_provisioned", "family": family_hash(family_token)},
+    )
+    return ProvisionResponse(family_token=family_token, action="minted")

@@ -33,7 +33,7 @@
     }
     var onboarding = document.querySelector("[data-parent-onboarding]");
     if (onboarding) {
-      // First parent sign-in: mint-or-link the family token, then re-render.
+      // First parent sign-in: mint the family token, then re-render.
       try {
         var response = await fetch("/parent/api/provision", {
           method: "POST",

@@ -40,6 +40,10 @@ Parent signs in at `/parent` on the child device; same origin ⇒ the family tok
 
 The family token appears in public-bucket URLs; unguessable but leakable (history, screenshots). Rotation procedure: mint a new token in Clerk metadata → republish the overlay under the new prefix (content-addressed cache makes this cheap) → delete the old prefix → parent re-visits `/parent` on the child device once to relink IndexedDB. No button yet; the schema must not assume the token is immutable.
 
+### Amendment (2026-11-22, AI-497): provisioning mints only
+
+First sign-in only ever **mints** a new family token. `/parent/api/provision` no longer adopts a token the client posts (the earlier "link" path): any field in the request is refused with 400, and provisioning is limited to 5 attempts per account per 15 minutes. The limit is held in process (one web instance, M11) and resets on deploy. An account can therefore only belong to the family it started. Joining an existing family from a second grown-up account or device is deferred to the cross-device linking work (GitHub #179), which will use a short-lived, one-time code rather than the token. The operator library names a family by its hash, never its token. Same-device linking above is unchanged.
+
 ### Account deletion policy
 
 Deleting the Clerk account unlinks the identity and **purges the family prefix** (pending and published) — consistent with ADR-005's GDPR Art. 17 posture. Implemented as a documented manual/script procedure now, webhook automation later.
@@ -52,7 +56,7 @@ Recorded as confirmed during implementation: EU data residency posture; free-tie
 
 1. Acceptance commit (docs only — this amendment)
 2. Config + `require_parent` + JWKS verification, with pytest seam tests
-3. Mint-or-link + session-claim template (Clerk dashboard config recorded in `docs/setup.md`)
+3. Mint (originally mint-or-link; see the 2026-11-22 amendment) + session-claim template (Clerk dashboard config recorded in `docs/setup.md`)
 4. `/parent` routes: sign-in, request form, Being made list (run cap enforced)
 5. Review queue + approve → family publish + overlay manifest + audit extension
 6. Player overlay merge + connect-this-device + CSP + refined guard test

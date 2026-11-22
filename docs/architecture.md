@@ -85,7 +85,7 @@ src/
 ├── api/
 │   ├── main.py             FastAPI app factory, middleware
 │   ├── auth.py             require_parent / require_parent_candidate — Clerk JWT verification via JWKS
-│   ├── clerk.py            Clerk REST client: family-token mint-or-link
+│   ├── clerk.py            Clerk REST client: family-token mint
 │   └── routes/
 │       ├── landing.py      GET / — the public landing page
 │       ├── player.py       GET /play — the child player shell
@@ -359,7 +359,7 @@ Playback mechanics live in [The Player → The audio engine](#the-audio-engine):
 
 ## The Parent Area
 
-Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision` mint-or-link) and the parent pages themselves (AI-411) — a sign-in home, story requests under a daily run cap (each run makes exactly one story, AI-480), and per-run progress polling. Parents review a staged story on one page (every page, picture and sound) and approve or reject it; approval is bound to the reviewed bytes (see [Review binding and publish order](#review-binding-and-publish-order)). Export/import is designed but not yet built.
+Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Clerk identity layer (`require_parent` JWT verification via JWKS, `/parent/api/provision`, which mints a family token at first sign-in and never adopts a posted one, AI-497) and the parent pages themselves (AI-411): a sign-in home, story requests under a daily run cap (each run makes exactly one story, AI-480), and per-run progress polling. Parents review a staged story on one page (every page, picture and sound) and approve or reject it; approval is bound to the reviewed bytes (see [Review binding and publish order](#review-binding-and-publish-order)). Export/import is designed but not yet built.
 
 - **The gate, as built (AI-444)** is a stand-in. The player's settings sheet has a "grown-ups" row that opens a modal asking for the sum `7 + 6` with three answer buttons. A wrong tap shows a message and keeps the modal open; Back or Escape closes it. The correct answer navigates to `/parent`, which has its own Clerk sign-in. There is no hold, no fresh random equation, and no failure count or lockout.
 - **The gate, as designed (not yet built)** is client-side theater with real persistence: 3-second hold (pointer events + fill animation), then a two-integer addition on a keypad. Failures and the 5-minute lockout persist locally, so a reload doesn't reset them. There is no PIN — the addition is freshly random each time.

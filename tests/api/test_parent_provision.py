@@ -1,7 +1,8 @@
-"""Provision endpoint tests (AI-410): mint, link, already, failure paths."""
+"""Provision endpoint tests (AI-410, AI-497): mint, already, refusals, rate limit, failure paths."""
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -17,6 +18,7 @@ from src.api.main import create_app
 from src.api.routes.parent import FAMILY_TOKEN_PATTERN
 from src.api.routes.parent import router as parent_router
 from src.config import Settings, get_settings
+from src.observability import family_hash
 from tests.api.clerk_jwt import (
     clerk_settings,
     generate_rsa_keypair,
@@ -32,6 +34,11 @@ VALID_TOKEN = "0123456789abcdef0123456789abcdef"
 def reset_jwks_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(auth_module._jwks_state, "keys", None)
     monkeypatch.setattr(auth_module._jwks_state, "fetched_at", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def reset_provision_limit() -> None:
+    parent_module.provision_limiter.clear()
 
 
 def _make_app(settings: Settings) -> FastAPI:
@@ -91,16 +98,16 @@ def test_mint_path_generates_and_persists_fresh_token(
     assert spy.calls[0][1] == body["family_token"]
 
 
-def test_link_path_adopts_posted_token_verbatim(
+def test_a_posted_family_token_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """An account can only belong to the family it started (AI-497, M6)."""
     spy = _ClerkSpy()
     client = _signed_in_client(monkeypatch, spy)
     response = client.post("/parent/api/provision", json={"existing_token": VALID_TOKEN})
-    assert response.status_code == 200
-    assert response.json() == {"family_token": VALID_TOKEN, "action": "linked"}
-    # valid_payload default sub is "user_2abc"
-    assert spy.calls == [("user_2abc", VALID_TOKEN)]
+    assert response.status_code == 400
+    assert VALID_TOKEN not in response.text
+    assert spy.calls == []
 
 
 def test_second_sign_in_makes_no_rest_call(
@@ -115,28 +122,69 @@ def test_second_sign_in_makes_no_rest_call(
     assert spy.calls == []
 
 
-def test_claims_token_wins_over_posted_token(
+def test_a_provisioned_account_posting_a_token_is_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A provisioned account cannot overwrite its token by posting another."""
+    """A provisioned account cannot swap its family by posting another token."""
     spy = _ClerkSpy()
     client = _signed_in_client(monkeypatch, spy, family_token=VALID_TOKEN)
-    other = "f" * 32
-    response = client.post("/parent/api/provision", json={"existing_token": other})
-    assert response.status_code == 200
-    assert response.json() == {"family_token": VALID_TOKEN, "action": "already"}
+    response = client.post("/parent/api/provision", json={"existing_token": "f" * 32})
+    assert response.status_code == 400
     assert spy.calls == []
 
 
-def test_malformed_posted_token_is_rejected_422(
+def test_any_posted_field_is_refused_400(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The token becomes an R2 key prefix — strict format or nothing."""
+    """Provisioning takes no fields; nothing posted can reach an R2 key prefix."""
     spy = _ClerkSpy()
     client = _signed_in_client(monkeypatch, spy)
     for bad in ["../evil", "ABCDEF0123456789ABCDEF0123456789", "short", "g" * 32]:
         response = client.post("/parent/api/provision", json={"existing_token": bad})
-        assert response.status_code == 422, bad
+        assert response.status_code == 400, bad
+        assert bad not in response.text
+    assert spy.calls == []
+
+
+def test_the_sixth_attempt_in_the_window_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ClerkSpy()
+    client = _signed_in_client(monkeypatch, spy)
+    for _ in range(5):
+        assert client.post("/parent/api/provision", json={}).status_code == 200
+    response = client.post("/parent/api/provision", json={})
+    assert response.status_code == 429
+    assert len(spy.calls) == 5
+
+
+def test_provisioning_logs_the_family_hash_never_the_token(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    spy = _ClerkSpy()
+    client = _signed_in_client(monkeypatch, spy)
+    with caplog.at_level(logging.INFO, logger="src.api.routes.parent"):
+        token = client.post("/parent/api/provision", json={}).json()["family_token"]
+    records = [r for r in caplog.records if getattr(r, "event", None) == "family_provisioned"]
+    assert len(records) == 1
+    assert records[0].family == family_hash(token)  # type: ignore[attr-defined]
+    assert token not in caplog.text
+    assert token not in str(records[0].__dict__)
+
+
+def test_a_non_object_json_body_is_a_400_that_echoes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ClerkSpy()
+    client = _signed_in_client(monkeypatch, spy)
+    secret = "a" * 32
+    response = client.post(
+        "/parent/api/provision",
+        content=f'"{secret}"',
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert secret not in response.text
     assert spy.calls == []
 
 

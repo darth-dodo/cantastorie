@@ -80,6 +80,8 @@ Do these in order, before merging the change that enforces the separate bucket (
 6. Merge.
 7. Confirm the deploy is live and the `main` R2 Bucket Audit job is green.
 
+**Retiring a leaked token while there are no real families.** Delete its prefixes in both buckets (`published/families/{token}/` in the public bucket, `pending/{token}/` in the pending bucket), and clear `family_token` from the owning Clerk user's public metadata in the Clerk dashboard so the next sign-in mints a fresh one. Since AI-497 a token can no longer be used to join a family, so retiring it only removes content that is already exposed.
+
 ### Access logs OFF
 
 R2 does not log object access by default — the goal is to keep it that way, so there is provably nothing recording what a child plays. Verify no event-notification pipeline is attached (a bare "no configurations found" is the healthy answer):

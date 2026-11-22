@@ -17,6 +17,7 @@ step, which remains the only writer to published/.
 from __future__ import annotations
 
 import json as _json
+import re
 import shutil
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -39,6 +40,7 @@ from src.pipeline.publish import (
     PublishedStory,
     _build_client,
     _content_type,
+    _publish_root,
     delete_staged_story,
     list_orphan_story_dirs,
     publish_story,
@@ -272,23 +274,83 @@ async def library(request: Request, settings: WorkshopSettings) -> Response:
     )
 
 
+def _listed(settings: Settings, story_id: str) -> list[PublishedStory]:
+    """Every manifest row (any lane) that lists story_id."""
+    return [
+        story
+        for story in stories_from_manifests(published_manifests(settings))
+        if story.id == story_id
+    ]
+
+
+def _story_lanes(settings: Settings, story_id: str) -> list[str | None]:
+    """The lanes (None = shared shelf, else a family token) whose manifests list story_id."""
+    return sorted(
+        {story.family_token for story in _listed(settings, story_id)}, key=lambda lane: lane or ""
+    )
+
+
+_ASSET_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+@router.get("/stories/{story_id}/cover")
+async def private_story_cover(
+    request: Request, settings: WorkshopSettings, story_id: str
+) -> Response:
+    """A family's private cover, for the operator library.
+
+    Its bucket URL carries the family token, so the page loads it here and the
+    family is found server-side (AI-497, M5). Shared-shelf covers keep their
+    public URL and never come through this route.
+    """
+    scope = await _scope(request, settings)
+    if scope is None or not scope.is_operator:
+        raise HTTPException(status_code=404)
+
+    def open_cover() -> tuple[Mapping[str, Any], str] | None:
+        rows = [story for story in _listed(settings, story_id) if story.family_token]
+        if len(rows) != 1 or not rows[0].cover:
+            return None
+        name = rows[0].cover.rsplit("/", 1)[-1]
+        if not _ASSET_NAME.fullmatch(name) or ".." in name:
+            return None
+        key = f"{_publish_root(rows[0].family_token)}/stories/{story_id}/{name}"
+        try:
+            return _build_client(settings).get_object(Bucket=settings.r2_bucket, Key=key), name
+        except Exception:
+            return None
+
+    opened = await run_in_threadpool(open_cover)
+    if opened is None:
+        raise HTTPException(status_code=404)
+    obj, name = opened
+    return stream_object(
+        obj,
+        media_type=_content_type(name),
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
 @router.post("/stories/{story_id}/delete")
 async def delete_published_story(
     request: Request,
     settings: WorkshopSettings,
     story_id: str,
-    # A form field, never a query param: a URL lands in the access log (B6).
-    family_token: Annotated[str | None, Form()] = None,
 ) -> Response:
     scope = await _scope(request, settings)
     if scope is None:
         return _to_login()
     if not scope.is_operator:
         raise HTTPException(status_code=403)
-    # Moderation: the operator can delete a shared-shelf story (family_token
-    # absent) or reach into any family's private overlay (family_token given).
-    # unpublish_story validates the token before it becomes an R2 prefix.
-    unpublish_story(story_id, settings, family_token=family_token or None)
+    # Moderation: the operator deletes a shared-shelf story or reaches into a
+    # family's private overlay. The page posts only the story id; the family is
+    # looked up here from the manifests, so no token ever reaches the page or
+    # the request (AI-497, M5). A posted family_token field is ignored.
+    lanes = await run_in_threadpool(_story_lanes, settings, story_id)
+    if len(lanes) > 1:
+        raise HTTPException(status_code=409, detail="story id is listed in more than one lane")
+    # Listed nowhere: the shared-shelf lane, as before (asset cleanup only).
+    unpublish_story(story_id, settings, family_token=lanes[0] if lanes else None)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/workshop/library", status_code=303)

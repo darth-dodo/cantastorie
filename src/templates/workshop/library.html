@@ -13,15 +13,14 @@
       {% for story in rows %}
         <div class="ws-card ws-run-card" data-story-card="{{ story.id }}">
           {% if story.cover %}
-            <img class="ws-story-cover" src="{{ story.cover }}" alt="" width="72" height="72" />
+            <img class="ws-story-cover" src="{% if story.family_token %}/workshop/stories/{{ story.id }}/cover{% else %}{{ story.cover }}{% endif %}" alt="" width="72" height="72" />
           {% endif %}
           <div class="ws-run-card-body">
             <div class="ws-run-title">{{ story.title }}</div>
-            <div class="ws-run-meta">{% if story.family_token %}private · {{ story.family_token }}{% else %}shared shelf{% endif %}</div>
+            <div class="ws-run-meta">{% if story.family_token %}private · family {{ story.family_token | family_hash }}{% else %}shared shelf{% endif %}</div>
           </div>
           <button class="ws-delete-btn"
                   hx-post="/workshop/stories/{{ story.id }}/delete"
-                  {% if story.family_token %}hx-vals='{{ {"family_token": story.family_token} | tojson }}'{% endif %}
                   hx-target="closest [data-story-card]"
                   hx-swap="outerHTML"
                   hx-confirm="Delete &ldquo;{{ story.title }}&rdquo; forever?">×</button>
