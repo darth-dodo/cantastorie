@@ -6,7 +6,7 @@
 
 ## Summary
 
-Cantastorie adopts Maya's software factory in full: an agent-run pipeline from a product request to a live Render deploy, where the human jobs are to write the product doc, answer agents and press Merge. Every station, skill, guardrail and flywheel step from Maya is ported and adapted to cantastorie's stack (Python/uv, vanilla JS, Render with a CI-gated deploy hook). The work queue moves from Linear to GitHub Issues, planning moves to OpenSpec, and all of Linear's Cantastorie history is copied to GitHub except security-sensitive issues.
+Cantastorie adopts Maya's software factory in full: an agent-run pipeline from a product request to a live Render deploy, where the human jobs are to write the product doc, answer agents and press Merge. Every station, skill, guardrail and flywheel step from Maya is ported and adapted to cantastorie's stack (Python/uv, vanilla JS, Render with a CI-gated deploy hook). The work queue moves from Linear to GitHub Issues, planning moves to OpenSpec, and open Linear work is recreated as fresh GitHub Issues; Linear stays as the archive.
 
 ## Intent
 
@@ -24,8 +24,8 @@ Cantastorie adopts Maya's software factory in full: an agent-run pipeline from a
 | Scope | Full factory: every `factory-*` skill and the supporting skills, not just the core loop |
 | Work queue | GitHub Issues, like Maya (replacing Linear) |
 | Specs | OpenSpec, like Maya; ADRs still record settled decisions |
-| Linear history | Copy everything (open and closed) to GitHub Issues |
-| Security-sensitive issues | Not copied; stay in Linear only, listed as "kept in Linear" |
+| Linear history | Not copied (changed 2026-11-22). Open Todo and Backlog work, plus one open bug, is recreated as fresh issues with no dates or comments; Linear stays as the archive |
+| Security-sensitive issues | Not copied; stay in Linear only. Abhishek chose which (see `docs/factory/linear-migration.md`) |
 | Merging | Denied to agents (`gh pr merge`); Abhishek merges |
 | Herdr | Not ported |
 | Extra pieces | GitHub Project board, post-deploy smoke workflow, `/health/version` |
@@ -78,25 +78,15 @@ Any existing project `.claude/settings.json` content is merged, not replaced.
 
 ## Part 2: Linear to GitHub Issues
 
-**Scope:** every issue in Linear's Cantastorie project, open and closed, including epics, **except security-sensitive issues**. Those stay in Linear and are listed in the mapping doc as "kept in Linear". An issue is security-sensitive when its title or description describes an unfixed or recently fixed vulnerability in detail (token exposure, auth bypass, unauthenticated access, secrets); each one the migration skips is listed for Abhishek to confirm.
+**Changed on 2026-11-22.** The first design copied every Linear issue with its history. Abhishek decided not to back-port history, so Linear stays as the archive and only open work moved.
 
-**Each copied issue:**
-
-- **Title:** unchanged.
-- **Body:** first line `Migrated from Linear AI-NNN (link)`, then the original description, then a metadata block: status, priority, assignee, created and completed dates, parent epic.
-- **Comments:** one comment holding the Linear comments in order, each with its author and date.
-- **Labels:** priority (`priority:*`), `epic` for epics, `bug`/`feature` where Linear had them, `status:in-progress` for In Progress or In Review.
-- **State:** Done → closed as completed; Canceled → closed as not planned; Duplicate → closed as not planned with the target noted; open → open.
-- **Hierarchy:** children reference their epic as `#N`, epics list their children; links are filled in after all issues exist.
-- **Board:** open issues are added to the Project board.
-
-**Running it:**
-
-- In AI-number order, paced below GitHub's rate limits (about one issue every few seconds).
-- **Resumable and idempotent:** a mapping file records `AI-NNN → #N` as each issue is created; a rerun skips anything already mapped.
-- The final mapping is committed as `docs/factory/linear-migration.md`.
-- **Linear is read-only** apart from one note added to the project description: "Moved to GitHub Issues on <date>; see docs/factory/linear-migration.md".
-- Creating the issues will notify Abhishek once per issue unless he unwatches the repo during the run.
+- **Scope:** Linear's open Todo and Backlog issues, plus AI-439 (an open bug that was In Progress). Done, Canceled, Duplicate and other in-progress items stay in Linear only.
+- **Each issue:** a fresh GitHub Issue with the Linear title and full description, ending `Previously Linear AI-NNN.` No dates, no assignee, no comment history. Linear issue links in descriptions become `#N` where that issue moved, else the plain `AI-NNN`.
+- **Labels:** `bug` or `feature` from the issue's content (Linear had none), plus `priority:*`; AI-439 also has `status:in-progress`.
+- **Security-sensitive issues** stay in Linear only. Abhishek chose them; their identifiers are listed in `docs/factory/linear-migration.md`.
+- **Board:** every moved issue is on the "Cantastorie" project.
+- **Linear:** each moved issue keeps its Linear record; AI-439 carries a comment pointing at its GitHub issue.
+- **Mapping:** `docs/factory/linear-migration.md`.
 
 ## Part 3: flywheel and runtime
 
@@ -128,7 +118,7 @@ Each step is its own PR:
 1. Guardrails (`.claude/settings.json`) and docs (`FACTORY.md`, `CLAUDE.md`, `PHASE_2.md`, `docs/factory/`)
 2. Skills and `openspec init` with `openspec/config.yaml`
 3. GitHub setup: labels, PR template, board, branch protection (each with Abhishek's go-ahead)
-4. Linear migration (dry run first: the list of issues to copy and to keep in Linear, for Abhishek to confirm)
+4. Linear migration (replaced on 2026-11-22: open work recreated as fresh issues; see Part 2)
 5. Smoke workflow and `/health/version`
 
 ## Testing and verification
