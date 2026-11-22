@@ -41,7 +41,7 @@ services:
     autoDeploy: false
 
     # Health Check Configuration
-    healthCheckPath: /health
+    healthCheckPath: /health/ready
 
     envVars:
       - key: ASSET_BASE
