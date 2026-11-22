@@ -155,7 +155,7 @@ Writing `it` replaces the committed chime stand-ins with spoken lines. `scripts/
    - **`OPENROUTER_API_KEY`**, which in-process generation needs for every model call.
    - **`CLERK_PUBLISHABLE_KEY`** and **`CLERK_JWKS_URL`** (without them `/parent` and `/workshop` answer 404), **`CLERK_SECRET_KEY`** (family-token provisioning), and optionally `CLERK_ISSUER`. The last two are not declared in `render.yaml`; add them by hand.
    - **`SENTRY_DSN`**, optional, for error monitoring.
-3. Wire up CI-gated deploys (below). `render.yaml` sets `autoDeploy: false`, so a push to `main` no longer redeploys by itself. The Dockerfile compiles Tailwind, installs the exact dependency set from `uv.lock`, and serves the shell; `/health` is the health check.
+3. Wire up CI-gated deploys (below). `render.yaml` sets `autoDeploy: false`, so a push to `main` no longer redeploys by itself. The Dockerfile compiles Tailwind, installs the exact dependency set from `uv.lock`, and serves the shell. Render's health check is `/health/ready` (readiness: both R2 buckets answer `head_bucket`; 503 with the failing check named, never secrets), cached for 10 s; `/health` stays as plain liveness. If R2 is down, the new instance is not promoted. To roll back the gate itself, set `healthCheckPath` back to `/health`.
 4. **Ephemeral disk**: `render.yaml` points `CONTENT_DIR` and `STAGING_DIR` at `/tmp` because Render's filesystem is wiped on every deploy. Workshop run records and staged artifacts survive anyway — they persist to the R2 pending bucket (ADR-005) — but anything only on the container disk is gone at the next deploy. Inspect staged stories through the workshop UI, not the filesystem.
 
 Without `ASSET_BASE`, the player falls back to the app's own `/static/content` mount (the dev fixtures) — useful for a smoke test, but real published stories live in R2.
@@ -175,7 +175,7 @@ Revisit this if run volume grows enough that repeated deploys start re-buying re
 
 ### Rolling-deploy overlap and shutdown cancellation (B5, AI-477)
 
-Render's deploys are zero-downtime: the new instance starts, passes `/health`, and only then is the old one terminated — so for a window during every deploy, **two instances of the app are alive at once**. Both run the boot `lifespan`. If a run is `running` when a deploy starts, both the outgoing and the incoming instance can call `resume_on_boot()` and pick up the *same* record — there is no distributed lock across instances, only the `RunStore`'s own optimistic-concurrency `save()` (`IfMatch` / `ConcurrentModificationError`).
+Render's deploys are zero-downtime: the new instance starts, passes `/health/ready`, and only then is the old one terminated — so for a window during every deploy, **two instances of the app are alive at once**. Both run the boot `lifespan`. If a run is `running` when a deploy starts, both the outgoing and the incoming instance can call `resume_on_boot()` and pick up the *same* record — there is no distributed lock across instances, only the `RunStore`'s own optimistic-concurrency `save()` (`IfMatch` / `ConcurrentModificationError`).
 
 **Accepted for now, not fixed:**
 
