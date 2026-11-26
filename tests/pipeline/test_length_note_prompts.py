@@ -11,7 +11,7 @@ from src.pipeline.content_rules import length_note
 from src.pipeline.models import Story
 from src.pipeline.steps.revise import revise_story
 from src.pipeline.steps.safety import safety_gate
-from src.pipeline.steps.write import StoryDraft, story_from_draft, write_story
+from src.pipeline.steps.write import StoryDraft, _write_inputs, story_from_draft, write_story
 from tests.pipeline.test_authoring_steps import (
     DraftModel,
     JudgeModel,
@@ -63,3 +63,17 @@ def test_the_marathi_writer_is_told_the_scaled_word_limits(tmp_path: Path) -> No
     write_story("the_sleepy_sea", "mr", _settings(), _cache(tmp_path), model=model)
     assert any(length_note("mr") in seen for seen in model.seen_prompts)
     assert any("22-52 words per page" in seen for seen in model.seen_prompts)
+
+
+def test_the_length_note_is_a_write_cache_input_only_where_it_applies() -> None:
+    """A Marathi or Japanese write made under the old prompt is never reused
+    (GitHub #195); other languages keep their cache keys."""
+    assert _write_inputs("the_sleepy_sea", "mr", _settings())["length_note"] == length_note("mr")
+    assert _write_inputs("the_sleepy_sea", "ja", _settings())["length_note"] == length_note("ja")
+    for language in ("it", "en", "hi"):
+        assert "length_note" not in _write_inputs("the_sleepy_sea", language, _settings())
+
+
+def test_the_marathi_note_gives_a_target_inside_the_range() -> None:
+    note = length_note("mr")
+    assert "aim for about 35 words per page" in note

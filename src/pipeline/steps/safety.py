@@ -79,6 +79,10 @@ def safety_gate(
         "temperature": SAFETY_TEMPERATURE,
         "prompt_version": PROMPT_VERSION,
     }
+    # Only where a language has its own length limits (GitHub #195): a verdict
+    # judged against the general limits is never reused for it.
+    if note := length_note(story.language):
+        inputs["length_note"] = note
 
     def produce() -> bytes:
         prompt = story.model_dump_json()

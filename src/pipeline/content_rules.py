@@ -38,6 +38,9 @@ CHARACTERS_PER_WORD = 2.5
 # pages that passed the plain limits clustered at the 30-word floor (median 32,
 # none over 41) while Hindi, English and Italian sat near 38-40.
 MARATHI_WORD_SCALE = 0.75
+# The per-page length the Marathi writer is told to aim for: above where passing
+# pages landed (median 32), comfortably inside the scaled 22-52 range.
+MARATHI_PAGE_TARGET = 35
 
 LengthUnit = Literal["words", "characters"]
 
@@ -164,7 +167,8 @@ def length_note(language: Language) -> str:
         return (
             "Length for this language is counted in words as written, with endings "
             "attached, so the limits are lower than the general rules: "
-            f"{limits.page_min}-{limits.page_max} words per page; "
+            f"{limits.page_min}-{limits.page_max} words per page "
+            f"(aim for about {MARATHI_PAGE_TARGET} words per page); "
             f"{limits.story_min}-{limits.story_max} words in total; "
             f"no sentence over {limits.sentence_max} words."
         )

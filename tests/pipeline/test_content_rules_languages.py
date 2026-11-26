@@ -108,7 +108,7 @@ def test_hindi_sentences_split_on_the_danda() -> None:
     assert check_story(make_story("hi", [page] * PAGE_COUNT)) == []
 
 
-def test_length_note_is_only_given_for_character_languages() -> None:
+def test_length_note_is_only_given_for_languages_with_their_own_limits() -> None:
     assert length_note("en") == ""
     assert length_note("hi") == ""
     assert length_note("it") == ""
@@ -145,5 +145,6 @@ def test_a_short_marathi_page_still_fails() -> None:
 def test_length_note_restates_the_marathi_word_limits() -> None:
     note = length_note("mr")
     assert "22-52 words per page" in note
+    assert "aim for about 35" in note
     assert "188-450 words in total" in note
     assert "15 words" in note
