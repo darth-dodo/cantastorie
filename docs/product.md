@@ -280,6 +280,8 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 
 **Japanese is measured in characters.** Japanese does not put spaces between words, so its limits are the word limits scaled at 2.5 characters per word, counting characters without spaces or punctuation (2026-10-10, AI-508). The full stop, exclamation and question marks end a Japanese sentence; Hindi and Marathi sentences may also end on the danda.
 
+**Marathi counts words against scaled limits.** Marathi attaches case endings and postpositions to the word, so the same scene takes fewer space-separated words than in English or Hindi. Its limits are the word limits scaled by 0.75: 22-52 words per page, 188-450 in total, a 15-word sentence cap (2026-11-26, GitHub #195). Published Marathi pages that passed the plain limits clustered at the 30-word floor, and a live Marathi run was rejected for falling under it.
+
 **Branching stories** follow the same per-page word and sentence limits on every node; every heard path — the shared opening plus one arm — is a full story's length and stays within the linear totals. Choice labels count as story text for every limit and for the gloss map.
 
 **Themes, only these at launch:** animals helping each other · tiny garden adventure · the sleepy sea · rain and puddles · bakery morning · grandparent visit · the lost mitten · gentle forest friends · the moon says goodnight · picnic surprise · the little boat · first snow.

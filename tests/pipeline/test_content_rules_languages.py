@@ -10,6 +10,7 @@ Marathi) may end them on the danda.
 
 from src.pipeline.content_rules import (
     CHARACTER_LIMITS,
+    MARATHI_LIMITS,
     PAGE_COUNT,
     WORD_LIMITS,
     check_story,
@@ -23,6 +24,10 @@ from src.pipeline.models import Language, Page, Story
 JA_SENTENCE = "うみがしずかにねむる。"  # 10 characters, plus the full stop
 # Twelve words, then the danda.
 HI_SENTENCE = "छोटी नाव धीरे धीरे पानी पर झूलती है और चाँद मुस्कुराता है।"
+# Twelve Marathi words, then the danda. Marathi attaches case endings and
+# postpositions to the word ("घरात" is "in the house"), so the same scene takes
+# fewer space-separated words than in English or Hindi (GitHub #195).
+MR_SENTENCE = "छोटी होडी हळूहळू पाण्यावर डोलते आणि चंद्र आकाशात हसतो आणि तारे चमकतात।"
 
 
 def make_story(language: Language, page_texts: list[str]) -> Story:
@@ -47,7 +52,7 @@ def make_story(language: Language, page_texts: list[str]) -> Story:
 def test_japanese_is_measured_in_characters_and_others_in_words() -> None:
     assert limits_for("ja") is CHARACTER_LIMITS
     assert CHARACTER_LIMITS.unit == "characters"
-    for language in ("it", "en", "hi", "mr"):
+    for language in ("it", "en", "hi"):
         assert limits_for(language) is WORD_LIMITS
     assert WORD_LIMITS.unit == "words"
 
@@ -106,8 +111,39 @@ def test_hindi_sentences_split_on_the_danda() -> None:
 def test_length_note_is_only_given_for_character_languages() -> None:
     assert length_note("en") == ""
     assert length_note("hi") == ""
+    assert length_note("it") == ""
     note = length_note("ja")
     assert "characters" in note
     assert "75-175" in note
     assert "625-1500" in note
     assert "50" in note
+
+
+def test_marathi_counts_words_against_scaled_limits() -> None:
+    assert limits_for("mr") is MARATHI_LIMITS
+    assert MARATHI_LIMITS.unit == "words"
+    assert (MARATHI_LIMITS.page_min, MARATHI_LIMITS.page_max) == (22, 52)
+    assert (MARATHI_LIMITS.story_min, MARATHI_LIMITS.story_max) == (188, 450)
+    assert MARATHI_LIMITS.sentence_max == 15
+
+
+def test_a_24_word_marathi_page_passes() -> None:
+    """The #195 failure: a full Marathi page lands just under the old 30-word floor."""
+    page = " ".join([MR_SENTENCE, MR_SENTENCE])  # 24 words
+    assert text_length(page, "mr") == 24
+    assert check_story(make_story("mr", [page] * PAGE_COUNT)) == []
+
+
+def test_a_short_marathi_page_still_fails() -> None:
+    pages = [" ".join([MR_SENTENCE, MR_SENTENCE])] * PAGE_COUNT
+    pages[3] = MR_SENTENCE  # 12 words, under the scaled floor
+    violations = check_story(make_story("mr", pages))
+    assert [v.rule for v in violations] == ["page_words"]
+    assert "22-52" in violations[0].detail
+
+
+def test_length_note_restates_the_marathi_word_limits() -> None:
+    note = length_note("mr")
+    assert "22-52 words per page" in note
+    assert "188-450 words in total" in note
+    assert "15 words" in note

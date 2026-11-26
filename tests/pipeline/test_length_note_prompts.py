@@ -55,3 +55,11 @@ def test_the_japanese_reviser_is_told_to_count_characters(tmp_path: Path) -> Non
     reviser = DraftModel(ja_draft())
     revise_story(ja_story(), ["page p1 is too short"], _settings(), _cache(tmp_path), model=reviser)
     assert length_note("ja") in reviser.seen_prompts[0]
+
+
+def test_the_marathi_writer_is_told_the_scaled_word_limits(tmp_path: Path) -> None:
+    """Marathi words carry attached endings, so its limits are scaled (GitHub #195)."""
+    model = DraftModel(StoryDraft(title="t", pages=["चंद्र हसतो आणि तारे चमकतात. " * 6] * 10))
+    write_story("the_sleepy_sea", "mr", _settings(), _cache(tmp_path), model=model)
+    assert any(length_note("mr") in seen for seen in model.seen_prompts)
+    assert any("22-52 words per page" in seen for seen in model.seen_prompts)
