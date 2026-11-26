@@ -7,7 +7,10 @@ carries the same rules, but only these pure functions decide.
 
 Japanese does not separate words with spaces, so it is measured in characters
 (spaces and punctuation excluded) against the word limits scaled by
-CHARACTERS_PER_WORD (AI-508). Every other roster language counts words.
+CHARACTERS_PER_WORD (AI-508). Marathi attaches case endings and postpositions
+to the word, so the same scene takes fewer space-separated words; it counts
+words against limits scaled by MARATHI_WORD_SCALE (GitHub #195). Every other
+roster language counts words against the plain limits.
 """
 
 import re
@@ -30,6 +33,14 @@ ARM_PAGES = 4  # pages per branch arm; shared prefix = PAGE_COUNT - ARM_PAGES
 # Characters of Japanese story text that stand in for one English word. A
 # children's register leans on kana, so it runs longer than adult prose.
 CHARACTERS_PER_WORD = 2.5
+
+# Marathi words per English word for the same amount of story. Published Marathi
+# pages that passed the plain limits clustered at the 30-word floor (median 32,
+# none over 41) while Hindi, English and Italian sat near 38-40.
+MARATHI_WORD_SCALE = 0.75
+# The per-page length the Marathi writer is told to aim for: above where passing
+# pages landed (median 32), comfortably inside the scaled 22-52 range.
+MARATHI_PAGE_TARGET = 35
 
 LengthUnit = Literal["words", "characters"]
 
@@ -67,6 +78,20 @@ CHARACTER_LIMITS = LengthLimits(
     story_min=_scaled(STORY_WORDS_MIN),
     story_max=_scaled(STORY_WORDS_MAX),
     sentence_max=_scaled(SENTENCE_WORDS_MAX),
+)
+
+
+def _marathi(words: int) -> int:
+    return round(words * MARATHI_WORD_SCALE)
+
+
+MARATHI_LIMITS = LengthLimits(
+    unit="words",
+    page_min=_marathi(PAGE_WORDS_MIN),
+    page_max=_marathi(PAGE_WORDS_MAX),
+    story_min=_marathi(STORY_WORDS_MIN),
+    story_max=_marathi(STORY_WORDS_MAX),
+    sentence_max=_marathi(SENTENCE_WORDS_MAX),
 )
 
 # Languages written without spaces between words.
@@ -111,7 +136,11 @@ def sentences(text: str) -> list[str]:
 
 
 def limits_for(language: Language) -> LengthLimits:
-    return CHARACTER_LIMITS if language in CHARACTER_LANGUAGES else WORD_LIMITS
+    if language in CHARACTER_LANGUAGES:
+        return CHARACTER_LIMITS
+    if language == "mr":
+        return MARATHI_LIMITS
+    return WORD_LIMITS
 
 
 def text_length(text: str, language: Language) -> int:
@@ -126,10 +155,23 @@ def text_length(text: str, language: Language) -> int:
 
 
 def length_note(language: Language) -> str:
-    """The length rules restated in characters, for prompts; empty for word languages."""
-    if language not in CHARACTER_LANGUAGES:
-        return ""
+    """The length rules restated for a language with its own limits, for prompts.
+
+    Empty for languages on the plain word limits, so their prompts and cache keys
+    never change.
+    """
     limits = limits_for(language)
+    if limits is WORD_LIMITS:
+        return ""
+    if limits.unit == "words":
+        return (
+            "Length for this language is counted in words as written, with endings "
+            "attached, so the limits are lower than the general rules: "
+            f"{limits.page_min}-{limits.page_max} words per page "
+            f"(aim for about {MARATHI_PAGE_TARGET} words per page); "
+            f"{limits.story_min}-{limits.story_max} words in total; "
+            f"no sentence over {limits.sentence_max} words."
+        )
     return (
         "Length is measured in characters for this language, not words "
         "(spaces and punctuation do not count): "

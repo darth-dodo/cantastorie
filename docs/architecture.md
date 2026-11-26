@@ -394,7 +394,7 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | Child flows | Playwright | Two taps to narration, page turns, choice overlay, retry state, resume offer, the stand-in gate (wrong answer stays, right answer passes; Escape is Back). Auto-continue is specified but skipped until AI-370 |
 | Safety | Audit script in CI | Zero unapproved assets reachable from any manifest |
 
-The content rules (page counts, word counts, sentence caps) are enforced twice: as pipeline validation in `assemble` and as pytest assertions against every published `story.json`. Japanese, which has no spaces between words, is measured in characters (spaces and punctuation excluded) against the word limits scaled at 2.5 characters per word (`content_rules.limits_for`, AI-508). The Japanese writer, judge and reviser get those limits restated in characters in their per-call message, so the shared instructions, and every other language's cache keys, are unchanged.
+The content rules (page counts, word counts, sentence caps) are enforced twice: as pipeline validation in `assemble` and as pytest assertions against every published `story.json`. Japanese, which has no spaces between words, is measured in characters (spaces and punctuation excluded) against the word limits scaled at 2.5 characters per word (`content_rules.limits_for`, AI-508). Marathi, which attaches case endings and postpositions to the word, counts words against the word limits scaled by 0.75 (22-52 per page, GitHub #195). The Japanese and Marathi writer, judge and reviser get their own limits restated in the per-call message, and that note is part of their write and safety cache inputs, so the shared instructions, and every other language's cache keys, are unchanged.
 
 ---
 

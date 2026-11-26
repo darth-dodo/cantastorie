@@ -132,3 +132,26 @@ def test_rerunning_revise_on_unchanged_inputs_makes_zero_model_calls(
 
     assert first == second
     assert reviser.calls == 1
+
+
+def test_the_branching_reviser_is_given_the_branching_structure(tmp_path: Path) -> None:
+    """Given a branching story routed to revise (GitHub #195),
+    When revise_story runs,
+    Then the reviser's instructions describe the shared pages and two arms,
+    not only the linear "exactly 10 pages" rules it must otherwise contradict.
+    """
+    story = branching_story_from_draft(
+        make_draft(), story_id="s1", theme="the_little_boat", language="it"
+    )
+    reviser = BranchingDraftModel(make_draft())
+
+    revise_story(
+        story,
+        ["content_rules/page_words: p2 too short"],
+        _settings(),
+        _cache(tmp_path),
+        model=reviser,
+    )
+
+    assert "This story BRANCHES" in reviser.seen_prompts[0]
+    assert "Two arms of exactly" in reviser.seen_prompts[0]

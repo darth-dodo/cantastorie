@@ -190,6 +190,11 @@ def _write_inputs(
     # Only when present, so a no-premise run keeps its pre-premise cache key.
     if premise is not None:
         inputs["premise"] = premise
+    # Only where a language has its own length limits, so a write made under
+    # the general limits is never reused for it (GitHub #195), while every other
+    # language keeps its cache key.
+    if note := length_note(language):
+        inputs["length_note"] = note
     return inputs
 
 

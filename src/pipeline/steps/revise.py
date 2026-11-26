@@ -22,6 +22,7 @@ from src.pipeline.models import Language, SafetyReport, Story, Theme
 from src.pipeline.providers import build_model
 from src.pipeline.steps.safety import safety_gate
 from src.pipeline.steps.write import (
+    BRANCHING_INSTRUCTIONS,
     WRITE_INSTRUCTIONS,
     BranchingStoryDraft,
     StoryDraft,
@@ -36,17 +37,21 @@ logger = logging.getLogger(__name__)
 MAX_REVISIONS = 2
 
 # Bump when the instructions change: prompt text is a cache-key input by proxy.
-PROMPT_VERSION = 1
+# 2: the branching reviser gets the branching structure (GitHub #195).
+PROMPT_VERSION = 2
 
-REVISE_INSTRUCTIONS = (
-    WRITE_INSTRUCTIONS
-    + """
+_REVISING = """
 You are revising an existing story that failed review. Fix ONLY what the
 listed failures name; keep everything that already works — same title
 unless a failure demands otherwise, same scenes, same tone. Return the
 complete corrected story.
 """
-)
+
+REVISE_INSTRUCTIONS = WRITE_INSTRUCTIONS + _REVISING
+
+# A branching story keeps its shared pages, split and two arms, so its reviser
+# needs the branching structure, not only the linear "exactly 10 pages" rules.
+BRANCHING_REVISE_INSTRUCTIONS = BRANCHING_INSTRUCTIONS + _REVISING
 
 
 class StoryRejectedError(Exception):
@@ -69,7 +74,9 @@ def build_revise_agent(model: Model) -> Agent[None, StoryDraft]:
 
 
 def build_branching_revise_agent(model: Model) -> Agent[None, BranchingStoryDraft]:
-    return Agent(model=model, output_type=BranchingStoryDraft, instructions=REVISE_INSTRUCTIONS)
+    return Agent(
+        model=model, output_type=BranchingStoryDraft, instructions=BRANCHING_REVISE_INSTRUCTIONS
+    )
 
 
 def revise_story(
