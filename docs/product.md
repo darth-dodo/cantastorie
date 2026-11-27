@@ -276,7 +276,7 @@ Language tabs, story rows with unpublish toggles, and the kill switch.
 
 ## Content Rules
 
-**Linear stories:** 8 pages, 30–70 words per page, 250–600 total, a 12-word sentence cap, present tense preferred, gentle repetition and sound words, and a final page that lands on comfort or sleepiness.
+**Linear stories:** 10 pages, 30-70 words per page, 250-600 total, a 20-word sentence cap, present tense preferred, gentle repetition and sound words, and a final page that lands on comfort or sleepiness.
 
 **Japanese is measured in characters.** Japanese does not put spaces between words, so its limits are the word limits scaled at 2.5 characters per word, counting characters without spaces or punctuation (2026-10-10, AI-508). The full stop, exclamation and question marks end a Japanese sentence; Hindi and Marathi sentences may also end on the danda.
 
