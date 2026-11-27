@@ -161,6 +161,11 @@ class Settings(BaseSettings):
     # The audit also fails on any pending/ object found in the public bucket.
     r2_pending_bucket: str = ""
 
+    # Content-Security-Policy rollback switch (AI-505): true sends the same
+    # policy as Content-Security-Policy-Report-Only, so a production surprise
+    # is an env change and a restart, not a code revert.
+    csp_report_only: bool = False
+
     # LangSmith observability — tracing for the FastAPI app and the pipeline.
     # When tracing is disabled (the default), the langsmith package is inert:
     # wrap_openai passes through, @traceable runs the function unchanged, and

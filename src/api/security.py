@@ -7,31 +7,113 @@ staged assets) pass through untouched.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 
+from src.api.routes._nav import fapi_host
+
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-# M16. The CSP is deliberately the minimal, source-free set: the parent and
-# workshop pages run inline scripts and load ClerkJS from the instance's
-# Frontend API host, and the player fetches stories, audio and art from
-# ASSET_BASE — a script-src/default-src allow-list would have to track all of
-# that. These directives restrict nothing a page legitimately loads.
+    from src.config import Settings
+
+# M16. Every response carries these; the Content-Security-Policy is added per
+# path by apply_security_headers (AI-505).
 SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Frame-Options": "DENY",
-    "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
 }
+CSP_HEADER = "Content-Security-Policy"
+CSP_REPORT_ONLY_HEADER = "Content-Security-Policy-Report-Only"
+
+# Clerk's documented sign-in needs: bot protection (Cloudflare Turnstile),
+# fraud protection, avatars, and blob: workers. Admin paths only (ADR-003).
+CLERK_BOT_PROTECTION = "https://challenges.cloudflare.com"
+CLERK_FRAUD_PROTECTION = "https://*.protect.clerk.com"
+CLERK_IMAGES = "https://img.clerk.com"
+
+
+def _asset_origins(settings: Settings) -> list[str]:
+    """The origins of ASSET_BASE and R2_PUBLIC_BASE that are absolute URLs."""
+    origins: list[str] = []
+    for value in (settings.asset_base, settings.r2_public_base):
+        parts = urlsplit(value)
+        if parts.scheme in ("http", "https") and parts.netloc:
+            origin = f"{parts.scheme}://{parts.netloc}"
+            if origin not in origins:
+                origins.append(origin)
+    return origins
+
+
+def _serialize(directives: dict[str, list[str]]) -> str:
+    return "; ".join(f"{name} {' '.join(sources)}" for name, sources in directives.items())
+
+
+def _public_directives(settings: Settings) -> dict[str, list[str]]:
+    assets = ["'self'", *_asset_origins(settings)]
+    return {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'"],
+        "font-src": ["'self'"],
+        "img-src": list(assets),
+        "media-src": list(assets),
+        "connect-src": list(assets),
+        "base-uri": ["'self'"],
+        "object-src": ["'none'"],
+        "frame-ancestors": ["'none'"],
+        "form-action": ["'self'"],
+    }
+
+
+def build_policies(settings: Settings) -> tuple[str, str]:
+    """The (public, admin) Content-Security-Policy values for these settings.
+
+    Public covers the child player, the landing page and every non-admin
+    response: scripts, styles and fonts from this origin only, story assets
+    from the published asset origin too. Admin adds what Clerk's sign-in needs
+    on /parent and /workshop; with Clerk unset those paths are 404s, so the
+    admin policy is the public one.
+    """
+    public = _public_directives(settings)
+    if not settings.clerk_jwks_url:
+        policy = _serialize(public)
+        return policy, policy
+    fapi = f"https://{fapi_host(settings)}"
+    admin = _public_directives(settings)
+    admin["script-src"] += [fapi, CLERK_BOT_PROTECTION, CLERK_FRAUD_PROTECTION]
+    admin["style-src"].append("'unsafe-inline'")
+    admin["img-src"] += [CLERK_IMAGES, "data:"]
+    admin["connect-src"] += [fapi, f"{CLERK_FRAUD_PROTECTION}:*"]
+    admin["frame-src"] = [CLERK_BOT_PROTECTION, CLERK_FRAUD_PROTECTION]
+    admin["worker-src"] = ["'self'", "blob:"]
+    return _serialize(public), _serialize(admin)
+
+
+class SecurityPolicy:
+    """The headers for one process: built once from settings at app start."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.public, self.admin = build_policies(settings)
+        self.header = CSP_REPORT_ONLY_HEADER if settings.csp_report_only else CSP_HEADER
+
+    def apply(self, headers: MutableHeaders, path: str) -> None:
+        for name, value in SECURITY_HEADERS.items():
+            headers.setdefault(name, value)
+        headers.setdefault(self.header, self.admin if _is_guarded(path) else self.public)
 
 
 class SecurityHeadersMiddleware:
-    """Stamp SECURITY_HEADERS onto every HTTP response, errors included."""
+    """Stamp the hardening headers and the path's policy onto every HTTP
+    response that passes through it (500s are stamped by the app's
+    Exception handler, which runs outside every user middleware)."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, policy: SecurityPolicy) -> None:
         self.app = app
+        self.policy = policy
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -40,9 +122,7 @@ class SecurityHeadersMiddleware:
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
-                headers = MutableHeaders(scope=message)
-                for name, value in SECURITY_HEADERS.items():
-                    headers.setdefault(name, value)
+                self.policy.apply(MutableHeaders(scope=message), scope["path"])
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
