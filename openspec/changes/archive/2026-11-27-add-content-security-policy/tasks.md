@@ -42,9 +42,9 @@ Test first throughout: each task writes its failing test, then the code that mak
 
 ## 7. Integration
 
-- [ ] 7.1 Run `make check`, `uv run pytest` (coverage floor), `npx vitest run` and `E2E_PORT=<free port> npx playwright test`; all exit 0
-- [ ] 7.2 Confirm `test_clerk_loads_nowhere_in_the_child_player` still passes and the `/play` header names no third-party source in any directive
-- [ ] 7.3 Put the post-deploy check (below) in the PR's "How verified" list as an unchecked item for Abhishek, with `CSP_REPORT_ONLY=true` named as the rollback switch; verify it is in the PR body
+- [x] 7.1 Run `make check`, `uv run pytest` (coverage floor), `npx vitest run` and `E2E_PORT=<free port> npx playwright test`; all exit 0
+- [x] 7.2 Confirm `test_clerk_loads_nowhere_in_the_child_player` still passes and the `/play` header names no third-party source in any directive
+- [x] 7.3 Put the post-deploy check (below) in the PR's "How verified" list as an unchecked item for Abhishek, with `CSP_REPORT_ONLY=true` named as the rollback switch; verify it is in the PR body
 
 ## Workflow follow-up
 
