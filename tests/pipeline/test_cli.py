@@ -7,6 +7,7 @@ and test_publish; here we prove the CLI wiring and its guardrails, so the
 provider-driven functions are stubbed.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import get_args
 
@@ -18,6 +19,7 @@ from src.pipeline.cli import app
 from src.pipeline.models import Language
 from src.pipeline.prompts import PromptLine, PromptPublishResult
 from src.pipeline.publish import AuditResult, PublishResult
+from src.pipeline.snapshots import DroppedEntry, RestorePlan, SnapshotInfo
 
 runner = CliRunner()
 
@@ -458,3 +460,159 @@ def test_a_dry_run_reports_a_missing_manifest_and_carries_on(
     assert seen == list(get_args(Language))
     assert "bg: would refuse (no manifest; needs --force)" in result.output
     assert "Refused" not in result.output
+
+
+SHARED_KEY = "published/it/manifest.json"
+FAMILY_KEY = "published/families/0123456789abcdef0123456789abcdef/it/manifest.json"
+
+
+def test_snapshot_manifests_dry_run_lists_every_manifest_and_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_seed(settings: object, *, dry_run: bool = False) -> list[str]:
+        seen["dry_run"] = dry_run
+        return [SHARED_KEY, FAMILY_KEY]
+
+    monkeypatch.setattr(cli, "seed_snapshots", fake_seed)
+
+    result = runner.invoke(app, ["snapshot-manifests", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert seen["dry_run"] is True
+    assert SHARED_KEY in result.output
+    assert FAMILY_KEY not in result.output
+    assert "Would snapshot 2 manifest(s)" in result.output
+
+
+def test_snapshot_manifests_reports_how_many_it_copied(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli, "seed_snapshots", lambda settings, *, dry_run=False: [SHARED_KEY, FAMILY_KEY]
+    )
+
+    result = runner.invoke(app, ["snapshot-manifests"])
+
+    assert result.exit_code == 0
+    assert "Snapshotted 2 manifest(s)" in result.output
+
+
+def test_restore_manifest_list_shows_snapshots_newest_first_with_time_and_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_list(settings: object, key: str) -> list[SnapshotInfo]:
+        assert key == SHARED_KEY
+        return [
+            SnapshotInfo(
+                kind="latest",
+                name="latest",
+                written_at=datetime(2026, 11, 27, 18, 0, tzinfo=UTC),
+                story_count=3,
+            ),
+            SnapshotInfo(
+                kind="history",
+                name="20261127T180000000000Z-abc.json",
+                written_at=datetime(2026, 11, 27, 18, 0, tzinfo=UTC),
+                story_count=3,
+            ),
+            SnapshotInfo(
+                kind="history",
+                name="20261120T090000000000Z-def.json",
+                written_at=datetime(2026, 11, 20, 9, 0, tzinfo=UTC),
+                story_count=2,
+            ),
+        ]
+
+    monkeypatch.setattr(cli, "list_snapshots", fake_list)
+
+    result = runner.invoke(app, ["restore-manifest", SHARED_KEY, "--list"])
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if "stories" in line]
+    assert "latest" in lines[0]
+    assert "2026-11-27T18:00:00Z" in lines[1]
+    assert "20261120T090000000000Z-def.json" in lines[2]
+    assert "2 stories" in lines[2]
+
+
+def _plan(*, written: bool, backup: str | None = None) -> RestorePlan:
+    return RestorePlan(
+        manifest_key=SHARED_KEY,
+        source="20261120T090000000000Z-def.json",
+        added=["old-story"],
+        removed=["new-story"],
+        dropped=[DroppedEntry(story_id="gone-story", reason="story.json is not published")],
+        dropped_prompts=[],
+        live_exists=True,
+        written=written,
+        backup=backup,
+    )
+
+
+def test_restore_manifest_is_a_dry_run_without_yes(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_restore(
+        settings: object, key: str, *, source: str | None = None, yes: bool = False
+    ) -> RestorePlan:
+        seen.update(key=key, source=source, yes=yes)
+        return _plan(written=False)
+
+    monkeypatch.setattr(cli, "restore_manifest", fake_restore)
+
+    result = runner.invoke(
+        app, ["restore-manifest", SHARED_KEY, "--from", "20261120T090000000000Z-def.json"]
+    )
+
+    assert result.exit_code == 0
+    assert seen == {
+        "key": SHARED_KEY,
+        "source": "20261120T090000000000Z-def.json",
+        "yes": False,
+    }
+    assert "added: old-story" in result.output
+    assert "removed: new-story" in result.output
+    assert "dropped: gone-story" in result.output
+    assert "Dry run" in result.output
+
+
+def test_restore_manifest_with_yes_prints_the_undo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli,
+        "restore_manifest",
+        lambda settings, key, *, source=None, yes=False: _plan(
+            written=yes, backup="20261127T183000000000Z-xyz.json"
+        ),
+    )
+
+    result = runner.invoke(app, ["restore-manifest", SHARED_KEY, "--latest", "--yes"])
+
+    assert result.exit_code == 0
+    assert "Restored" in result.output
+    assert "--from 20261127T183000000000Z-xyz.json --yes" in result.output
+
+
+def test_restore_manifest_needs_exactly_one_source() -> None:
+    neither = runner.invoke(app, ["restore-manifest", SHARED_KEY])
+    both = runner.invoke(app, ["restore-manifest", SHARED_KEY, "--latest", "--from", "x.json"])
+
+    assert neither.exit_code == 1
+    assert both.exit_code == 1
+
+
+def test_restore_manifest_errors_never_print_the_raw_family_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(settings: object, key: str, *, source: str | None = None, yes: bool = False) -> None:
+        raise ValueError(f"no snapshot 'latest' for {key}")
+
+    monkeypatch.setattr(cli, "restore_manifest", refuse)
+    monkeypatch.setattr(cli, "list_snapshots", refuse)
+
+    restored = runner.invoke(app, ["restore-manifest", FAMILY_KEY, "--latest"])
+    listed = runner.invoke(app, ["restore-manifest", FAMILY_KEY, "--list"])
+
+    for result in (restored, listed):
+        assert result.exit_code == 1
+        assert "0123456789abcdef0123456789abcdef" not in result.output
+        assert "no snapshot" in result.output

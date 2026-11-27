@@ -335,7 +335,7 @@ async def delete_parent_story(
         raise HTTPException(status_code=404)
     # A family delete stays scoped to its own overlay lane — never the shared
     # shelf, never another family. The token is the session's, never the URL's.
-    unpublish_story(story_id, settings, family_token=ctx.family_token)
+    await run_in_threadpool(unpublish_story, story_id, settings, family_token=ctx.family_token)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/parent/stories", status_code=303)

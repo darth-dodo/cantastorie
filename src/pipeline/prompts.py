@@ -246,7 +246,14 @@ def publish_prompts(
     def mutate(manifest: dict[str, Any]) -> None:
         manifest["prompts"] = _merged_prompts(manifest, prompt_urls)
 
-    _, manifest_written = _write_manifest(client, bucket, manifest_key, load=load, mutate=mutate)
+    _, manifest_written = _write_manifest(
+        client,
+        bucket,
+        manifest_key,
+        load=load,
+        mutate=mutate,
+        snapshot_bucket=settings.pending_bucket,
+    )
     lines = [line.model_copy(update={"url": published_at.get(line.name)}) for line in before]
     return PromptPublishResult(
         language=language,

@@ -419,7 +419,7 @@ Fixed in code (AI-472).
 | M10 | Cap enforcement is check-then-act; `save()` on a new record is an unconditional PUT | `src/workshop/manager.py:91-96` | Open — AI-491 |
 | M11 | Correct only at one worker and one replica; nothing in `Dockerfile` or `render.yaml` enforces that | `src/workshop/manager.py:85` | Open — AI-491 |
 | M12 | Repair tooling and orphan detection skip family overlays entirely | `scripts/repair_manifests.py:35`, `src/pipeline/publish.py:712` | Partly fixed; rest in AI-502 |
-| M13 | No R2 versioning, backup, or manifest-loss recovery path | `render.yaml`, `docs/setup.md` | Open — AI-492 |
+| M13 | No R2 versioning, backup, or manifest-loss recovery path | `render.yaml`, `docs/setup.md` | Fixed (#185): every manifest write is snapshotted to the pending bucket and `restore-manifest` restores one; runbook in [`docs/setup.md`](../setup.md#recovering-a-manifest-m13). Backups of `pending/` data are #199 |
 | M14 | `.env.example` omits `ASSET_BASE`, `CONTENT_DIR`, `STAGING_DIR`, `PARENT_DAILY_RUN_CAP` | `.env.example` | Fixed (AI-501) |
 | M15 | JWT issuer unpinned by default (`clerk_issuer` defaults empty) and `exp` is verified-if-present, not required | `src/api/auth.py:179-185` | Open — AI-496 |
 | M16 | No security response headers anywhere (CSP, X-Frame-Options, nosniff, Referrer-Policy) | `src/` | Open — AI-496 |
@@ -525,7 +525,7 @@ Ordered by risk reduction per unit of effort.
 - [x] All manifest writes routed through the `IfMatch` + `Cache-Control` helper (H5)
 - [ ] `--workers 1` and `numInstances: 1` made explicit with the reason, or the family cap made a conditional write (M11)
 - [ ] `/health/ready` checking config and R2; `healthCheckPath` repointed (M1)
-- [ ] R2 object versioning or nightly manifest snapshots enabled (M13)
+- [x] Manifest snapshots on every write, with a restore command (M13): done (#185); R2 has no object versioning
 - [x] e2e suite added to CI (M2) — done (AI-462, #95): the `E2E Test` job is required by `CI Success`
 
 ---

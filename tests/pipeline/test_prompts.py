@@ -25,6 +25,7 @@ from src.config import Settings
 from src.pipeline.prompts import DEV_PROMPT_FILES, publish_prompts, write_dev_prompts
 from src.pipeline.providers import NarrationClient
 from src.pipeline.publish import MANIFEST_PROMPT_KEYS
+from src.pipeline.snapshots import HISTORY_PREFIX, latest_key
 from src.pipeline.steps.utterance_texts import IT_UTTERANCES, UTTERANCE_TEXTS
 
 BUCKET = "cantastorie-published"
@@ -408,3 +409,20 @@ def test_a_dev_dry_run_writes_nothing(tmp_path: Path) -> None:
     assert calls == []
     assert not content.exists()
     assert [line.text for line in plan.lines] == list(IT_UTTERANCES.values())
+
+
+def test_publishing_prompts_snapshots_the_manifest_it_wrote(tmp_path: Path, s3: S3Client) -> None:
+    """M13: the prompt publish leaves a latest and a history copy of its manifest."""
+    s3.create_bucket(Bucket=PENDING_BUCKET)
+    _seed_manifest(s3)
+    settings = _settings(tmp_path)
+
+    publish_prompts("es", settings, client=s3, narration_client=_tts(settings, []))
+
+    live = s3.get_object(Bucket=BUCKET, Key=MANIFEST_KEY)["Body"].read()
+    latest = s3.get_object(Bucket=PENDING_BUCKET, Key=latest_key(MANIFEST_KEY))["Body"].read()
+    history = s3.list_objects_v2(
+        Bucket=PENDING_BUCKET, Prefix=f"{HISTORY_PREFIX}/{MANIFEST_KEY}/"
+    ).get("Contents", [])
+    assert latest == live
+    assert len(history) == 1

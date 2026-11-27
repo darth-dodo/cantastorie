@@ -1,22 +1,30 @@
-"""Typer CLI: generate, publish, publish-prompts, audit.
+"""Typer CLI: generate, publish, publish-prompts, audit, snapshot-manifests, restore-manifest.
 
 generate runs the whole authoring pass and stages a story for review; publish
 uploads a staged story to R2. publish-prompts narrates and publishes a
 language's spoken prompts (H6, AI-481). audit verifies every reachable asset
 in the published bucket is approved and listed — the provable-safety gate
-(AI-378).
+(AI-378). snapshot-manifests and restore-manifest are the manifest recovery
+path (M13, docs/setup.md "Recovering a manifest").
 """
 
-from typing import Literal, cast, get_args
+from datetime import UTC, datetime
+from typing import Literal, NoReturn, cast, get_args
 
 import typer
 
 from src.config import get_settings
-from src.observability import configure_logging, init_error_monitoring, init_observability
+from src.observability import (
+    configure_logging,
+    init_error_monitoring,
+    init_observability,
+    redact_family_tokens,
+)
 from src.pipeline.generate import generate_story
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
 from src.pipeline.prompts import PromptPublishResult, publish_prompts, write_dev_prompts
 from src.pipeline.publish import audit_published_bucket, publish_story
+from src.pipeline.snapshots import list_snapshots, restore_manifest, seed_snapshots
 
 app = typer.Typer(help="Cantastorie authoring pipeline", no_args_is_help=True)
 
@@ -185,3 +193,79 @@ def audit() -> None:
         typer.echo(f"  - {v}")
     if result.violations:
         raise typer.Exit(1)
+
+
+@app.command("snapshot-manifests")
+def snapshot_manifests_command(
+    dry_run: bool = typer.Option(False, "--dry-run", help="List the manifests; write nothing"),
+) -> None:
+    """Copy every live manifest into the private snapshot area (seed or backup)."""
+    try:
+        keys = seed_snapshots(get_settings(), dry_run=dry_run)
+    except ValueError as error:
+        _refuse(error)
+    for key in keys:
+        typer.echo(f"  {redact_family_tokens(key)}")
+    verb = "Would snapshot" if dry_run else "Snapshotted"
+    typer.echo(f"{verb} {len(keys)} manifest(s).")
+
+
+def _refuse(error: ValueError) -> NoReturn:
+    typer.echo(f"Refused: {redact_family_tokens(str(error))}")
+    raise typer.Exit(1) from None
+
+
+def _utc(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@app.command("restore-manifest")
+def restore_manifest_command(
+    key: str = typer.Argument(..., help="Manifest key, e.g. published/it/manifest.json"),
+    list_only: bool = typer.Option(False, "--list", help="List this manifest's snapshots"),
+    source: str = typer.Option(
+        "", "--from", help="A snapshot name from --list (a history name, or previous)"
+    ),
+    latest: bool = typer.Option(False, "--latest", help="Restore the latest snapshot"),
+    yes: bool = typer.Option(False, "--yes", help="Write the restore; without it, a dry run"),
+) -> None:
+    """List a manifest's snapshots, or restore one (a dry run unless --yes)."""
+    settings = get_settings()
+    shown = redact_family_tokens(key)
+    if list_only:
+        try:
+            found = list_snapshots(settings, key)
+        except ValueError as error:
+            _refuse(error)
+        typer.echo(f"Snapshots of {shown}, newest first:")
+        for item in found:
+            typer.echo(f"  {item.name:<52} {_utc(item.written_at)}  {item.story_count} stories")
+        if not found:
+            typer.echo("  none")
+        return
+    if latest == bool(source):
+        typer.echo("Choose exactly one of --latest or --from <name> (see --list).")
+        raise typer.Exit(1)
+    try:
+        plan = restore_manifest(settings, key, source=source or None, yes=yes)
+    except ValueError as error:
+        _refuse(error)
+    typer.echo(f"Restore {shown} from {plan.source}:")
+    if not plan.live_exists:
+        typer.echo("  no live manifest: it will be recreated")
+    typer.echo(f"  added: {', '.join(plan.added) or '-'}")
+    typer.echo(f"  removed: {', '.join(plan.removed) or '-'}")
+    for drop in plan.dropped:
+        typer.echo(f"  dropped: {drop.story_id} ({redact_family_tokens(drop.reason)})")
+    for name in plan.dropped_prompts:
+        typer.echo(f"  dropped prompt: {name}")
+    if not yes:
+        typer.echo("Dry run: nothing written. Rerun with --yes to restore.")
+        return
+    state = "Restored" if plan.written else "Restored (unchanged, nothing written)"
+    typer.echo(f"{state} {shown}.")
+    if plan.backup:
+        typer.echo(
+            f"Undo: restore-manifest {shown} --from {plan.backup} --yes "
+            "(with the real key if it is a family manifest)"
+        )

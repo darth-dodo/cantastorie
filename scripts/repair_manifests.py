@@ -78,6 +78,7 @@ def repair_manifests(
                     key,
                     load=partial(_load_manifest, client, settings.r2_bucket, language),
                     mutate=mutate,
+                    snapshot_bucket=settings.pending_bucket,
                 )
 
             if changed:

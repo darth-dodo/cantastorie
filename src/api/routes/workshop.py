@@ -350,7 +350,9 @@ async def delete_published_story(
     if len(lanes) > 1:
         raise HTTPException(status_code=409, detail="story id is listed in more than one lane")
     # Listed nowhere: the shared-shelf lane, as before (asset cleanup only).
-    unpublish_story(story_id, settings, family_token=lanes[0] if lanes else None)
+    await run_in_threadpool(
+        unpublish_story, story_id, settings, family_token=lanes[0] if lanes else None
+    )
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
     return RedirectResponse("/workshop/library", status_code=303)
@@ -465,7 +467,7 @@ async def approve_run(
         )
     if record.story_id is None:
         raise HTTPException(status_code=409, detail="The run has no staged story to publish")
-    publisher(record.story_id)
+    await run_in_threadpool(publisher, record.story_id)
     manager.store.save(record.advance("approved"))
     return _to_login()
 
@@ -532,7 +534,7 @@ async def delete_run(
             delete_staged_story(story_id, settings)
             shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
         if record.state == "approved" and not any(other.state == "approved" for other in sharing):
-            unpublish_story(story_id, settings)
+            await run_in_threadpool(unpublish_story, story_id, settings)
     manager.store.delete(scope.store_token, run_id)
     if request.headers.get("HX-Request"):
         return HTMLResponse("")
@@ -554,7 +556,7 @@ async def delete_staged_story_route(
     if record.state not in {"staged", "failed", "rejected", "approved"}:
         raise HTTPException(status_code=400)
     if record.state == "approved":
-        unpublish_story(story_id, settings)
+        await run_in_threadpool(unpublish_story, story_id, settings)
     delete_staged_story(story_id, settings)
     shutil.rmtree(settings.content_dir / story_id, ignore_errors=True)
     updated = record.model_copy(update={"story_id": None})
