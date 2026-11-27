@@ -9,6 +9,7 @@ from mypy_boto3_s3 import S3Client
 from scripts.repair_manifests import repair_manifests
 
 from src.config import Settings
+from src.pipeline.snapshots import HISTORY_PREFIX, latest_key
 
 BUCKET = "cantastorie-published"
 PENDING_BUCKET = "cantastorie-pending"
@@ -172,3 +173,17 @@ def test_repair_manifests_retries_a_conflict_without_losing_a_concurrent_publish
 
     ids = sorted(entry["id"] for entry in _manifest(s3)["stories"])
     assert ids == sorted([STORY_ID, "second-story"])
+
+
+def test_repair_manifests_snapshots_the_manifest_it_wrote(s3: S3Client) -> None:
+    """M13: a repair write leaves a latest and a history copy of its bytes."""
+    _put_production_manifest(s3)
+
+    repair_manifests(_settings(), client=s3)
+
+    key = "published/it/manifest.json"
+    live = s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+    latest = s3.get_object(Bucket=PENDING_BUCKET, Key=latest_key(key))["Body"].read()
+    history = s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=f"{HISTORY_PREFIX}/{key}/")
+    assert latest == live
+    assert len(history.get("Contents", [])) == 1

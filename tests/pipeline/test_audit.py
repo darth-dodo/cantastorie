@@ -22,6 +22,7 @@ from src.pipeline.publish import (
     audit_published_bucket,
     publish_story,
     stage_story,
+    unpublish_story,
 )
 from src.pipeline.steps.assemble import AssembledStory, assemble_story
 from src.pipeline.steps.illustrate import IllustrationSet
@@ -408,3 +409,21 @@ def test_audit_fails_on_an_orphan_family_story_dir(tmp_path: Path, s3: S3Client)
 
     result = audit_published_bucket(settings, client=s3)
     assert any("ghost" in v for v in result.violations)
+
+
+def test_audit_passes_with_manifest_snapshots_on(tmp_path: Path, s3: S3Client) -> None:
+    """M13: publish and unpublish snapshot every manifest into the pending
+    bucket; nothing lands under snapshots/ in the public bucket and the audit
+    still passes."""
+    settings = _settings(tmp_path)
+    for story_id in ("first-story", "second-story"):
+        stage_story(_assembled(tmp_path, story_id=story_id), settings, client=s3)
+        publish_story(story_id, settings, client=s3)
+    unpublish_story("second-story", settings, client=s3)
+
+    result = audit_published_bucket(settings, client=s3)
+
+    assert result.violations == []
+    assert s3.list_objects_v2(Bucket=BUCKET, Prefix="snapshots/").get("KeyCount") == 0
+    pending = s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix="snapshots/manifests/")
+    assert pending.get("KeyCount", 0) >= 4

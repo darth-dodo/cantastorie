@@ -146,6 +146,63 @@ uv run cantastorie publish-prompts --language all --local
 
 Writing `it` replaces the committed chime stand-ins with spoken lines. `scripts/generate_dev_story.py` still writes those chimes (`story-start.wav`, `end.wav`, `audio-retry.wav`, `offline.wav` under `src/static/content/it/prompts/`), so rerunning it undoes the Italian `--local` run: run `publish-prompts --language it --local` again afterwards (free from the cache), or restore the four files from version control. Writing `en` gives the English dev shelf prompts; the E2E specs pin the Italian shelf, so they hold either way, but rerun the suite after committing. Until prompts exist for a language, the player stays silent where a prompt would play: no greeting, no start or end line, and a silent sleeping bird. It never blocks or errors (`tests/js/playback.test.js`).
 
+### Recovering a manifest (M13)
+
+A manifest is the index of a whole shelf: a bad write or a delete empties that shelf. Cloudflare R2 has no object versioning (`PutBucketVersioning` and `GetBucketVersioning` are unsupported, see the [R2 S3 API compatibility table](https://developers.cloudflare.com/r2/api/s3/api/)), so the app keeps its own copies. Every manifest write it makes (publish, unpublish, `publish-prompts`, `scripts/repair_manifests.py`) also writes the same bytes into the **private** pending bucket:
+
+```
+snapshots/manifests/latest/{manifest key}                              ← the last app-written state, never expires
+snapshots/manifests/history/{manifest key}/{UTC stamp}Z-{md5}.json     ← one per real change, expires after 30 days
+```
+
+`{manifest key}` is the manifest's own path, so `published/it/manifest.json` and `published/families/{token}/it/manifest.json` keep separate snapshots. A write skipped because the bytes are unchanged adds no history. A failed snapshot never fails the publish: it logs `manifest_snapshot_failed` and sends one Sentry event with the family token hashed; the next write, or a `snapshot-manifests` run, closes the gap. `snapshots/` sits outside `pending/`, so a cleanup of `pending/` cannot reach it, and nothing is ever written under `snapshots/` in the public bucket.
+
+**One-time setup after deploy (owner).** Expire history after 30 days (the `latest/` prefix has no rule), then check it:
+
+```bash
+wrangler r2 bucket lifecycle add cantastorie-pending manifest-history snapshots/manifests/history/ --expire-days 30 -J eu
+wrangler r2 bucket lifecycle list cantastorie-pending -J eu
+```
+
+Seed snapshots for the manifests that predate this feature (run it again before any manual bucket work, as a backup). Family keys are printed with the token hashed:
+
+```bash
+uv run cantastorie snapshot-manifests --dry-run
+uv run cantastorie snapshot-manifests
+```
+
+**Restore one manifest.**
+
+```bash
+# 1. List its snapshots, newest first, with time and story count.
+uv run cantastorie restore-manifest published/it/manifest.json --list
+
+# 2. Dry run (the default): prints the story ids it would add and remove, and any it drops.
+uv run cantastorie restore-manifest published/it/manifest.json --from <history name>
+uv run cantastorie restore-manifest published/it/manifest.json --latest
+
+# 3. Restore. It first copies the live manifest into history and prints its name.
+uv run cantastorie restore-manifest published/it/manifest.json --from <history name> --yes
+
+# 4. Undo: restore the copy step 3 printed.
+uv run cantastorie restore-manifest published/it/manifest.json --from <printed name> --yes
+
+# 5. Always audit after a restore.
+uv run cantastorie audit
+```
+
+- **Review gate**: a restore keeps an entry only when that story's `story.json` is already published under the same lane's `stories/` directory and its `story` and `cover` URLs stay inside that lane. Anything else (a story unpublished since the snapshot, an entry pointing at another lane) is dropped and reported. A prompt is kept only when its audio is still published in the lane. A restore writes only the manifest, never a story asset, so it cannot surface a story a parent has not approved.
+- **Concurrency**: the write goes through the same IfMatch-and-retry helper as publish. A story published or unpublished while the restore runs is kept as the concurrent writer left it.
+- **Deleted manifest**: `--latest` recreates it with the surviving entries.
+- **Family manifests**: pass the real key (`published/families/{token}/{lang}/manifest.json`); output shows the token hashed. Rehearse on a shared manifest.
+- **Out of scope**: story assets, prompts audio, run records and staged stories under `pending/` have no snapshots (#199).
+
+**Rehearsal (owner, after deploy).** Restore one shared manifest from its latest copy: dry run, `--yes`, then undo, then `audit`. Paste the output here:
+
+```
+(pending the post-deploy rehearsal)
+```
+
 ---
 
 ## 3. The Render web service

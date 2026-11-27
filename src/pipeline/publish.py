@@ -37,6 +37,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from src.observability import family_hash
+from src.pipeline import snapshots
 from src.pipeline.models import Language, Story, Theme
 
 if TYPE_CHECKING:
@@ -370,6 +371,7 @@ def _write_manifest(
     *,
     load: Callable[[], tuple[dict[str, Any], str | None]],
     mutate: Callable[[dict[str, Any]], None],
+    snapshot_bucket: str,
 ) -> tuple[dict[str, Any], bool]:
     """Load-mutate-write a manifest under optimistic concurrency.
 
@@ -386,6 +388,11 @@ def _write_manifest(
     repair included. A ``PreconditionFailed`` — another writer won the race —
     retries up to ``_MANIFEST_WRITE_ATTEMPTS`` times; any other error
     propagates.
+
+    After a PUT, the same bytes are snapshotted into ``snapshot_bucket`` (the
+    private pending bucket; see snapshots.py). Required, so a new writer cannot
+    forget it. A snapshot failure is reported, never raised: the manifest is
+    already live. A skipped write adds no snapshot.
 
     Returns the manifest as written and whether a PUT actually happened
     (``False`` when ``mutate`` produced bytes identical to what's already
@@ -422,6 +429,7 @@ def _write_manifest(
             if _precondition_failed(error) and attempt < _MANIFEST_WRITE_ATTEMPTS - 1:
                 continue
             raise
+        snapshots.write_snapshot(client, snapshot_bucket, key, manifest_bytes)
         return manifest, True
     raise RuntimeError("manifest write retry loop exhausted")
 
@@ -434,6 +442,8 @@ def _publish_manifest(
     public_base: str,
     prompt_urls: dict[str, str],
     root: str = PUBLISHED_PREFIX,
+    *,
+    snapshot_bucket: str,
 ) -> tuple[list[str], list[str], list[str]]:
     manifest_key = f"{root}/{language}/manifest.json"
 
@@ -448,6 +458,7 @@ def _publish_manifest(
         manifest_key,
         load=lambda: _load_manifest(client, bucket, language, root),
         mutate=mutate,
+        snapshot_bucket=snapshot_bucket,
     )
     listed_ids = [entry["id"] for entry in manifest["stories"]]
     if wrote:
@@ -588,7 +599,14 @@ def publish_story(
                 prompt_urls[manifest_key] = f"{public_base}/prompts/{language}/{name}"
 
     manifest_uploaded, manifest_skipped, manifest_story_ids = _publish_manifest(
-        client, bucket, language, story, public_base, prompt_urls, root
+        client,
+        bucket,
+        language,
+        story,
+        public_base,
+        prompt_urls,
+        root,
+        snapshot_bucket=pending_bucket,
     )
     uploaded.extend(manifest_uploaded)
     skipped.extend(manifest_skipped)
@@ -652,6 +670,7 @@ def unpublish_story(
             manifest_key,
             load=lambda: _load_manifest(client, bucket, lang, root),
             mutate=mutate,
+            snapshot_bucket=settings.pending_bucket,
         )
     keys: list[ObjectIdentifierTypeDef] = []
     for page in client.get_paginator("list_objects_v2").paginate(
