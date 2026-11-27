@@ -382,6 +382,8 @@ Hermano's server-rendered pattern: Jinja2 + HTMX + Tailwind. **Shipped:** the Cl
 | Error reports carry no child data | Sentry is server-side only (no browser SDK); events omit request bodies, stack-frame locals, IPs, and auth/cookie headers ([ADR-009](adr/ADR-009-sentry-error-monitoring.md)) |
 | Keys never reach the browser | The OpenRouter, R2 and Clerk secret keys exist only in the web service and pipeline environments (the planned Deepgram and Mistral keys will follow the same rule) |
 
+**Response headers.** Every response, 404s and 500s included, carries `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options` and a Content-Security-Policy built once from settings at app start. Two policies, chosen by path prefix: `/parent` and `/workshop` get the admin policy, everything else (the child player, the landing page, `/health`, the 404 page) the public one. The public policy allows scripts, styles and fonts from this origin only (no `'unsafe-inline'`, no `'unsafe-eval'`), and images, audio and fetches from this origin plus the origins of `ASSET_BASE` and `R2_PUBLIC_BASE` when they are absolute URLs, so bucket-direct playback works and nothing else loads. The admin policy adds only what Clerk's sign-in needs (its Frontend API host, Cloudflare Turnstile, Clerk fraud protection and avatars, `'unsafe-inline'` styles), and only when Clerk is configured; those hosts never appear on a child path (ADR-003). Fonts (Baloo 2, Literata) are self-hosted under `/static/fonts/` with their OFL licences, so the child player makes no third-party request at all. The policy is enforced; `CSP_REPORT_ONLY=true` is the rollback switch that sends the same policy as `Content-Security-Policy-Report-Only` without a code change.
+
 ---
 
 ## Testing
