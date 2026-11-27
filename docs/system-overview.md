@@ -289,7 +289,11 @@ An app factory (`create_app`) that initializes observability, adds LangSmith's `
 
 Unset Clerk config means the `/workshop` and `/parent` routers answer 404 — each area simply does not exist until configured.
 
-The player template carries the three things the player boot needs: the design-system stylesheets (`tokens.css`, `player.css`), the `asset-base` meta tag, and the `#app` mount that `main.js` looks for.
+The player template carries the three things the player boot needs: the design-system stylesheets (`fonts.css`, `tokens.css`, `player.css`), the `asset-base` meta tag, and the `#app` mount that `main.js` looks for.
+
+### Response headers (`src/api/security.py`, AI-505)
+
+`build_policies(settings)` returns the public and admin Content-Security-Policy values; `SecurityPolicy` holds them and the header name (`Content-Security-Policy`, or `Content-Security-Policy-Report-Only` when `CSP_REPORT_ONLY=true`, the rollback switch) and stamps them with the M16 headers through `apply(headers, path)`. `SecurityHeadersMiddleware` (outermost user middleware) applies it to every response; paths under the `/parent` and `/workshop` prefixes, the same `GUARDED_PREFIXES` that `CrossOriginWriteGuard` uses, get the admin policy. A 500 is answered by `create_app()`'s `Exception` handler, which runs outside the user middleware, so it logs `unhandled_error`, captures to Sentry, and stamps the same headers itself. Asset origins come from `ASSET_BASE` and `R2_PUBLIC_BASE`; Clerk hosts from `fapi_host(settings)`, so the policy and the Clerk script tags name the same Frontend API host. No template has an inline `<script>` (the landing reveal and the parent stories toggles live in `landing.js` and `parent-stories.js`), no public template has inline styles (the 404 page uses `404.css`), `auth/base.html` sets HTMX `allowEval: false`, and fonts come from `src/static/fonts/` via `fonts.css`. `tests/test_csp_sources.py` scans the templates and stylesheets to keep it that way.
 
 ### Parent identity (Clerk, [ADR-003](adr/ADR-003-parent-authentication-clerk.md))
 

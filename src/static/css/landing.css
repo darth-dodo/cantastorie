@@ -334,6 +334,11 @@ body {
   box-shadow: 0 0 0 1.5px var(--accent-22), var(--card-shadow);
 }
 
+.l-step-art--taps { background-image: url(/static/img/landing-spot-taps.png); }
+.l-step-art--choice { background-image: url(/static/img/landing-spot-choice.png); }
+.l-step-art--narrator { background-image: url(/static/img/landing-spot-narrator.png); }
+.l-step-art--review { background-image: url(/static/img/landing-spot-review.png); }
+
 .l-step-art-placeholder {
   background-image: radial-gradient(120% 80% at 50% 20%, var(--accent-22), transparent 70%);
 }
@@ -446,6 +451,10 @@ body {
   text-decoration: none;
   transition: box-shadow var(--settle), color var(--settle);
 }
+.l-ghost-btn--spaced {
+  margin-top: 8px;
+}
+
 .l-ghost-btn:hover {
   box-shadow: inset 0 0 0 1.5px var(--primary-ring);
   color: var(--accent-text);

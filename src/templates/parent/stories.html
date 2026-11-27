@@ -97,30 +97,5 @@
 
 </div>
 
-<script>
-(function () {
-  "use strict";
-  // Filter panel toggle
-  document.querySelectorAll("[data-filter-wrap]").forEach(function (wrap) {
-    var btn = wrap.querySelector("[data-filter-toggle]");
-    var panel = wrap.querySelector("[data-filter-panel]");
-    if (!btn || !panel) return;
-    btn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      panel.hidden = !panel.hidden;
-    });
-    document.addEventListener("click", function () { panel.hidden = true; });
-  });
-  // Two-step delete arming
-  document.querySelectorAll("[data-arm-wrap]").forEach(function (wrap) {
-    var trigger = wrap.querySelector("[data-arm-trigger]");
-    var confirm = wrap.querySelector("[data-arm-confirm]");
-    if (!trigger || !confirm) return;
-    trigger.addEventListener("click", function () {
-      trigger.hidden = true;
-      confirm.hidden = false;
-    });
-  });
-})();
-</script>
+<script type="module" src="/static/js/parent-stories.js"></script>
 {% endblock %}

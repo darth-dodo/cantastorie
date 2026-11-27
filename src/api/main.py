@@ -10,9 +10,10 @@ from pathlib import Path
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler as _default_http_handler
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from langsmith.middleware import TracingMiddleware
+from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.routes._templates import templates
@@ -23,7 +24,7 @@ from src.api.routes.player import router as player_router
 from src.api.routes.published import router as published_router
 from src.api.routes.workshop import get_run_manager
 from src.api.routes.workshop import router as workshop_router
-from src.api.security import CrossOriginWriteGuard, SecurityHeadersMiddleware
+from src.api.security import CrossOriginWriteGuard, SecurityHeadersMiddleware, SecurityPolicy
 from src.config import get_settings
 from src.observability import configure_logging, init_error_monitoring, init_observability
 from src.workshop.manager import RunManager
@@ -105,8 +106,10 @@ def create_app() -> FastAPI:
     # or auth dependency runs (M4).
     app.add_middleware(CrossOriginWriteGuard)
     # Added last so it is the outermost user middleware: every route and
-    # handled-error response (404s included) carries the hardening headers (M16).
-    app.add_middleware(SecurityHeadersMiddleware)
+    # handled-error response (404s included) carries the hardening headers and
+    # the path's Content-Security-Policy (M16, AI-505).
+    policy = SecurityPolicy(settings)
+    app.add_middleware(SecurityHeadersMiddleware, policy=policy)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(health_router)
@@ -132,6 +135,25 @@ def create_app() -> FastAPI:
         # For all other HTTP errors, delegate to FastAPI's built-in handler
         # which returns the standard JSON error response.
         return await _default_http_handler(request, exc)
+
+    # Starlette runs this handler in ServerErrorMiddleware, outside every user
+    # middleware, so the 500 stamps its own headers. Starlette re-raises after
+    # it, so the server log and Sentry's ASGI integration still see the error;
+    # the explicit capture is deduplicated by Sentry's Dedupe integration. The
+    # explicit unhandled_error line is kept for its event and path fields;
+    # uvicorn also logs the re-raised exception, so a 500 appears twice in the
+    # log (one Sentry event).
+    @app.exception_handler(Exception)
+    async def server_error_handler(request: Request, exc: Exception) -> Response:
+        logger.exception(
+            "unhandled_error",
+            exc_info=exc,
+            extra={"event": "unhandled_error", "path": request.url.path},
+        )
+        sentry_sdk.capture_exception(exc)
+        response = PlainTextResponse("Internal Server Error", status_code=500)
+        policy.apply(MutableHeaders(raw=response.raw_headers), request.url.path)
+        return response
 
     return app
 

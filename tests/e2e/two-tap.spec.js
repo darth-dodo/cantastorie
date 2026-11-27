@@ -11,13 +11,12 @@ import { expect, test } from "@playwright/test";
 
 // The Italian dev manifest (src/static/content/it/manifest.json) lists five.
 const IT_SHELF_COVERS = 5;
-const FONT_ORIGINS = ["https://fonts.googleapis.com", "https://fonts.gstatic.com"];
 
 test("two taps from cold load to a story", async ({ page, context, baseURL }) => {
   const offOrigin = [];
   page.on("request", (request) => {
     const origin = new URL(request.url()).origin;
-    if (origin !== new URL(baseURL).origin && !FONT_ORIGINS.includes(origin)) {
+    if (origin !== new URL(baseURL).origin) {
       offOrigin.push(request.url());
     }
   });
@@ -52,7 +51,7 @@ test("two taps from cold load to a story", async ({ page, context, baseURL }) =>
   // The shelf is manifest-driven, not hardcoded.
   expect(await page.evaluate(() => window.__shell.manifestLoaded)).toBe(true);
 
-  // Privacy: no cookies, no third-party traffic (fonts tracked separately).
+  // Privacy: no cookies, no third-party traffic at all (fonts are self-hosted).
   expect(await context.cookies()).toHaveLength(0);
   expect(offOrigin).toEqual([]);
 });
