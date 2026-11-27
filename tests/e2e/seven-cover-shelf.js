@@ -29,11 +29,11 @@ export const SEVEN_COVER_MANIFEST = {
   })),
 };
 
-// Serve the stubbed manifest, open the EN shelf, and wait for every cover's
+// Serve the stubbed manifest (or a variant of it), open the EN shelf, and wait for every cover's
 // art to finish loading so layout-space measurements are final.
-export async function openSevenCoverShelf(page) {
+export async function openSevenCoverShelf(page, manifest = SEVEN_COVER_MANIFEST) {
   await page.route("**/en/manifest.json", (route) =>
-    route.fulfill({ contentType: "application/json", body: JSON.stringify(SEVEN_COVER_MANIFEST) }),
+    route.fulfill({ contentType: "application/json", body: JSON.stringify(manifest) }),
   );
   await page.goto("/play?lang=en&theme=light", { waitUntil: "networkidle" });
   await page.waitForSelector(".covers .cover");
