@@ -66,7 +66,7 @@ Baloo 2 and Literata SHALL be served from the app's own `/static/fonts/` with th
 - **THEN** none references `fonts.googleapis.com` or `fonts.gstatic.com`, and no policy names a Google host
 
 #### Scenario: Both families render
-- **WHEN** the shelf greeting (Baloo 2) and a reading-mode string (Literata) render in a real browser
+- **WHEN** the shelf greeting (Baloo 2) and a Literata string (the 404 heading or the landing tagline) render in a real browser
 - **THEN** both families load from `/static/fonts/` and the computed font is the named family, not a fallback
 
 #### Scenario: Landing page styles

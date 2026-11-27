@@ -160,6 +160,7 @@ Names only; values live in the places below and never in the repo. `.env.example
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_ENDPOINT` | Render env, local `.env`. Pipeline and app tracing |
 | `RENDER_DEPLOY_HOOK_URL` | GitHub Actions secret. Used by the CI `deploy` job |
 | `RENDER_GIT_COMMIT` | Set by Render on every deploy (not secret) |
+| `CSP_REPORT_ONLY` | Render env, local `.env` (not secret; default `false`). `true` sends the Content-Security-Policy as report-only: the rollback switch |
 
 Never commit `.env`; it is gitignored and read-denied in `.claude/settings.json`.
 

@@ -139,7 +139,10 @@ def create_app() -> FastAPI:
     # Starlette runs this handler in ServerErrorMiddleware, outside every user
     # middleware, so the 500 stamps its own headers. Starlette re-raises after
     # it, so the server log and Sentry's ASGI integration still see the error;
-    # the explicit capture is deduplicated by Sentry's Dedupe integration.
+    # the explicit capture is deduplicated by Sentry's Dedupe integration. The
+    # explicit unhandled_error line is kept for its event and path fields;
+    # uvicorn also logs the re-raised exception, so a 500 appears twice in the
+    # log (one Sentry event).
     @app.exception_handler(Exception)
     async def server_error_handler(request: Request, exc: Exception) -> Response:
         logger.exception(

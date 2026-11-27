@@ -13,9 +13,9 @@ Test first throughout: each task writes its failing test, then the code that mak
 
 - [x] 2.1 Write failing tests that build the app through `create_app()` with env set (then `get_settings.cache_clear()`): `/play`, `/`, `/health` and the 404 page carry the public policy; `/parent` (Clerk configured) carries the admin policy; `/parent` with Clerk unset (404) carries the public policy; Clerk configured, `/play`'s policy names no Clerk, `challenges.cloudflare.com` or `protect.clerk.com` host (header twin of the ADR-003 guard)
 - [x] 2.2 Add `csp_report_only: bool = False` to `Settings` with failing tests: default sends `Content-Security-Policy` only; `CSP_REPORT_ONLY=true` sends `Content-Security-Policy-Report-Only` with the same value and no `Content-Security-Policy`
-- [x] 2.3 Change `SecurityHeadersMiddleware` to take the two policies and the header name, choosing by the `/parent` and `/workshop` prefixes (shared with `CrossOriginWriteGuard`), through one `apply_security_headers(headers, path)` helper; wire it in `create_app()`; verify 2.1 and 2.2 pass and the existing M16 tests stay green
+- [x] 2.3 Change `SecurityHeadersMiddleware` to take the two policies and the header name, choosing by the `/parent` and `/workshop` prefixes (shared with `CrossOriginWriteGuard`), through one `SecurityPolicy.apply(headers, path)` method; wire it in `create_app()`; verify 2.1 and 2.2 pass and the existing M16 tests stay green
 - [x] 2.4 Write a failing test that forces a 500 (a test-only route raising `RuntimeError`, `TestClient(raise_server_exceptions=False)`) and asserts all four headers, the path's policy, the `Internal Server Error` body, and that Sentry capture (mocked) and the error log still fire
-- [x] 2.5 Register an `Exception` handler in `create_app()` that returns the plain 500 response with `apply_security_headers` applied; verify 2.4 passes
+- [x] 2.5 Register an `Exception` handler in `create_app()` that returns the plain 500 response with `SecurityPolicy.apply` applied; verify 2.4 passes
 - [x] 2.6 Add `CSP_REPORT_ONLY` to `.env.example` with a one-line comment; verify `make check` passes
 
 ## 3. No inline script or style on public pages
@@ -30,7 +30,7 @@ Test first throughout: each task writes its failing test, then the code that mak
 - [x] 4.1 Write a failing pytest that scans every template and stylesheet under `src/` for `fonts.googleapis.com` and `fonts.gstatic.com`, and asserts `src/static/fonts/baloo-2/OFL.txt` and `src/static/fonts/literata/OFL.txt` exist; verify it fails today
 - [x] 4.2 Download the variable woff2 files for Baloo 2 (`latin`, `latin-ext`, `devanagari`) and Literata (`latin`, `latin-ext`, `greek`, `cyrillic`, `cyrillic-ext`) into `src/static/fonts/<family>/`, with each family's `OFL.txt` from the `google/fonts` repo; verify the files are woff2 (`file` output) and the licence names the family
 - [x] 4.3 Write `src/static/css/fonts.css` with the `@font-face` rules (same `unicode-range` values, `font-display: swap`, local `url(/static/fonts/...)`), link it from `index.html`, `landing.html`, `404.html` and `auth/base.html`, and remove every Google Fonts `<link>` and `preconnect`; verify 4.1 passes
-- [x] 4.4 Delete `FONT_ORIGINS` from `tests/e2e/two-tap.spec.js` so the off-origin request list must equal `[]`; add a Playwright check that the shelf greeting computes to `Baloo 2` and a reading-mode string to `Literata`, both loaded from `/static/fonts/`; verify both pass, and attach screenshots of the Italian, Greek, Russian and Hindi shelves to the PR
+- [x] 4.4 Delete `FONT_ORIGINS` from `tests/e2e/two-tap.spec.js` so the off-origin request list must equal `[]`; add a Playwright check that the shelf greeting computes to `Baloo 2` and a Literata string (the 404 heading or the landing tagline) to `Literata`, both loaded from `/static/fonts/`; verify both pass, and attach screenshots of the Italian, Greek, Russian and Hindi shelves to the PR
 
 ## 5. Browser proof
 

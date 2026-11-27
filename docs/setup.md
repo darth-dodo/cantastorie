@@ -337,6 +337,13 @@ The app writes one line per event to stdout; `PYTHONUNBUFFERED=1` in the
 - **Level:** `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`;
   default `INFO`) sets the `src.*` loggers. Third-party libraries stay at
   `WARNING`. Leave it unset in Render unless you are debugging.
+- **Content-Security-Policy rollback:** `CSP_REPORT_ONLY` (default `false`)
+  decides how the policy is sent. Unset or `false`, every response carries an
+  enforced `Content-Security-Policy`. `true` sends the same value as
+  `Content-Security-Policy-Report-Only`, so the browser reports violations in
+  the console and blocks nothing. To roll back a policy that breaks a page in
+  production, set `CSP_REPORT_ONLY=true` in Render → Environment and restart
+  the service, then fix the policy and remove the variable.
 - **Format:** key=value (logfmt) lines, not JSON:
   `ts=2026-10-03T17:30:51.466Z level=INFO logger=src.workshop.manager event=run_started run_id=… family=…`.
   Render's log viewer shows raw text and searches by substring, so

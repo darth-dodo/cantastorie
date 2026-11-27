@@ -6,6 +6,7 @@ staged assets) pass through untouched.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -14,13 +15,15 @@ from starlette.responses import JSONResponse
 
 from src.api.routes._nav import fapi_host
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
     from src.config import Settings
 
 # M16. Every response carries these; the Content-Security-Policy is added per
-# path by apply_security_headers (AI-505).
+# path by SecurityPolicy.apply (AI-505).
 SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -36,15 +39,44 @@ CLERK_FRAUD_PROTECTION = "https://*.protect.clerk.com"
 CLERK_IMAGES = "https://img.clerk.com"
 
 
+def _origin(value: str) -> str | None:
+    """The scheme, host and port of an absolute http(s) URL, never its userinfo."""
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    host = f"[{parts.hostname}]" if ":" in parts.hostname else parts.hostname
+    port = f":{parts.port}" if parts.port is not None else ""
+    return f"{parts.scheme}://{host}{port}"
+
+
+def _is_same_origin_path(value: str) -> bool:
+    parts = urlsplit(value)
+    return not parts.scheme and not parts.netloc
+
+
 def _asset_origins(settings: Settings) -> list[str]:
-    """The origins of ASSET_BASE and R2_PUBLIC_BASE that are absolute URLs."""
+    """The origins of ASSET_BASE and R2_PUBLIC_BASE that are absolute URLs.
+
+    A same-origin path adds nothing. Any other value the policy cannot use
+    (protocol-relative, a non-http scheme) is left out with a warning, since
+    the browser would then block the assets it names.
+    """
     origins: list[str] = []
-    for value in (settings.asset_base, settings.r2_public_base):
-        parts = urlsplit(value)
-        if parts.scheme in ("http", "https") and parts.netloc:
-            origin = f"{parts.scheme}://{parts.netloc}"
-            if origin not in origins:
-                origins.append(origin)
+    for name, value in (
+        ("ASSET_BASE", settings.asset_base),
+        ("R2_PUBLIC_BASE", settings.r2_public_base),
+    ):
+        if not value or _is_same_origin_path(value):
+            continue
+        origin = _origin(value)
+        if origin is None:
+            logger.warning(
+                "csp_asset_origin_ignored",
+                extra={"event": "csp_asset_origin_ignored", "setting": name},
+            )
+            continue
+        if origin not in origins:
+            origins.append(origin)
     return origins
 
 

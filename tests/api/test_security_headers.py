@@ -159,11 +159,44 @@ def test_r2_public_base_on_another_origin_is_added_and_deduplicated() -> None:
 
 
 @pytest.mark.parametrize("asset_base", ["/static/content", "/published"])
-def test_relative_asset_base_adds_nothing_beyond_self(asset_base: str) -> None:
-    public, _ = build_policies(settings(asset_base=asset_base))
+def test_relative_asset_base_adds_nothing_beyond_self(
+    asset_base: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="src.api.security"):
+        public, _ = build_policies(settings(asset_base=asset_base))
     directives = parse(public)
     for name in ("img-src", "media-src", "connect-src"):
         assert directives[name] == ["'self'"]
+    assert caplog.records == []
+
+
+def test_asset_origin_drops_userinfo_and_keeps_the_port() -> None:
+    public, _ = build_policies(
+        settings(asset_base="https://user:secret@Pub-Example.r2.dev:8443/published")
+    )
+    assert parse(public)["img-src"] == ["'self'", "https://pub-example.r2.dev:8443"]
+    assert "user" not in public
+    assert "secret" not in public
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("asset_base", "//pub-example.r2.dev/published"),
+        ("asset_base", "ftp://pub-example.r2.dev/published"),
+        ("r2_public_base", "//pub-example.r2.dev/published"),
+    ],
+)
+def test_an_ignored_asset_origin_logs_one_warning(
+    field: str, value: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="src.api.security"):
+        public, _ = build_policies(settings(**{field: value}))
+    assert parse(public)["img-src"] == ["'self'"]
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert warnings[0].getMessage() == "csp_asset_origin_ignored"
+    assert warnings[0].setting == field.upper()  # type: ignore[attr-defined]
 
 
 # 1.3 Admin policy
