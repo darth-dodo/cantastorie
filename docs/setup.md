@@ -152,12 +152,15 @@ A manifest is the index of a whole shelf: a bad write or a delete empties that s
 
 ```
 snapshots/manifests/latest/{manifest key}                              ← the last app-written state, never expires
+snapshots/manifests/previous/{manifest key}                            ← the latest copy each write replaces, never expires
 snapshots/manifests/history/{manifest key}/{UTC stamp}Z-{md5}.json     ← one per real change, expires after 30 days
 ```
 
 `{manifest key}` is the manifest's own path, so `published/it/manifest.json` and `published/families/{token}/it/manifest.json` keep separate snapshots. A write skipped because the bytes are unchanged adds no history. A failed snapshot never fails the publish: it logs `manifest_snapshot_failed` and sends one Sentry event with the family token hashed; the next write, or a `snapshot-manifests` run, closes the gap. `snapshots/` sits outside `pending/`, so a cleanup of `pending/` cannot reach it, and nothing is ever written under `snapshots/` in the public bucket.
 
-**One-time setup after deploy (owner).** Expire history after 30 days (the `latest/` prefix has no rule), then check it:
+Before each write replaces `latest/`, the old latest copy is copied server-side to `previous/`, so a bad write after more than 30 quiet days (history expired) still leaves the last good state.
+
+**One-time setup after deploy (owner).** Expire history after 30 days, then check it. The rule must cover `snapshots/manifests/history/` only: never `latest/` or `previous/`, and never the whole `snapshots/` prefix.
 
 ```bash
 wrangler r2 bucket lifecycle add cantastorie-pending manifest-history snapshots/manifests/history/ --expire-days 30 -J eu
@@ -179,6 +182,7 @@ uv run cantastorie restore-manifest published/it/manifest.json --list
 
 # 2. Dry run (the default): prints the story ids it would add and remove, and any it drops.
 uv run cantastorie restore-manifest published/it/manifest.json --from <history name>
+uv run cantastorie restore-manifest published/it/manifest.json --from previous
 uv run cantastorie restore-manifest published/it/manifest.json --latest
 
 # 3. Restore. It first copies the live manifest into history and prints its name.
@@ -192,7 +196,9 @@ uv run cantastorie audit
 ```
 
 - **Review gate**: a restore keeps an entry only when that story's `story.json` is already published under the same lane's `stories/` directory and its `story` and `cover` URLs stay inside that lane. Anything else (a story unpublished since the snapshot, an entry pointing at another lane) is dropped and reported. A prompt is kept only when its audio is still published in the lane. A restore writes only the manifest, never a story asset, so it cannot surface a story a parent has not approved.
-- **Concurrency**: the write goes through the same IfMatch-and-retry helper as publish. A story published or unpublished while the restore runs is kept as the concurrent writer left it.
+- **Concurrency (fails closed)**: the write goes through the same IfMatch helper as publish. If the live manifest changed between the dry run's plan and the write (a publish, an unpublish, a prompt run), the restore writes nothing and exits 1 with "manifest changed since planned; rerun the dry run". Just before the write each kept entry's `story.json` is checked again and a vanished one is dropped. An unpublish can still delete a story's assets in the moment after that check, so the `audit` after every restore (step 5) is the backstop.
+- **No-op restore**: a restore whose result equals the live manifest writes nothing, takes no backup and prints no undo.
+- **Undo is exact for app-written manifests**: the undo restores the backup's content and rewrites it in the app's canonical JSON (sorted keys, 2-space indent). A manifest the app wrote comes back byte for byte; one written by hand in another layout comes back with the same content but different bytes.
 - **Deleted manifest**: `--latest` recreates it with the surviving entries.
 - **Family manifests**: pass the real key (`published/families/{token}/{lang}/manifest.json`); output shows the token hashed. Rehearse on a shared manifest.
 - **Out of scope**: story assets, prompts audio, run records and staged stories under `pending/` have no snapshots (#199).

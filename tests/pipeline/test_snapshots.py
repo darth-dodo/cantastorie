@@ -29,6 +29,8 @@ from src.pipeline.publish import (
 from src.pipeline.snapshots import (
     HISTORY_PREFIX,
     LATEST_PREFIX,
+    PREVIOUS_PREFIX,
+    ManifestConflictError,
     history_key,
     latest_key,
     list_snapshots,
@@ -222,11 +224,11 @@ def test_listing_shows_the_latest_and_history_copies_newest_first_with_story_cou
 
     listed = list_snapshots(_settings(tmp_path), SHARED_KEY, client=s3)
 
-    assert [item.kind for item in listed] == ["latest", "history", "history"]
-    assert [item.story_count for item in listed] == [2, 2, 1]
+    assert [item.kind for item in listed] == ["latest", "previous", "history", "history"]
+    assert [item.story_count for item in listed] == [2, 1, 2, 1]
     history_times = [item.written_at for item in listed if item.kind == "history"]
     assert history_times == sorted(history_times, reverse=True)
-    assert listed[1].name == _history(s3, SHARED_KEY)[-1].rsplit("/", 1)[-1]
+    assert listed[2].name == _history(s3, SHARED_KEY)[-1].rsplit("/", 1)[-1]
 
 
 # 3. Restore with the review gate intact
@@ -365,7 +367,7 @@ def test_a_restore_aborts_when_the_backup_copy_fails(
     assert _body(s3, SHARED_KEY) == before
 
 
-def test_a_restore_that_loses_a_race_keeps_the_concurrent_publish(
+def test_a_restore_that_loses_a_race_fails_closed_and_keeps_the_concurrent_publish(
     tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _publish(tmp_path, s3, "first-story")
@@ -390,10 +392,101 @@ def test_a_restore_that_loses_a_race_keeps_the_concurrent_publish(
 
     monkeypatch.setattr(s3, "put_object", race_a_concurrent_publish)
 
-    restore_manifest(_settings(tmp_path), SHARED_KEY, source=first_only, yes=True, client=s3)
+    with pytest.raises(ManifestConflictError, match="manifest changed since planned"):
+        restore_manifest(_settings(tmp_path), SHARED_KEY, source=first_only, yes=True, client=s3)
 
     assert raced
-    assert sorted(_ids(s3, SHARED_KEY)) == ["concurrent-story", "first-story"]
+    assert sorted(_ids(s3, SHARED_KEY)) == ["concurrent-story", "first-story", "second-story"]
+
+
+def test_a_restore_drops_an_entry_whose_story_vanishes_before_the_write(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _publish(tmp_path, s3, "first-story")
+    _publish(tmp_path, s3, "second-story")
+    both = sorted(_history(s3, SHARED_KEY))[-1].rsplit("/", 1)[-1]
+    _publish(tmp_path, s3, "third-story")
+    put_snapshot = snapshots.put_snapshot
+
+    def unpublish_assets_meanwhile(*args: Any, **kwargs: Any) -> str:
+        s3.delete_object(Bucket=BUCKET, Key="published/stories/second-story/story.json")
+        return put_snapshot(*args, **kwargs)
+
+    monkeypatch.setattr(snapshots, "put_snapshot", unpublish_assets_meanwhile)
+
+    plan = restore_manifest(_settings(tmp_path), SHARED_KEY, source=both, yes=True, client=s3)
+
+    assert _ids(s3, SHARED_KEY) == ["first-story"]
+    assert "second-story" in [item.story_id for item in plan.dropped]
+
+
+def _restore_family_entry(tmp_path: Path, s3: S3Client, entry: dict[str, Any]) -> list[str]:
+    _publish(tmp_path, s3, "family-story", family_token=TOKEN)
+    _publish(tmp_path, s3, "shared-story")
+    snapshot = json.loads(_body(s3, FAMILY_KEY))
+    snapshot["stories"] = [entry]
+    s3.put_object(
+        Bucket=PENDING_BUCKET, Key=latest_key(FAMILY_KEY), Body=json.dumps(snapshot).encode()
+    )
+    plan = restore_manifest(_settings(tmp_path), FAMILY_KEY, client=s3)
+    return [item.story_id for item in plan.dropped]
+
+
+def test_a_restore_drops_a_cover_that_climbs_out_of_its_lane(tmp_path: Path, s3: S3Client) -> None:
+    lane = f"{PUBLIC_BASE}/families/{TOKEN}/stories/family-story"
+    dropped = _restore_family_entry(
+        tmp_path,
+        s3,
+        {
+            "id": "family-story",
+            "story": f"{lane}/story.json",
+            "cover": f"{lane}/../../../../stories/shared-story/cover.webp",
+        },
+    )
+
+    assert dropped == ["family-story"]
+
+
+def test_a_restore_drops_an_entry_on_a_foreign_host(tmp_path: Path, s3: S3Client) -> None:
+    lane = f"https://evil.example.test/published/families/{TOKEN}/stories/family-story"
+    dropped = _restore_family_entry(
+        tmp_path,
+        s3,
+        {"id": "family-story", "story": f"{lane}/story.json", "cover": f"{lane}/cover.webp"},
+    )
+
+    assert dropped == ["family-story"]
+
+
+def test_each_write_keeps_the_replaced_latest_as_a_non_expiring_previous_copy(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    _publish(tmp_path, s3, "first-story")
+    first_latest = _body(s3, latest_key(SHARED_KEY), PENDING_BUCKET)
+    _publish(tmp_path, s3, "second-story")
+
+    previous_key = f"{PREVIOUS_PREFIX}/{SHARED_KEY}"
+    assert _body(s3, previous_key, PENDING_BUCKET) == first_latest
+    assert not PREVIOUS_PREFIX.startswith(HISTORY_PREFIX)
+    listed = list_snapshots(_settings(tmp_path), SHARED_KEY, client=s3)
+    assert [item.kind for item in listed][:2] == ["latest", "previous"]
+    assert listed[1].story_count == 1
+
+    plan = restore_manifest(_settings(tmp_path), SHARED_KEY, source="previous", yes=True, client=s3)
+
+    assert plan.removed == ["second-story"]
+    assert _ids(s3, SHARED_KEY) == ["first-story"]
+
+
+def test_a_restore_that_changes_nothing_takes_no_backup(tmp_path: Path, s3: S3Client) -> None:
+    _publish(tmp_path, s3, "first-story")
+    history_before = _history(s3, SHARED_KEY)
+
+    plan = restore_manifest(_settings(tmp_path), SHARED_KEY, yes=True, client=s3)
+
+    assert plan.written is False
+    assert plan.backup is None
+    assert _history(s3, SHARED_KEY) == history_before
 
 
 def test_restoring_the_latest_copy_recreates_a_deleted_manifest(

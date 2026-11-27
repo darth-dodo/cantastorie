@@ -9,7 +9,7 @@ path (M13, docs/setup.md "Recovering a manifest").
 """
 
 from datetime import UTC, datetime
-from typing import Literal, cast, get_args
+from typing import Literal, NoReturn, cast, get_args
 
 import typer
 
@@ -200,11 +200,19 @@ def snapshot_manifests_command(
     dry_run: bool = typer.Option(False, "--dry-run", help="List the manifests; write nothing"),
 ) -> None:
     """Copy every live manifest into the private snapshot area (seed or backup)."""
-    keys = seed_snapshots(get_settings(), dry_run=dry_run)
+    try:
+        keys = seed_snapshots(get_settings(), dry_run=dry_run)
+    except ValueError as error:
+        _refuse(error)
     for key in keys:
         typer.echo(f"  {redact_family_tokens(key)}")
     verb = "Would snapshot" if dry_run else "Snapshotted"
     typer.echo(f"{verb} {len(keys)} manifest(s).")
+
+
+def _refuse(error: ValueError) -> NoReturn:
+    typer.echo(f"Refused: {redact_family_tokens(str(error))}")
+    raise typer.Exit(1) from None
 
 
 def _utc(moment: datetime) -> str:
@@ -215,7 +223,9 @@ def _utc(moment: datetime) -> str:
 def restore_manifest_command(
     key: str = typer.Argument(..., help="Manifest key, e.g. published/it/manifest.json"),
     list_only: bool = typer.Option(False, "--list", help="List this manifest's snapshots"),
-    source: str = typer.Option("", "--from", help="A history snapshot name from --list"),
+    source: str = typer.Option(
+        "", "--from", help="A snapshot name from --list (a history name, or previous)"
+    ),
     latest: bool = typer.Option(False, "--latest", help="Restore the latest snapshot"),
     yes: bool = typer.Option(False, "--yes", help="Write the restore; without it, a dry run"),
 ) -> None:
@@ -223,7 +233,10 @@ def restore_manifest_command(
     settings = get_settings()
     shown = redact_family_tokens(key)
     if list_only:
-        found = list_snapshots(settings, key)
+        try:
+            found = list_snapshots(settings, key)
+        except ValueError as error:
+            _refuse(error)
         typer.echo(f"Snapshots of {shown}, newest first:")
         for item in found:
             typer.echo(f"  {item.name:<52} {_utc(item.written_at)}  {item.story_count} stories")
@@ -233,7 +246,10 @@ def restore_manifest_command(
     if latest == bool(source):
         typer.echo("Choose exactly one of --latest or --from <name> (see --list).")
         raise typer.Exit(1)
-    plan = restore_manifest(settings, key, source=source or None, yes=yes)
+    try:
+        plan = restore_manifest(settings, key, source=source or None, yes=yes)
+    except ValueError as error:
+        _refuse(error)
     typer.echo(f"Restore {shown} from {plan.source}:")
     if not plan.live_exists:
         typer.echo("  no live manifest: it will be recreated")

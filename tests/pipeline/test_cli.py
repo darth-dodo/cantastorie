@@ -598,3 +598,21 @@ def test_restore_manifest_needs_exactly_one_source() -> None:
 
     assert neither.exit_code == 1
     assert both.exit_code == 1
+
+
+def test_restore_manifest_errors_never_print_the_raw_family_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(settings: object, key: str, *, source: str | None = None, yes: bool = False) -> None:
+        raise ValueError(f"no snapshot 'latest' for {key}")
+
+    monkeypatch.setattr(cli, "restore_manifest", refuse)
+    monkeypatch.setattr(cli, "list_snapshots", refuse)
+
+    restored = runner.invoke(app, ["restore-manifest", FAMILY_KEY, "--latest"])
+    listed = runner.invoke(app, ["restore-manifest", FAMILY_KEY, "--list"])
+
+    for result in (restored, listed):
+        assert result.exit_code == 1
+        assert "0123456789abcdef0123456789abcdef" not in result.output
+        assert "no snapshot" in result.output

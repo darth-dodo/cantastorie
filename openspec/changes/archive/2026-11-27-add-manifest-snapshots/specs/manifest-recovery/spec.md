@@ -44,7 +44,7 @@ Snapshots SHALL live only in the private pending bucket, under a `snapshots/` pr
 
 ### Requirement: History expires, the latest copy does not
 
-History copies SHALL expire after a fixed retention (default 30 days) set by a lifecycle rule on the pending bucket. The latest copy of each manifest SHALL be kept until it is replaced by a newer write.
+History copies SHALL expire after a fixed retention (default 30 days) set by a lifecycle rule on the pending bucket. The latest copy of each manifest SHALL be kept until it is replaced by a newer write, and the copy it replaces SHALL be kept as a non-expiring previous copy, restorable like any snapshot.
 
 #### Scenario: A manifest unchanged for longer than the retention is still recoverable
 - **WHEN** a manifest was last written more than the retention ago and its history copies have expired
@@ -76,7 +76,7 @@ Restoring a snapshot SHALL by default only print what would change: the story id
 
 ### Requirement: A restore never lists an unreviewed or removed story
 
-A restore SHALL keep a snapshot entry only when that story's `story.json` exists under the same lane's `stories/` directory and its URLs stay inside that lane. Every other entry SHALL be dropped and reported. A restore SHALL NOT write or copy any story asset.
+A restore SHALL keep a snapshot entry only when that story's `story.json` exists under the same lane's `stories/` directory, its story URL is exactly that `story.json` under the lane's public base, its cover URL sits in that story's directory, and neither URL has a `..` segment. Every other entry SHALL be dropped and reported. A restore SHALL NOT write or copy any story asset.
 
 #### Scenario: A story unpublished since the snapshot stays gone
 - **WHEN** a snapshot lists a story whose directory unpublish has since deleted
@@ -92,7 +92,11 @@ A restore SHALL keep a snapshot entry only when that story's `story.json` exists
 
 ### Requirement: A restore is safe under concurrency and can be undone
 
-A confirmed restore SHALL write through the same conditional write as publish, so a concurrent publish is never silently lost, SHALL first take a history copy of the live manifest it replaces (even one no app write produced), and SHALL leave a snapshot of what it wrote.
+A confirmed restore SHALL write through the same conditional write as publish and SHALL fail closed: when the live manifest changed between the restore's plan and its write, it SHALL write nothing and report that the manifest changed since planned. It SHALL first take a history copy of the live manifest it replaces (even one no app write produced) and SHALL leave a snapshot of what it wrote.
+
+#### Scenario: A concurrent publish during a restore
+- **WHEN** a publish changes the live manifest after the restore planned and before it wrote
+- **THEN** the restore writes nothing, the concurrent publish stays listed, and the owner is told to rerun the dry run
 
 #### Scenario: Undoing a restore
 - **WHEN** the owner restores snapshot A and then restores the history copy the restore took of the manifest it replaced
@@ -101,3 +105,15 @@ A confirmed restore SHALL write through the same conditional write as publish, s
 #### Scenario: Restoring a deleted manifest
 - **WHEN** the live manifest no longer exists and the owner confirms a restore of its latest copy
 - **THEN** the manifest is recreated with the latest copy's surviving entries
+
+### Requirement: A restore re-checks stories at write time and skips a no-op
+
+Just before the write, a restore SHALL check each kept entry's `story.json` again and drop any that vanished. A restore that would change nothing SHALL write nothing, take no backup and offer no undo.
+
+#### Scenario: A story removed between plan and write
+- **WHEN** a kept entry's `story.json` is deleted after the plan and before the write
+- **THEN** the restored manifest does not list it and the restore reports it as dropped
+
+#### Scenario: Restoring a copy equal to the live manifest
+- **WHEN** the owner confirms a restore whose result equals the live manifest
+- **THEN** nothing is written and no backup copy is taken
