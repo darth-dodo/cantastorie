@@ -199,6 +199,27 @@ test("reopening a branched story in the same session follows the other arm", asy
   expect(arts).not.toContain(ARM_A_FIRST_ART);
 });
 
+// "Again" after a branching story (#208): the replay starts over on the
+// story's original pages, so the choice comes round again instead of the
+// rebuilt path carrying the child straight into last time's arm.
+test("Again after a branch offers the choice again", async ({ page }) => {
+  test.setTimeout(90_000);
+  await wakeAndOpenBranchingStory(page);
+
+  const options = page.locator(".overlay .option");
+  await expect(options).toHaveCount(2, { timeout: 20_000 });
+  await options.nth(1).click(); // arm B
+  await expect(page.locator(".end")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: AGAIN }).click();
+  await expect(page.locator(".player")).toBeVisible();
+  // The replayed path is the shared prefix again, not prefix plus arm B...
+  await expect(page.locator(".bead")).toHaveCount(ARM_FIRST_PAGE_INDEX);
+  // ...and the choice overlay opens on the branch page.
+  await expect(page.locator(".overlay .prompt")).toHaveText(CHOICE_PROMPT, { timeout: 20_000 });
+  await expect(options).toHaveCount(2);
+});
+
 // Auto-continue (M31, #186): product.md -> "Choice behavior, precisely". After
 // 30 seconds idle on the choice the nudge plays (the cards nudge; the spoken
 // line when the language carries one), and 10 seconds later the first option

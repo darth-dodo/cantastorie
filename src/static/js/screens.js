@@ -875,7 +875,11 @@ export function buildGate({ lang = 'en', onPass = () => {}, opener = null } = {}
   return backdrop;
 }
 
-export function buildEnd(store, endText = { title: "The End!", again: "Again!", prompt: "Another story?" }) {
+export function buildEnd(
+  store,
+  endText = { title: "The End!", again: "Again!", prompt: "Another story?" },
+  onAgain = () => store.replay(),
+) {
   const screen = el("div", "screen end night");
 
   const stars = el("div", "stars");
@@ -888,7 +892,7 @@ export function buildEnd(store, endText = { title: "The End!", again: "Again!", 
 
   const options = el("div", "options");
   options.append(
-    blobOption({ label: endText.again, icon: iconReplay(), onTap: () => store.replay() }),
+    blobOption({ label: endText.again, icon: iconReplay(), onTap: onAgain }),
     blobOption({ label: endText.prompt, icon: iconShelf(), onTap: () => store.toShelf() }),
   );
 

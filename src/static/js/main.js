@@ -485,9 +485,20 @@ export async function init(
   // "Start over" on the resume offer: the rebuilt branching path is dropped
   // for the story's original pages BEFORE the store restarts, so page 0 opens
   // on the unextended path and its first choice comes round again (#189).
-  function onRestart() {
+  function resetToPristinePath() {
     if (activeStory && activePristinePages) playback.resetPath([...activePristinePages]);
+  }
+
+  function onRestart() {
+    resetToPristinePath();
     store.resumeRestart();
+  }
+
+  // "Again" on the end screen starts over the same way: the choice comes
+  // round again instead of the old arm playing straight on (#208).
+  function onAgain() {
+    resetToPristinePath();
+    store.replay();
   }
 
   function render(state) {
@@ -560,7 +571,7 @@ export async function init(
         if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {
         playerScreen = null;
-        app.appendChild(buildEnd(store, ENDS[lang] ?? ENDS.en));
+        app.appendChild(buildEnd(store, ENDS[lang] ?? ENDS.en, onAgain));
       }
       shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError, settingsOpen };
 
