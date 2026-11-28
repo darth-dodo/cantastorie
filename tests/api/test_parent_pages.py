@@ -327,6 +327,20 @@ def test_failed_run_shows_rested_not_the_pipeline_error(
     assert "ElevenLabs" not in response.text
 
 
+def test_failed_run_row_rests_at_the_step_that_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#172: the parent row names the recorded step, not "write"."""
+    run = new_run(VALID_TOKEN, StoryRequest(theme="the_sleepy_sea", language="it"))
+    run = run.advance("running").advance("failed", error="boom", failed_step="illustrate")
+    manager = _FakeManager()
+    _store_with_runs(manager, [run])
+    client = _parent_client(monkeypatch, manager)
+    response = client.get(f"/parent/runs/{run.id}/progress")
+    assert "rested at illustrate" in response.text
+    assert "rested at write" not in response.text
+
+
 def test_workshop_progress_fragment_is_unchanged_for_operator() -> None:
     """The parametrization must not alter the workshop's rendering defaults."""
     from src.api.routes import workshop as workshop_module  # noqa: PLC0415

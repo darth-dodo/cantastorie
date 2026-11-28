@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 import sentry_sdk
 
-from src.observability import family_hash, run_context
+from src.observability import failed_step, family_hash, run_context
 from src.pipeline.generate import generate_story
 from src.pipeline.steps.assemble import ContentRulesViolation
 from src.pipeline.steps.image_safety import ImageSafetyRejectedError
@@ -73,6 +73,25 @@ def _safety_rejection_fields(error: Exception) -> dict[str, object] | None:
     if story_id is not None:
         fields["story_id"] = story_id
     return fields
+
+
+# The rested screen speaks in six beads; finer timed steps fold into them.
+BEADS = ("write", "revise", "safety", "narrate", "illustrate", "assemble")
+_STEP_BEADS = {"image_safety": "illustrate", "narrate_prompts": "narrate", "stage": "assemble"}
+
+
+def _failed_bead(error: Exception) -> str | None:
+    """The bead a run stopped on (#172), from the step the error was raised
+    in. A gate rejection is raised after its loop, so it is named by type."""
+    step = failed_step(error)
+    if step is None:
+        if isinstance(error, StoryRejectedError):
+            return "safety"
+        if isinstance(error, ImageSafetyRejectedError):
+            return "illustrate"
+        return None
+    bead = _STEP_BEADS.get(step, step)
+    return bead if bead in BEADS else None
 
 
 GLOBAL_CAP_MESSAGE = "the story workshop is resting for today — tomorrow brings more"
@@ -283,7 +302,7 @@ class RunManager:
                 else:
                     logger.exception("run_failed", extra=failure)
                 sentry_sdk.capture_exception(error)
-                record = record.advance("failed", error=str(error))
+                record = record.advance("failed", error=str(error), failed_step=_failed_bead(error))
             self._store.save(record)
             return record
 

@@ -131,6 +131,9 @@ class RunRecord(BaseModel):
     # digests existed has none, so it does not count until reviewed again.
     reviewed_digest: str | None = None
     error: str | None = None
+    # The bead a failed run stopped on (#172); None when the failure fell
+    # outside any step, or for records saved before it was kept.
+    failed_step: str | None = None
     created_at: datetime
     updated_at: datetime
     _etag: str | None = PrivateAttr(default=None)
@@ -168,6 +171,7 @@ class RunRecord(BaseModel):
         *,
         error: str | None = None,
         story_id: str | None = None,
+        failed_step: str | None = None,
     ) -> RunRecord:
         if state not in _TRANSITIONS[self.state]:
             raise InvalidTransition(f"{self.state} → {state} is not in the run lifecycle")
@@ -176,6 +180,7 @@ class RunRecord(BaseModel):
                 "state": state,
                 # A retry starts clean; a failure carries its reason.
                 "error": error if state == "failed" else None,
+                "failed_step": failed_step if state == "failed" else None,
                 "story_id": self.story_id if story_id is None else story_id,
                 # A freshly staged story has not been seen yet.
                 "reviewed": False if state == "staged" else self.reviewed,

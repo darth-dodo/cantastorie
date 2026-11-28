@@ -9,6 +9,7 @@ seam and mint JWTs locally against a mock JWKS — zero network, no mocking of
 the code under test.
 """
 
+import asyncio
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -27,6 +28,7 @@ from src.api.auth import SESSION_COOKIE
 from src.api.main import create_app
 from src.api.routes.workshop import TEMPLATES_DIR, get_publisher, get_run_manager
 from src.config import Settings, get_settings
+from src.observability import timed_step
 from src.pipeline.models import Page, PageAudio, Story
 from src.pipeline.publish import STAGED_PREFIX
 from src.workshop.manager import RunManager
@@ -413,6 +415,52 @@ def test_a_stale_runs_progress_poll_self_heals_and_stops_polling(
     assert fragment.status_code == 200
     assert 'data-state="failed"' in fragment.text  # reaped, not still "running"
     assert "hx-get" not in fragment.text  # a reaped run no longer polls forever
+
+
+def _rest_bead(html: str) -> list[str]:
+    return re.findall(r'ws-bead-label ws-bead-label--rest">(\w+)<', html)
+
+
+def test_a_run_that_failed_at_narrate_rests_at_narrate(tmp_path: Path, s3: S3Client) -> None:
+    """#172: a mid-pipeline failure leaves no checkpoint dirs, so the beads
+    used to read "write". The record's failed step names where it stopped."""
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+
+    def fail_at_narrate(request: StoryRequest, settings: Settings, run_id: str) -> str:
+        with timed_step("narrate"):
+            raise RuntimeError("Client error '400 Bad Request' for url audio/speech")
+        return "unreachable"
+
+    harness.manager = RunManager(harness.store, harness.settings, generate=fail_at_narrate)
+    record = new_run("operator", StoryRequest(theme="first_snow", language="it"))
+    harness.store.save(record)
+    asyncio.run(harness.manager.execute(record))
+
+    fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    assert "The run rested at narrate" in fragment.text
+    assert _rest_bead(fragment.text) == ["narrate"]
+    assert "400 Bad Request" in fragment.text  # the note and the headline agree
+    bench = harness.client.get("/workshop")
+    assert "stopped at narrate" in bench.text
+
+
+def test_a_failed_run_with_no_recorded_step_falls_back_to_checkpoints(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """A reaped run (or a record from before #172) has no failed step."""
+    harness = _Harness(tmp_path, s3)
+    harness.sign_in()
+    record = new_run("operator", StoryRequest(theme="first_snow", language="it"))
+    harness.store.save(record.advance("running").advance("failed", error="interrupted"))
+    for step in ("write", "safety"):
+        (harness.settings.content_dir / "first_snow-it-abc" / step).mkdir(parents=True)
+
+    fragment = harness.client.get(f"/workshop/runs/{record.id}/progress")
+
+    assert "The run rested at narrate" in fragment.text
+    assert _rest_bead(fragment.text) == ["narrate"]
 
 
 def test_a_settled_run_stops_polling_and_links_its_stories(tmp_path: Path, s3: S3Client) -> None:

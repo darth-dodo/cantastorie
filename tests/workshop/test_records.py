@@ -22,6 +22,7 @@ from src.pipeline.models import PREMISE_MAX_LENGTH
 from src.workshop import records
 from src.workshop.records import (
     InvalidTransition,
+    RunRecord,
     RunStore,
     StoryRequest,
     new_run,
@@ -555,3 +556,21 @@ def test_listing_runs_skips_the_usage_folder(s3: S3Client) -> None:
     store.save(record)
 
     assert [r.id for r in store.list_runs()] == [record.id]
+
+
+def test_a_failed_record_keeps_its_failed_step_and_a_retry_clears_it() -> None:
+    """#172: the rested screen reads the step from the record."""
+    failed = (
+        new_run("family-abc", REQUEST).advance("running").advance("failed", failed_step="narrate")
+    )
+    assert failed.failed_step == "narrate"
+
+    retried = failed.advance("queued")
+    assert retried.failed_step is None
+
+
+def test_a_record_saved_before_failed_step_loads_without_one() -> None:
+    record = new_run("family-abc", REQUEST).advance("running").advance("failed", error="x")
+    data = record.model_dump(mode="json")
+    data.pop("failed_step", None)
+    assert RunRecord.model_validate(data).failed_step is None
