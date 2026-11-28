@@ -14,6 +14,13 @@ The owner picks the host before the spike task starts. Prices checked 2026-11-28
 | Self-hosted Temporal on Render | About $40 total (server private service Standard $25, Postgres Basic-256mb $6, storage about $1.50, worker $7) | No new vendor; we own upgrades, schema migrations and backups |
 | Temporal dev server | $0 | Not for production (Temporal's own docs); used for local development and CI in every option |
 
+## Alternatives rejected
+
+ADR-012 records each one with its reasons:
+- Keeping the in-process runs and patching them.
+- A Redis queue (RQ or arq).
+- Render Workflows, rejected by the owner on 2026-11-28 ("Temporal"). It would have meant no new vendor at about $2 to $3 a month. But it needs an account-wide `RENDER_API_KEY` on the web service, its retries cannot exclude safety rejections or read timeouts, a Frankfurt workflow service is unconfirmed, and it has only been GA since 2026-09-01.
+
 ## What Changes
 
 - A feature flag `PIPELINE_ENGINE` (`inprocess` by default, or `temporal`) chooses how a new run executes. The in-process path stays until the cutover, then is removed.

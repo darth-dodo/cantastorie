@@ -138,6 +138,23 @@ A story run is several minutes of paid provider calls (text, two judges, narrati
 
 Already rejected in ADR-001 for the pipeline's shape. A graph checkpointer still runs in the web process and still needs a durable store and a worker, so it solves less than Option C with the same new dependency. Not considered further.
 
+### Option E: Render Workflows (rejected by the owner on 2026-11-28: "Temporal")
+
+**Description**: Render's own durable runs (GA 2026-09-01). A flow is a plain Python function whose `ctx.step(...)` calls are checkpointed; if an instance fails, Render replays the flow on a new instance and reuses the results of completed steps. The web service starts a run with the `render` SDK's `start_flow` (with an `idempotency_key`) and reads it with `get_flow_run`. Declared in `render.yaml` as `type: workflow`.
+
+**What it would have offered**:
+- No new vendor and no always-on worker: per-second flex compute plus $0.25 per GB of retained state, about $2 to $3 a month at about 100 runs
+- Each run stays on the workflow version it started on, even when a new version deploys ("All attempts of a flow run use the workflow version the run started on")
+
+**Why it was rejected**:
+- Starting a run needs an account-wide `RENDER_API_KEY` on the web service, a credential that can also deploy, change or delete every service in the account
+- Step retries take only a count, a delay and a backoff (`Retry(max_retries, wait_duration_ms, backoff_scaling)`); there is no way to mark an error non-retryable, so a safety rejection or a provider read timeout would be retried like any other failure, unless every step catches and re-wraps its own errors
+- A Frankfurt workflow service is unconfirmed: the docs name no region for workflows except an Oregon exception for flows
+- It is new (GA 2026-09-01), and the docs do not describe what happens to a step in flight during a deploy
+- Not a differentiator: steps run one at a time on one instance and an interrupted step re-runs in full, and step outputs are capped at 4 MB with state kept 30 days, so the R2 cache tier is needed under Render Workflows too
+
+**Estimated Effort**: Similar to Option C. **Cost**: about $2 to $3 a month.
+
 ---
 
 ## Hosting options (Decision needed)
@@ -285,6 +302,7 @@ Planned as the OpenSpec change `move-pipeline-to-temporal`:
 - [Billable Actions](https://docs.temporal.io/cloud/actions): workflow starts, activity starts and retries, heartbeats that reach the server, queries received by a worker
 - [Temporal Cloud regions](https://docs.temporal.io/cloud/regions): `aws-eu-central-1` Frankfurt
 - [Temporal CLI server](https://docs.temporal.io/cli/server): the dev server is not for production
+- [Render Workflows](https://render.com/docs/workflows), [Defining flows](https://render.com/docs/workflows-defining-flows), [Triggering runs](https://render.com/docs/workflows-running) and [Limits and pricing](https://render.com/docs/workflows-limits): steps, replay, `Retry`, `RENDER_API_KEY`, the 4 MB and 30 day limits (checked 2026-11-28)
 - [Render pricing](https://render.com/pricing) and [Render free tier](https://render.com/docs/free): instance, Postgres and Key Value prices; free Postgres expires after 30 days
 - [temporalio on PyPI](https://pypi.org/project/temporalio/): Python SDK 1.37.0, Python 3.11+, Pydantic data converter
 - [Pydantic AI durable execution with Temporal](https://pydantic.dev/docs/ai/integrations/durable_execution/temporal/): considered and not used; it makes each model call an activity, while this design keeps a whole step as one activity
