@@ -24,7 +24,13 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, PrivateAttr, ValidationError, model_validator
 
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
-from src.pipeline.publish import CLIENT_CONFIG, STAGED_PREFIX, child_prefixes, parallel_map
+from src.pipeline.publish import (
+    CLIENT_CONFIG,
+    CONFLICT_CODES,
+    STAGED_PREFIX,
+    child_prefixes,
+    parallel_map,
+)
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -63,8 +69,6 @@ _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 USAGE_DIR = "_usage"
 # Conditional-write attempts before an increment gives up under contention.
 _COUNTER_ATTEMPTS = 5
-# R2 answers a lost conditional write with 412, or 409 when two land at once.
-_CONFLICT_CODES = frozenset({"PreconditionFailed", "ConditionalRequestConflict", "412", "409"})
 
 
 def _as_legacy_id_list(value: Any, key: str) -> list[str]:
@@ -312,7 +316,7 @@ class RunStore:
                         IfMatch=etag,
                     )
             except ClientError as error:
-                if str(error.response.get("Error", {}).get("Code")) in _CONFLICT_CODES:
+                if str(error.response.get("Error", {}).get("Code")) in CONFLICT_CODES:
                     continue
                 raise
             return count + 1

@@ -125,6 +125,8 @@ MANIFEST_PROMPT_KEYS = {
 }
 
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
+# R2 answers a lost conditional write with 412, or 409 when two land at once.
+CONFLICT_CODES = frozenset({"PreconditionFailed", "ConditionalRequestConflict", "412", "409"})
 _MANIFEST_WRITE_ATTEMPTS = 3
 
 
@@ -254,7 +256,7 @@ def _missing(error: ClientError) -> bool:
 
 
 def _precondition_failed(error: ClientError) -> bool:
-    return str(error.response.get("Error", {}).get("Code")) == "PreconditionFailed"
+    return str(error.response.get("Error", {}).get("Code")) in CONFLICT_CODES
 
 
 def _upload_if_new(
