@@ -381,8 +381,9 @@ def _write_manifest(
     and returns the current manifest plus its ETag (``None`` when the manifest
     doesn't exist yet). ``mutate`` edits that manifest in place.
 
-    The write carries ``IfMatch`` on the ETag (omitted for a not-yet-existing
-    manifest, an unconditional create) and ``Cache-Control: public,
+    The write carries ``IfMatch`` on the ETag, or ``IfNoneMatch: *`` for a
+    not-yet-existing manifest (so two concurrent creates cannot clobber each
+    other, #181), and ``Cache-Control: public,
     max-age=60`` — the manifest is "the one volatile file" (see module
     docstring), so every writer keeps its cache lifetime short, unpublish and
     repair included. A ``PreconditionFailed`` — another writer won the race —
@@ -415,6 +416,7 @@ def _write_manifest(
                     Body=manifest_bytes,
                     ContentType="application/json",
                     CacheControl="public, max-age=60",
+                    IfNoneMatch="*",
                 )
             else:
                 client.put_object(
