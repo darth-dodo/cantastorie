@@ -25,21 +25,19 @@ export function createPrefetcher({
   let loaded = 0;
   let failed = 0;
   let generation = 0; // bumped per prefetch; an older queue stops starting jobs
+  const unstarted = new Set(); // planned by the current prefetch, not yet started
 
   // Plans one asset: counted and marked now (so a second prefetch dedupes),
   // run later by the pool. A job whose prefetch was superseded before it
-  // started is unmarked instead, so a later prefetch can still bank it.
+  // started never runs; supersede() unmarked it already.
   function plan(url, task, jobGeneration) {
     if (!url || requested.has(url)) return null;
     requested.add(url);
+    unstarted.add(url);
     total += 1;
     return async () => {
-      if (jobGeneration !== generation) {
-        requested.delete(url);
-        bankedAudio.delete(url);
-        total -= 1;
-        return;
-      }
+      if (jobGeneration !== generation) return;
+      unstarted.delete(url);
       try {
         await task();
         loaded += 1;
@@ -47,6 +45,17 @@ export function createPrefetcher({
         failed += 1;
       }
     };
+  }
+
+  // Unmarks the replaced prefetch's unstarted assets before the next one
+  // plans, so the next prefetch banks them instead of skipping them.
+  function supersede() {
+    for (const url of unstarted) {
+      requested.delete(url);
+      bankedAudio.delete(url);
+      total -= 1;
+    }
+    unstarted.clear();
   }
 
   function planAudio(url, jobGeneration) {
@@ -117,6 +126,7 @@ export function createPrefetcher({
     // prompt must be local long before the end screen asks for it.
     async prefetchStory(story, extraAudio = []) {
       generation += 1;
+      supersede();
       const jobGeneration = generation;
       const pages = story.allPages ?? story.pages;
       evictOthers(new Set([...storyAudio(pages), ...extraAudio, ...keepAudio]));

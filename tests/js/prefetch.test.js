@@ -372,4 +372,43 @@ describe("Budget tablets: page 1 first, then a small pool in page order (M21)", 
     expect(assets.started).toContain("/b/p1.wav");
     expect(assets.started.filter((url) => url.startsWith("/s/"))).toEqual(["/s/p1.wav", "/s/p1.webp"]);
   });
+  it("tapping story B while A loads still prefetches B's spoken prompts (#187)", async () => {
+    const assets = gatedAssets();
+    const prefetcher = createPrefetcher({ engine: assets.engine, fetchFn: assets.fetchFn });
+    const prompts = ["/p/start.wav", "/p/end.wav", "/p/audio-retry.wav", "/p/choice-nudge.wav"];
+    const storyB = { pages: [{ id: "b1", audioUrl: "/b/p1.wav", imageUrl: null }] };
+
+    const doneA = prefetcher.prefetchStory(storyOfPages(8), prompts);
+    await flushAll();
+    const doneB = prefetcher.prefetchStory(storyB, prompts);
+    for (let i = 0; i < 20; i++) {
+      assets.releaseAll();
+      await flushAll();
+    }
+    await Promise.all([doneA, doneB]);
+
+    for (const url of prompts) expect(assets.started).toContain(url);
+    expect(prefetcher.status().failed).toBe(0);
+  });
+
+  it("prefetching the same story twice mid-queue still loads every page (#187)", async () => {
+    const assets = gatedAssets();
+    const prefetcher = createPrefetcher({ engine: assets.engine, fetchFn: assets.fetchFn });
+    const story = storyOfPages(4);
+
+    const first = prefetcher.prefetchStory(story);
+    await flushAll();
+    const second = prefetcher.prefetchStory(story);
+    for (let i = 0; i < 20; i++) {
+      assets.releaseAll();
+      await flushAll();
+    }
+    await Promise.all([first, second]);
+
+    for (let i = 1; i <= 4; i++) {
+      expect(assets.started).toContain(`/s/p${i}.wav`);
+      expect(assets.started).toContain(`/s/p${i}.webp`);
+    }
+    expect(prefetcher.status()).toEqual({ total: 8, loaded: 8, failed: 0 });
+  });
 });
