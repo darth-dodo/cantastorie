@@ -4,14 +4,14 @@
 
 Story runs execute inside the web process and rely on a checkpoint folder that Render wipes on every deploy (`CONTENT_DIR=/tmp/cantastorie-content`), so a deploy in the middle of a run re-buys every finished step, and a rolling deploy can run the same story twice (`docs/setup.md` records both as accepted costs). The owner's goal of 2026-11-28 is to move the pipeline to Temporal; [ADR-012](../../../docs/adr/ADR-012-durable-story-runs-on-temporal.md) (Proposed) records the trade-off against keeping the in-process runs or using a simple Redis queue.
 
-## Decision needed: Temporal hosting
+## Hosting: Temporal Cloud (decided)
 
-The owner picks the host before the spike task starts. Prices checked 2026-11-28; every option also needs the Render background worker ($7 a month).
+The owner decided on 2026-11-28: "Cloud". Runs use Temporal Cloud, pay-as-you-go, in `aws-eu-central-1` Frankfurt. Self-hosting on Render was considered and not chosen. Prices were checked on 2026-11-28, and every option also needs the Render background worker ($7 a month).
 
 | Option | Monthly cost | Notes |
 |---|---|---|
-| Temporal Cloud, pay-as-you-go, `aws-eu-central-1` Frankfurt (recommended) | About $7.25 total at 100 runs, about $10 at the global cap | No base fee; $50 per million Actions plus 10% support; about 40 Actions per run (unverified); $150 credit for 90 days |
-| Self-hosted Temporal on Render | About $40 total (server private service Standard $25, Postgres Basic-256mb $6, storage about $1.50, worker $7) | No new vendor; we own upgrades, schema migrations and backups |
+| Temporal Cloud, pay-as-you-go, `aws-eu-central-1` Frankfurt (chosen) | About $7.25 total at 100 runs, about $10 at the global cap | No base fee; $50 per million Actions plus 10% support; about 40 Actions per run (unverified); $150 credit for 90 days |
+| Self-hosted Temporal on Render (considered, not chosen) | About $40 total (server private service Standard $25, Postgres Basic-256mb $6, storage about $1.50, worker $7) | No new vendor; we own upgrades, schema migrations and backups |
 | Temporal dev server | $0 | Not for production (Temporal's own docs); used for local development and CI in every option |
 
 ## Alternatives rejected
@@ -29,7 +29,7 @@ ADR-012 records each one with its reasons:
 - The artifact cache gains a second tier in the private pending bucket, so a step retried on a new container finds what it already bought.
 - Run records gain `engine`, the current step, the completed steps and the failed step. The workshop and parent progress views read these instead of the container's checkpoint folders.
 - Workflow payloads are encrypted before they leave the app; workflow ids carry only the random run id.
-- New settings: `PIPELINE_ENGINE`, `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_API_KEY` (Cloud only), `TEMPORAL_PAYLOAD_KEY`.
+- New settings: `PIPELINE_ENGINE`, `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_API_KEY`, `TEMPORAL_PAYLOAD_KEY`.
 - After the cutover: **BREAKING (internal)** the in-process background task, boot resume and stale-run reaper are removed.
 
 ## Safety and review gate

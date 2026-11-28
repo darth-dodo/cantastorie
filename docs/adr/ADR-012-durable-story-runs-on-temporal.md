@@ -1,7 +1,7 @@
 # ADR-012: Durable Story Runs on Temporal
 
 **Date**: 2026-11-28
-**Status**: Proposed. **Decision needed: Temporal hosting** (see [Hosting options](#hosting-options-decision-needed)).
+**Status**: Proposed. Hosting decided by the owner on 2026-11-28: "Cloud" (Temporal Cloud, pay-as-you-go, `aws-eu-central-1` Frankfurt; see [Hosting options](#hosting-options)).
 **Context**: The owner's goal of 2026-11-28, "use the factory and move the pipeline to temporal", routed by `factory:ask` as Gated because it changes a settled decision. The owner's goal is the yes to plan it; this ADR records the trade-off and supersedes part of two Accepted ADRs once it is Accepted.
 **Decider(s)**: Project Owner
 **Supersedes (on acceptance, in part)**: [ADR-001](ADR-001-technology-stack.md) "Plain Python pipeline, no graph or orchestration framework" for how a workshop run is *executed* (the step functions stay plain Python and Pydantic AI); [ADR-005](ADR-005-workshop-area.md) Option A's "in-process background runs, one at a time, resume on boot" (the workshop surfaces, R2 run records and the review gate stay).
@@ -14,7 +14,7 @@ Each workshop story run becomes one **Temporal workflow** with **one activity pe
 
 The migration is behind a flag (`PIPELINE_ENGINE=inprocess|temporal`, default `inprocess`); the in-process path stays until the cutover is rehearsed, then is removed.
 
-The recommended host is **Temporal Cloud, pay-as-you-go (Developer support), in AWS Frankfurt (`aws-eu-central-1`)**, with payloads encrypted before they leave the worker. Expected cost: about **$7 to $10 a month** in total, almost all of it the Render worker. Self-hosting Temporal on Render costs about **$40 a month** and adds a database and an upgrade path to run. The owner picks the host.
+The host is **Temporal Cloud, pay-as-you-go (Developer support), in AWS Frankfurt (`aws-eu-central-1`)**, chosen by the owner on 2026-11-28 ("Cloud"), with payloads encrypted before they leave the worker. Expected cost: about **$7 to $10 a month** in total, almost all of it the Render worker. Self-hosting Temporal on Render costs about **$40 a month** and adds a database and an upgrade path to run. Self-hosting was considered and not chosen.
 
 ---
 
@@ -157,7 +157,7 @@ Already rejected in ADR-001 for the pipeline's shape. A graph checkpointer still
 
 ---
 
-## Hosting options (Decision needed)
+## Hosting options
 
 Prices checked on 2026-11-28 from [temporal.io/pricing](https://temporal.io/pricing), [docs.temporal.io/cloud/pricing](https://docs.temporal.io/cloud/pricing), [docs.temporal.io/cloud/actions](https://docs.temporal.io/cloud/actions), [docs.temporal.io/cloud/regions](https://docs.temporal.io/cloud/regions), [render.com/pricing](https://render.com/pricing) and [render.com/docs/free](https://render.com/docs/free). Every option needs the Render background worker (Starter, $7 a month, 512 MB), because the worker runs the pipeline.
 
@@ -169,7 +169,7 @@ Prices checked on 2026-11-28 from [temporal.io/pricing](https://temporal.io/pric
 | **Self-hosted Temporal on Render** | **About $40** (worker $7 + Temporal server as a private service, Standard 2 GB $25 + Render Postgres Basic-256mb $6 + about 5 GB storage at $0.30 = $1.50). From about $21.50 if the server fits Starter 512 MB (unverified, likely too small for frontend, history, matching and worker services in one process); about $59 with Postgres Basic-1gb $19 and a $7 UI service. | `temporalio/server` image as a Render private service on Render Postgres | No new vendor; data stays in our Render account; private network only | Four times the cost; we own Temporal upgrades and schema migrations, Postgres sizing and backups; Render's free Postgres expires after 30 days, so there is no free path; no UI unless we run and protect one |
 | **Temporal dev server** (`temporal server start-dev`) | $0 | In-memory, or SQLite with `--db-filename` | Ideal for local development and CI tests; one binary | Temporal: "The development server is not intended for production use." Not an option for production; used for `make dev` and tests in every option |
 
-**Recommendation: Temporal Cloud, pay-as-you-go, `aws-eu-central-1`**, with a payload codec (AES-GCM through the existing `cryptography` dependency) so workflow inputs and results are ciphertext to Temporal, and workflow ids that carry only the random run id. It is the cheapest option that is safe for production, it adds no infrastructure to run, and it keeps self-hosting open because the SDK code is the same. Choose self-hosting instead if keeping every byte inside our own Render account matters more than about $33 a month and the upgrade work.
+**Decision (owner, 2026-11-28: "Cloud"): Temporal Cloud, pay-as-you-go, `aws-eu-central-1`**, with a payload codec (AES-GCM through the existing `cryptography` dependency) so workflow inputs and results are ciphertext to Temporal, and workflow ids that carry only the random run id. It is the cheapest option that is safe for production, it adds no infrastructure to run, and it keeps self-hosting open because the SDK code is the same. Self-hosting on Render was considered and not chosen: it keeps every byte in our own Render account, but costs about $33 a month more and adds the upgrade, migration and backup work.
 
 ---
 
@@ -193,7 +193,7 @@ Scores 1 to 5, higher is better. Self-hosted Temporal scores the same as C on du
 
 ### Chosen Option: C, Temporal workflows with one activity per step
 
-**Hosting: Decision needed.** Recommended: Temporal Cloud, pay-as-you-go, `aws-eu-central-1`.
+**Hosting**: Temporal Cloud, pay-as-you-go, `aws-eu-central-1` Frankfurt (owner, 2026-11-28: "Cloud"). Self-hosted Temporal on Render was considered and not chosen.
 
 **Rationale**: The failures in the evidence (lost checkpoints on deploy, a second execution during the overlap, threads that cannot be stopped, a timer-based reaper) are the problems a durable workflow engine exists to solve. Option A fixes them by building a small engine by hand; Option B moves the work to a queue but keeps whole-run retries. Option C keeps the step functions as they are and gives each step its own record, retry policy and timeout.
 
@@ -313,4 +313,4 @@ Planned as the OpenSpec change `move-pipeline-to-temporal`:
 
 - **ADR Number**: 012
 - **Created**: 2026-11-28
-- **Tags**: pipeline, workshop, durability, temporal, hosting, decision-needed
+- **Tags**: pipeline, workshop, durability, temporal, hosting

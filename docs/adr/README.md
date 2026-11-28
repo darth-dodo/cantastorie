@@ -38,7 +38,7 @@ Small, local, easily-reversed choices do not need an ADR. When in doubt, prefer 
 | [ADR-009](ADR-009-sentry-error-monitoring.md) | Sentry Error Monitoring (Server-Side Only) | Accepted | 2026-09-27 |
 | [ADR-010](ADR-010-audio-wake-and-stall-recovery.md) | Audio Wake and Stall Recovery in the Child Player | Accepted | 2026-09-27 |
 | [ADR-011](ADR-011-image-safety-vision-judge.md) | Image Safety via a Cross-Family Vision Judge | Accepted | 2026-09-28 |
-| [ADR-012](ADR-012-durable-story-runs-on-temporal.md) | Durable Story Runs on Temporal | Proposed (decision needed: Temporal hosting) | 2026-11-28 |
+| [ADR-012](ADR-012-durable-story-runs-on-temporal.md) | Durable Story Runs on Temporal | Proposed (hosting: Temporal Cloud, decided 2026-11-28) | 2026-11-28 |
 
 > **Renumbering note (2026-07-12)**: two ADRs were originally filed as ADR-004. The workshop-area ADR is now ADR-005, which shifted Nonna Narrates to ADR-006 and LangSmith observability to ADR-007. File history is preserved via `git mv`.
 

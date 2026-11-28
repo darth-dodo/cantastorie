@@ -75,7 +75,7 @@ A `PayloadCodec` on the client and worker encrypts every payload with the existi
 
 1. Ship the spike with the flag off in production. Nothing changes for users.
 2. Ship the workflow, activities and cache tier; tests only.
-3. Ship the worker service in `render.yaml`; create the namespace (or the self-hosted server) and set its secrets; the worker idles.
+3. Ship the worker service in `render.yaml`; create the Temporal Cloud namespace in `aws-eu-central-1` and set its secrets; the worker idles.
 4. Ship the workshop changes; set `PIPELINE_ENGINE=temporal` on the operator's own runs in a rehearsal: start a run, redeploy the worker during illustrate, confirm completion and compare provider call counts with a clean run (LangSmith or OpenRouter activity).
 5. Cutover: set `PIPELINE_ENGINE=temporal` in production. Watch a week of runs and one month of Temporal usage against the ADR estimate.
 6. Remove the in-process path after no `inprocess` record has been live for a week.
