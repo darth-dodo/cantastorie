@@ -79,6 +79,11 @@ for (const width of [320, 360, 390, 414, 768]) {
       ).toBeLessThanOrEqual(c.captionClient);
     }
 
+    expect(
+      layout.cards[0].captionWraps,
+      `"${LONG_TITLES[0]}" wraps onto more than one line`,
+    ).toBe(true);
+
     const widths = layout.cards.map((c) => c.width);
     expect(
       Math.max(...widths) - Math.min(...widths),

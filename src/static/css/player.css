@@ -243,7 +243,9 @@ button.presses:active {
      past half the shelf and the right column was clipped (#180). */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px 16px;
-  padding: 6px 4px 0;
+  /* 12px sides: the cover's 7px sticker ring plus its 2deg tilt reach past
+     the card, and a narrower padding cut the ring flat at the shelf edges. */
+  padding: 6px 12px 0;
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
@@ -289,6 +291,10 @@ button.presses:active {
 }
 
 .cover-caption {
+  /* Paint above the tilted, positioned .cover: its sticker ring otherwise
+     covered the top of the first line, where Devanagari vowel loops sit (#204). */
+  position: relative;
+  z-index: 1;
   font: 700 14px/1.2 var(--font-app, system-ui);
   text-align: center;
   color: var(--caption-ink, var(--ink-soft));
