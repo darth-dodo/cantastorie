@@ -26,7 +26,9 @@ dependencies = [
     "boto3>=1.35.0",
     # Observability: LangSmith tracing (ADR-007) + Sentry errors, server-side only (ADR-009)
     "langsmith>=0.3.0",
-    "sentry-sdk[fastapi]>=2.0.0",
+    "sentry-sdk[fastapi]>=2.0.0,<3",
+    # Durable story runs behind PIPELINE_ENGINE (ADR-012)
+    "temporalio>=1.37.0",
 ]
 
 [project.scripts]
@@ -139,6 +141,7 @@ addopts = [
 markers = [
     "slow: marks tests as slow",
     "integration: marks tests requiring external services",
+    "temporal: marks tests that start the Temporal test server",
 ]
 
 # =============================================================================

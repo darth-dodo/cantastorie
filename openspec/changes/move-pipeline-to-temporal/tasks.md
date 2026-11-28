@@ -6,11 +6,11 @@ Each test is written first and seen failing before the code that makes it pass. 
 
 ## 1. Spike behind the flag
 
-- [ ] 1.1 Add `temporalio` with `uv add temporalio` and verify `uv lock --check` and `make check` pass
-- [ ] 1.2 Test first in `tests/workshop/test_engine_flag.py`: `Settings` defaults `pipeline_engine` to `inprocess`, accepts `temporal`, refuses other values, and refuses `temporal` without `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_API_KEY` and `TEMPORAL_PAYLOAD_KEY`; add the fields to `src/config.py` and `.env.example`; verify the tests pass
-- [ ] 1.3 Test first in `tests/workshop/temporal/test_codec.py`: the AES-GCM payload codec round-trips a payload, a payload encoded with one key fails to decode with another, and the encoded bytes do not contain a sample premise; implement `src/workshop/temporal/codec.py`; verify the tests pass
-- [ ] 1.4 Test first: a one-activity `SpikeWorkflow` run in `WorkflowEnvironment.start_time_skipping()` through a client built by `src/workshop/temporal/client.py` (codec and Pydantic data converter on) returns the activity's result; verify with `uv run pytest tests/workshop/temporal -m temporal`, and cache the test server download in CI (`.github/workflows/ci.yml`)
-- [ ] 1.5 Record the measured billable Actions for a spike run with a heartbeating activity in the ADR-012 cost section; verify the number and how it was counted are in the diff
+- [x] 1.1 Add `temporalio` with `uv add temporalio` and verify `uv lock --check` and `make check` pass
+- [x] 1.2 Test first in `tests/workshop/test_engine_flag.py`: `Settings` defaults `pipeline_engine` to `inprocess`, accepts `temporal`, refuses other values, and refuses `temporal` without `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_API_KEY` and `TEMPORAL_PAYLOAD_KEY`; add the fields to `src/config.py` and `.env.example`; verify the tests pass
+- [x] 1.3 Test first in `tests/workshop/temporal/test_codec.py`: the AES-GCM payload codec round-trips a payload, a payload encoded with one key fails to decode with another, and the encoded bytes do not contain a sample premise; implement `src/workshop/temporal/codec.py`; verify the tests pass
+- [x] 1.4 Test first: a one-activity `SpikeWorkflow` run in `WorkflowEnvironment.start_time_skipping()` through a client built by `src/workshop/temporal/client.py` (codec and Pydantic data converter on) returns the activity's result; verify with `uv run pytest tests/workshop/temporal -m temporal`, and cache the test server download in CI (`.github/workflows/ci.yml`)
+- [x] 1.5 Record the measured billable Actions for a spike run with a heartbeating activity in the ADR-012 cost section; verify the number and how it was counted are in the diff
 
 ## 2. One workflow, one activity per step
 
