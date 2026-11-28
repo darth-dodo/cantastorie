@@ -246,6 +246,9 @@ button.presses:active {
   /* 12px sides: the cover's 7px sticker ring plus its 2deg tilt reach past
      the card, and a narrower padding cut the ring flat at the shelf edges. */
   padding: 6px 12px 0;
+  /* Own stacking context: the captions' z-index lifts them above the covers
+     only, never above the shelf's bottom fade or its buttons (#204). */
+  isolation: isolate;
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
