@@ -381,8 +381,9 @@ def _write_manifest(
     and returns the current manifest plus its ETag (``None`` when the manifest
     doesn't exist yet). ``mutate`` edits that manifest in place.
 
-    The write carries ``IfMatch`` on the ETag (omitted for a not-yet-existing
-    manifest, an unconditional create) and ``Cache-Control: public,
+    The write carries ``IfMatch`` on the ETag, or ``IfNoneMatch: *`` for a
+    not-yet-existing manifest (so two concurrent creates cannot clobber each
+    other, #181), and ``Cache-Control: public,
     max-age=60`` — the manifest is "the one volatile file" (see module
     docstring), so every writer keeps its cache lifetime short, unpublish and
     repair included. A ``PreconditionFailed`` — another writer won the race —
@@ -415,6 +416,7 @@ def _write_manifest(
                     Body=manifest_bytes,
                     ContentType="application/json",
                     CacheControl="public, max-age=60",
+                    IfNoneMatch="*",
                 )
             else:
                 client.put_object(
@@ -1044,19 +1046,40 @@ def list_orphan_story_dirs(
     client: S3Client | None = None,
     manifests: list[tuple[Lane, dict[str, Any]]] | None = None,
 ) -> list[str]:
-    """Story directories under published/stories/ that no manifest lists.
+    """Story directories that no manifest in their own lane lists.
+
+    Walks the shared ``published/stories/`` and each family overlay's
+    ``stories/`` (M12), lane by lane like the audit. A shared orphan is named
+    by its story id; a family orphan as ``families/{family hash}/{story id}``,
+    so the raw token (a capability) never reaches the page. Shared orphans
+    come first, then family ones, sorted.
 
     Pass ``manifests`` (from published_manifests) to reuse a read the caller
     already made instead of reading every manifest again.
     """
     client = client or _build_client(settings)
+    bucket = settings.r2_bucket
     if manifests is None:
         manifests = published_manifests(settings, client=client)
-    listed = {
-        str(entry["id"])
-        for _lane, manifest in manifests
-        for entry in manifest.get("stories", [])
-        if entry.get("story")
-    }
-    dirs = child_prefixes(client, settings.r2_bucket, f"{PUBLISHED_PREFIX}/stories/")
-    return [story_id for story_id in dirs if story_id not in listed]
+    listed: dict[str | None, set[str]] = {}
+    for (_language, family_token), manifest in manifests:
+        listed.setdefault(family_token, set()).update(
+            str(entry["id"]) for entry in manifest.get("stories", []) if entry.get("story")
+        )
+    shared_dirs = child_prefixes(client, bucket, f"{PUBLISHED_PREFIX}/stories/")
+    orphans = [sid for sid in shared_dirs if sid not in listed.get(None, set())]
+    tokens = [
+        name
+        for name in child_prefixes(client, bucket, f"{PUBLISHED_PREFIX}/{FAMILIES_SEGMENT}/")
+        if _FAMILY_TOKEN_RE.fullmatch(name)
+    ]
+    family_dirs = parallel_map(
+        lambda token: child_prefixes(client, bucket, f"{_publish_root(token)}/stories/"), tokens
+    )
+    family_orphans = [
+        f"{FAMILIES_SEGMENT}/{family_hash(token)}/{sid}"
+        for token, dirs in zip(tokens, family_dirs, strict=True)
+        for sid in dirs
+        if sid not in listed.get(token, set())
+    ]
+    return orphans + sorted(family_orphans)
