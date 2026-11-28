@@ -199,26 +199,39 @@ test("reopening a branched story in the same session follows the other arm", asy
   expect(arts).not.toContain(ARM_A_FIRST_ART);
 });
 
-// Auto-continue (nudge at 30s, auto-pick the first option at 40s) is specified
-// for the choice overlay but not yet wired in playback.js — the loop simply
-// waits on an open choice (see the file header there: "the overlay, nudge, and
-// auto-continue are AI-370"). Skipped as follow-up scope until those timers
-// land; noted in the AI-428 report. When wired, this proves a hands-off child
-// still reaches arm A's own ending.
-test.skip("auto-continue picks the first option", async ({ page }) => {
+// Auto-continue (M31, #186): product.md -> "Choice behavior, precisely". After
+// 30 seconds idle on the choice the nudge plays (the cards nudge; the spoken
+// line when the language carries one), and 10 seconds later the first option
+// is picked for the child. Playwright's clock stands in for the 40 seconds, so
+// the player code keeps its real timings: a hands-off child still reaches
+// arm A's own ending.
+test("auto-continue picks the first option", async ({ page }) => {
+  await page.clock.install();
   await wakeAndOpenBranchingStory(page);
 
   await expect(page.locator(".overlay .option")).toHaveCount(2, { timeout: 20_000 });
 
-  // Wait out the nudge + auto-continue window with no tap; the first option
-  // (arm A) should be chosen for the child.
+  // 25 seconds idle: no nudge yet. The installed clock still flows in real
+  // time while Playwright polls, so this leaves slack; the exact 30 second
+  // boundary is pinned by the Vitest specs in tests/js/playback.test.js.
+  await page.clock.runFor(25_000);
+  await expect(page.locator(".overlay .options.nudge")).toHaveCount(0);
+
+  // By 30 seconds the cards nudge, and the choice still waits for the child.
+  await page.clock.runFor(5_000);
+  await expect(page.locator(".overlay .options.nudge")).toHaveCount(1);
+  await expect(page.locator(".overlay")).toHaveCount(1);
+
+  // 10 more seconds with no tap: the first option (arm A) is chosen.
+  await page.clock.runFor(10_000);
+  await expect(page.locator(".overlay")).toHaveCount(0);
   await page.waitForFunction(
     ({ index, art }) => {
       const node = document.querySelector(`.page-art[data-page="${index}"]`);
       return !!node && node.style.backgroundImage.includes(art);
     },
     { index: ARM_FIRST_PAGE_INDEX, art: ARM_A_FIRST_ART },
-    { timeout: 60_000 },
+    { timeout: 20_000 },
   );
   const arts = await armArtByIndex(page);
   expect(arts[ARM_FIRST_PAGE_INDEX]).toBe(ARM_A_FIRST_ART);

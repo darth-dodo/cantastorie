@@ -285,7 +285,18 @@ export async function init(
 
   let stories = manifest?.stories ?? fallbackShelf;
   let prefetcher = createPrefetcher({ engine, fetchFn });
-  let playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
+  // The idle choice (M31): the cards nudge on screen beside the spoken nudge,
+  // and the auto-continue follows the first option exactly as a tap would.
+  const makePlayback = () =>
+    createPlayback({
+      store,
+      engine,
+      prefetcher,
+      prompts: manifest?.prompts ?? {},
+      onChoiceNudge: () => app.querySelector(".overlay .options")?.classList.add("nudge"),
+      onAutoChoose: (i) => onChoose(i),
+    });
+  let playback = makePlayback();
 
   let activeStory = null;
   let activePristinePages = null; // the open story's original, unextended path
@@ -387,7 +398,7 @@ export async function init(
     // subscribed, it would still react to the store and speak the old
     // language's prompts (M23).
     playback.dispose();
-    playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
+    playback = makePlayback();
     store.toShelf();
     shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen };
     render(store.state);
@@ -531,7 +542,11 @@ export async function init(
           const choiceView = activeStory
             ? activeStory.pages[store.state.choicePage].choice
             : undefined;
-          playerScreen.appendChild(buildChoiceOverlay(choiceView, store, onChoose));
+          const choiceOverlay = buildChoiceOverlay(choiceView, store, onChoose);
+          // Any touch on the overlay means the child is awake: the idle
+          // clock before the nudge starts again.
+          choiceOverlay.addEventListener("pointerdown", () => playback.choiceActivity());
+          playerScreen.appendChild(choiceOverlay);
         }
         if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store, RESUMES[lang] ?? RESUMES.en, onRestart));
         if (state.audioError) playerScreen.appendChild(buildAudioError(store));

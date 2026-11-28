@@ -1404,6 +1404,38 @@ button.presses:active {
   overflow: hidden;
 }
 
+/* The idle choice nudge (M31): after 30 seconds the cards glow softly,
+   beside the spoken nudge, asking for a tap. */
+.options.nudge .choice-card {
+  animation: choice-nudge 2.4s ease-in-out infinite;
+}
+
+@keyframes choice-nudge {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 6px rgba(245, 223, 174, 0.35),
+      0 0 44px 4px rgba(245, 223, 174, 0.18),
+      0 18px 40px rgba(0, 0, 0, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(245, 223, 174, 0.6),
+      0 0 64px 10px rgba(245, 223, 174, 0.32),
+      0 18px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options.nudge .choice-card {
+    animation: none;
+    box-shadow:
+      0 0 0 8px rgba(245, 223, 174, 0.6),
+      0 0 64px 10px rgba(245, 223, 174, 0.32),
+      0 18px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
 .choice-card-image {
   width: 100%;
   height: 100%;
