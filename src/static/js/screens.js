@@ -748,7 +748,11 @@ export function buildChoiceOverlay(view, store, onChoose) {
   return overlay;
 }
 
-export function buildResumeOverlay(store, resumeText = "Welcome back! Continue or start over?") {
+export function buildResumeOverlay(
+  store,
+  resumeText = "Welcome back! Continue or start over?",
+  onRestart = () => store.resumeRestart(),
+) {
   const titleId = nextDialogId("resume-title");
   // No Escape: continue and start over are both real answers, neither a cancel.
   const overlay = makeDialog(el("div", "overlay"), { labelledBy: titleId });
@@ -762,7 +766,7 @@ export function buildResumeOverlay(store, resumeText = "Welcome back! Continue o
   const options = el("div", "options");
   options.append(
     blobOption({ label: "Continue", icon: iconPlay(), onTap: () => store.resumeContinue() }),
-    blobOption({ label: "Start over", icon: iconReplay(), onTap: () => store.resumeRestart() }),
+    blobOption({ label: "Start over", icon: iconReplay(), onTap: onRestart }),
   );
   overlay.append(prompt, options);
   return overlay;

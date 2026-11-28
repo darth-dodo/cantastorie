@@ -288,6 +288,7 @@ export async function init(
   let playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
 
   let activeStory = null;
+  let activePristinePages = null; // the open story's original, unextended path
   const storyCache = new Map();
 
   // Every cover open (and a language switch) bumps the sequence. An open
@@ -349,6 +350,7 @@ export async function init(
       }
       if (superseded()) return;
       activeStory = loaded;
+      activePristinePages = loaded.pages;
       // A save left mid-branch replays here: fold the recorded picks over the
       // loaded story so the arm the child chose is back on the played path
       // BEFORE playback.openStory runs — its unfinished check (page <
@@ -363,6 +365,7 @@ export async function init(
     // Only a cover with no story.json at all (the dev/mock shelf) runs on
     // the page timer.
     activeStory = null;
+    activePristinePages = null;
     playback.clearStory();
     store.openStory({ pageCount: PAGE_COUNT, choicePage: CHOICE_PAGE });
   }
@@ -375,6 +378,7 @@ export async function init(
     openSeq += 1; // a cover still loading in the old language is dropped
     storyCache.clear();
     activeStory = null;
+    activePristinePages = null;
     playback.clearStory();
     manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
@@ -459,6 +463,14 @@ export async function init(
     store.choose(i);
   }
 
+  // "Start over" on the resume offer: the rebuilt branching path is dropped
+  // for the story's original pages BEFORE the store restarts, so page 0 opens
+  // on the unextended path and its first choice comes round again (#189).
+  function onRestart() {
+    if (activeStory && activePristinePages) playback.resetPath([...activePristinePages]);
+    store.resumeRestart();
+  }
+
   function render(state) {
     save(state);
 
@@ -521,7 +533,7 @@ export async function init(
             : undefined;
           playerScreen.appendChild(buildChoiceOverlay(choiceView, store, onChoose));
         }
-        if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store, RESUMES[lang] ?? RESUMES.en));
+        if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store, RESUMES[lang] ?? RESUMES.en, onRestart));
         if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {
         playerScreen = null;

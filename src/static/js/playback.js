@@ -274,6 +274,20 @@ export function createPlayback({
       });
     },
 
+    // "Start over" on the resume offer (#189): the played path goes back to
+    // the story's original pages, dropping every arm the resume replay
+    // appended, and the next branch is the first one again. main.js calls
+    // this BEFORE store.resumeRestart(), as onChoose extends before choose().
+    resetPath(pages) {
+      if (!story) return;
+      story.pages = pages;
+      const choiceIndex = pages.findIndex((page) => page.choice);
+      store.extendShape({
+        pageCount: pages.length,
+        choicePage: choiceIndex === -1 ? null : choiceIndex,
+      });
+    },
+
     // A cover without a published story.json: the page timer stands in.
     clearStory() {
       story = null;

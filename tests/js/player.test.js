@@ -402,6 +402,37 @@ describe("resume across two branch points (M28, AI-494)", () => {
     expect(running.store.state.pageCount).toBe(6);
     expect(running.store.state.choices).toEqual([0, 1]);
   });
+
+  it("start over on the resume offer drops the rebuilt path: the first choice opens again (#189)", async () => {
+    // Left on a1 after picking arm a: the resume replay rebuilds p1, p2, a1, a2.
+    localStorage.setItem(
+      "cantastorie-shell",
+      JSON.stringify({ screen: "shelf", page: 2, choices: [0] }),
+    );
+    document.body.innerHTML = '<main id="app"></main>';
+    running = await init(document, { fetchFn: twoBranchFetch, engine: fakeEngine() });
+
+    branchingCover().click();
+    await vi.waitFor(() => expect(running.store.state.resumeOpen).toBe(true));
+    expect(running.store.state.pageCount).toBe(4);
+
+    // The child taps the start over picture on the resume offer.
+    document.querySelector('.overlay .option[aria-label="Start over"]').click();
+    expect(running.store.state.resumeOpen).toBe(false);
+    expect(running.store.state.page).toBe(0);
+    expect(running.store.state.choices).toEqual([]);
+    // The original, unextended pages: p1, p2, with the first choice on p2.
+    expect(running.store.state.pageCount).toBe(2);
+    expect(running.store.state.choicePage).toBe(1);
+    expect(document.querySelectorAll(".page-art")).toHaveLength(2);
+
+    running.store.nextPage(); // p1 -> p2
+    running.store.nextPage(); // p2's end opens the first branch again
+    expect(running.store.state.screen).toBe("player");
+    expect(running.store.state.choiceOpen).toBe(true);
+    await vi.waitFor(() => expect(document.querySelectorAll(".overlay .option")).toHaveLength(2));
+    expect(document.querySelectorAll(".overlay .option")[1].getAttribute("aria-label")).toBe("b1");
+  });
 });
 
 describe("replaying a branch in the same session (AI-482)", () => {
