@@ -7,6 +7,7 @@ refused at boot instead of failing at the first submit.
 """
 
 import base64
+import os
 
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -102,3 +103,35 @@ def test_temporal_secrets_never_appear_in_repr_or_str() -> None:
     for rendered in (repr(settings), str(settings)):
         assert "temporal-api-key-sample" not in rendered
         assert PAYLOAD_KEY not in rendered
+
+
+FAKE_API_KEY = "tmprl-FAKEAPIKEYSECRETVALUE1234567890"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "missing"),
+    [
+        ({"TEMPORAL_PAYLOAD_KEY": ""}, "TEMPORAL_PAYLOAD_KEY"),
+        ({"TEMPORAL_PAYLOAD_KEY": base64.b64encode(b"z" * 31).decode()}, None),
+        ({"TEMPORAL_NAMESPACE": ""}, "TEMPORAL_NAMESPACE"),
+    ],
+)
+def test_a_refused_temporal_config_prints_no_part_of_a_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    temporal_env: None,
+    overrides: dict[str, str],
+    missing: str | None,
+) -> None:
+    monkeypatch.setenv("PIPELINE_ENGINE", "temporal")
+    monkeypatch.setenv("TEMPORAL_API_KEY", FAKE_API_KEY)
+    for name, value in overrides.items():
+        monkeypatch.setenv(name, value)
+    payload_key = os.environ["TEMPORAL_PAYLOAD_KEY"]
+    with pytest.raises(ValidationError) as caught:
+        Settings(_env_file=None)
+    text = str(caught.value)
+    if missing:
+        assert missing in text
+    for secret in (s for s in (FAKE_API_KEY, payload_key) if s):
+        for start in range(max(len(secret) - 7, 1)):
+            assert secret[start : start + 8] not in text

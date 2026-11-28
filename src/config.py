@@ -61,6 +61,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # A refused config must not echo env input: its tail can be a secret.
+        hide_input_in_errors=True,
     )
 
     # The only key in the whole system; SecretStr keeps it out of logs.
