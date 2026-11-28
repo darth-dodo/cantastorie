@@ -29,13 +29,14 @@ export const SEVEN_COVER_MANIFEST = {
   })),
 };
 
-// Serve the stubbed manifest (or a variant of it), open the EN shelf, and wait for every cover's
-// art to finish loading so layout-space measurements are final.
+// Serve the stubbed manifest (or a variant of it), open the shelf in the manifest's language, and
+// wait for every cover's art to finish loading so layout-space measurements are final.
 export async function openSevenCoverShelf(page, manifest = SEVEN_COVER_MANIFEST) {
-  await page.route("**/en/manifest.json", (route) =>
+  const lang = manifest.language;
+  await page.route(`**/${lang}/manifest.json`, (route) =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify(manifest) }),
   );
-  await page.goto("/play?lang=en&theme=light", { waitUntil: "networkidle" });
+  await page.goto(`/play?lang=${lang}&theme=light`, { waitUntil: "networkidle" });
   await page.waitForSelector(".covers .cover");
   for (const img of await page.locator(".covers img.cover-art").all()) {
     await img.scrollIntoViewIfNeeded();
