@@ -44,6 +44,8 @@ export function createPlayback({
   // The idle choice: the screen nudges the cards, and the auto-continue
   // picks an option the way a tap would (main.js's onChoose).
   onChoiceNudge = () => {},
+  // A tap restarted the idle clock: the screen drops the nudge.
+  onChoiceActivity = () => {},
   onAutoChoose = (optionIndex) => store.choose(optionIndex),
 }) {
   let story = null;
@@ -310,6 +312,7 @@ export function createPlayback({
     // 30 seconds of idle start again (a pending auto-continue is dropped).
     choiceActivity() {
       if (disposed || choiceTimerId === null || !store.state.choiceOpen) return;
+      onChoiceActivity();
       startChoiceClock();
     },
 

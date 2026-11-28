@@ -628,6 +628,27 @@ describe("Choice nudge and auto-continue (M31, #186): 30 seconds idle nudges, 10
     expect(onAutoChoose).not.toHaveBeenCalled();
   });
 
+  it("a tap that restarts the idle clock clears the card glow (#186)", async () => {
+    const onChoiceActivity = vi.fn();
+    playback.dispose();
+    playback = createPlayback({
+      store,
+      engine,
+      prefetcher,
+      prompts: { ...PROMPTS, choice_nudge: NUDGE_PROMPT },
+      isHidden,
+      onChoiceNudge,
+      onChoiceActivity,
+      onAutoChoose,
+    });
+    await openToChoice();
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS);
+    expect(onChoiceNudge).toHaveBeenCalledTimes(1);
+
+    playback.choiceActivity();
+    expect(onChoiceActivity).toHaveBeenCalledTimes(1);
+  });
+
   it("a tapped card closes the overlay and cancels both timers", async () => {
     await openToChoice();
     vi.advanceTimersByTime(10_000);

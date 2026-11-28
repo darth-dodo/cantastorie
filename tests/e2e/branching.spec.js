@@ -257,3 +257,18 @@ test("auto-continue picks the first option", async ({ page }) => {
   const arts = await armArtByIndex(page);
   expect(arts[ARM_FIRST_PAGE_INDEX]).toBe(ARM_A_FIRST_ART);
 });
+
+// A tap on the overlay after the nudge (#186): the child is awake, so the
+// idle clock starts over and the cards stop glowing.
+test("a tap after the nudge clears the card glow", async ({ page }) => {
+  await page.clock.install();
+  await wakeAndOpenBranchingStory(page);
+
+  await expect(page.locator(".overlay .option")).toHaveCount(2, { timeout: 20_000 });
+  await page.clock.runFor(30_000);
+  await expect(page.locator(".overlay .options.nudge")).toHaveCount(1);
+
+  await page.locator(".overlay").dispatchEvent("pointerdown");
+  await expect(page.locator(".overlay .options.nudge")).toHaveCount(0);
+  await expect(page.locator(".overlay")).toHaveCount(1);
+});

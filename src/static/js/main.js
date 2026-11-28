@@ -302,6 +302,7 @@ export async function init(
       prefetcher,
       prompts: manifest?.prompts ?? {},
       onChoiceNudge: () => app.querySelector(".overlay .options")?.classList.add("nudge"),
+      onChoiceActivity: () => app.querySelector(".overlay .options")?.classList.remove("nudge"),
       onAutoChoose: (i) => onChoose(i),
     });
   let playback = makePlayback();
