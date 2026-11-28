@@ -413,6 +413,7 @@ Phase 1 ships in seven vertical slices — each ends with a child hearing someth
 ### Proposed (ADRs open, not yet on the roadmap)
 
 - **Nonna Narrates** — family voice narration: a grandparent or parent records one consent sentence and becomes the narrator of their family's stories, with never-stored clips and one-tap total revocation ([ADR-006](adr/ADR-006-family-voice-narration.md), Proposed; cloning runs on Voxtral via the Mistral API per [ADR-008](adr/ADR-008-narration-gemini-defaults-mistral-cloning.md); depends on a multi-tenant architecture ADR)
+- **Durable story runs** - each story run becomes a Temporal workflow with one step per pipeline stage, on a separate worker, so a deploy never re-buys finished work or makes a story twice; publishing stays behind parent approval ([ADR-012](adr/ADR-012-durable-story-runs-on-temporal.md), Proposed; decision needed: Temporal hosting)
 
 ### Future Ideas
 
