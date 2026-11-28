@@ -234,6 +234,19 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def openrouter_key_is_set_if_runs_can_start(self) -> Self:
+        # clerk_jwks_url switches on /parent (and, with the publishable key,
+        # /workshop), and both start generation runs that call OpenRouter. An
+        # empty key would boot fine and fail at the first submit (M3), so the
+        # app refuses to start instead. Player-only setups need no key.
+        if self.clerk_jwks_url and not self.openrouter_api_key.get_secret_value():
+            raise ValueError(
+                "OPENROUTER_API_KEY must be set when CLERK_JWKS_URL is: the workshop "
+                "and parent area start runs that call OpenRouter"
+            )
+        return self
+
+    @model_validator(mode="after")
     def safety_judge_is_a_different_family_than_the_writer(self) -> Self:
         # A shared writer/judge blind spot is the failure mode that matters
         # (docs/architecture.md → "Model roles"); refuse the config outright.

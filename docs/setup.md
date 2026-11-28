@@ -12,7 +12,7 @@ The web service is not secret-free. A parent or operator run generates its story
 
 | Variable | Needed for |
 |----------|------------|
-| `OPENROUTER_API_KEY` | Every model call: writing, the safety judges, images and narration |
+| `OPENROUTER_API_KEY` | Every model call: writing, the safety judges, images and narration. With `CLERK_JWKS_URL` set (workshop or parent area on) the app refuses to boot without it |
 | `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, `R2_PENDING_BUCKET` | Run records, staged stories and publishing. All or none; with an endpoint set the app refuses to boot unless `R2_PENDING_BUCKET` names a separate private bucket |
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL` | Parent and operator sign-in. Unset, `/parent` and `/workshop` answer 404 |
 | `CLERK_SECRET_KEY` | The one Clerk REST call: writing a new family's token into `public_metadata` at first sign-in (`src/api/clerk.py`) |

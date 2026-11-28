@@ -17,6 +17,7 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
+from src.observability import family_hash
 from src.pipeline.publish import (
     list_family_shelf,
     list_orphan_story_dirs,
@@ -155,9 +156,41 @@ def test_family_shelf_is_shared_plus_own_lane_never_another_family(
 
 
 def test_orphans_ignore_stories_listed_by_a_family_overlay(tmp_path: Path, s3: S3Client) -> None:
-    """A story directory an overlay manifest lists is not an orphan."""
+    """A story directory an overlay manifest lists, in that family's own
+    stories/ (where publish writes it), is not an orphan."""
     _put_overlay_manifest(s3, FAMILY, "it", [("fam-a-it-1", "Storia A")])
-    s3.put_object(Bucket=BUCKET, Key="published/stories/fam-a-it-1/story.json", Body=b"{}")
+    s3.put_object(
+        Bucket=BUCKET, Key=f"published/families/{FAMILY}/stories/fam-a-it-1/story.json", Body=b"{}"
+    )
     s3.put_object(Bucket=BUCKET, Key="published/stories/ghost/story.json", Body=b"{}")
 
     assert list_orphan_story_dirs(_settings(tmp_path)) == ["ghost"]
+
+
+def test_orphans_include_unlisted_family_lane_dirs_without_the_raw_token(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """M12 (#188): family lanes are walked too, lane by lane. A family dir no
+    manifest in that family lists is flagged, named by the family's hash so
+    the raw token (a capability) never reaches the page."""
+    _put_manifest(s3, "it", [("shared-it-1", "Globale")])
+    _put_overlay_manifest(s3, FAMILY, "it", [("fam-a-it-1", "Storia A")])
+    family_root = f"published/families/{FAMILY}/stories"
+    s3.put_object(Bucket=BUCKET, Key=f"{family_root}/fam-a-it-1/story.json", Body=b"{}")
+    s3.put_object(Bucket=BUCKET, Key=f"{family_root}/fam-ghost/story.json", Body=b"{}")
+    # Listed only by the shared shelf, so an orphan in the family lane.
+    s3.put_object(Bucket=BUCKET, Key=f"{family_root}/shared-it-1/story.json", Body=b"{}")
+    s3.put_object(
+        Bucket=BUCKET, Key=f"published/families/{OTHER_FAMILY}/stories/b-ghost/p1.webp", Body=b"x"
+    )
+
+    orphans = list_orphan_story_dirs(_settings(tmp_path))
+
+    assert orphans == sorted(
+        [
+            f"families/{family_hash(FAMILY)}/fam-ghost",
+            f"families/{family_hash(FAMILY)}/shared-it-1",
+            f"families/{family_hash(OTHER_FAMILY)}/b-ghost",
+        ]
+    )
+    assert all(FAMILY not in o and OTHER_FAMILY not in o for o in orphans)

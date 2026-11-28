@@ -266,9 +266,38 @@ def test_clerk_with_a_pinned_issuer_loads() -> None:
         _env_file=None,  # type: ignore[call-arg]
         clerk_jwks_url="https://clerk.example/.well-known/jwks.json",
         clerk_issuer="https://clerk.example",
+        openrouter_api_key=SecretStr("sk-or-test"),
     )
     assert settings.clerk_issuer == "https://clerk.example"
 
 
 def test_unconfigured_clerk_needs_no_issuer() -> None:
     assert Settings(_env_file=None).clerk_issuer == ""  # type: ignore[call-arg]
+
+
+def test_settings_refuse_an_enabled_workshop_or_parent_area_without_an_openrouter_key() -> None:
+    """M3 (#188): with Clerk on, the workshop and /parent can start runs, and
+    every run calls OpenRouter. An empty key must stop the app at boot, not
+    fail at the first submit.
+    """
+    with pytest.raises(ValidationError, match="OPENROUTER_API_KEY must be set"):
+        Settings(
+            _env_file=None,
+            clerk_jwks_url="https://clerk.example.test/.well-known/jwks.json",
+            clerk_issuer="https://clerk.example.test",
+        )
+
+
+def test_settings_accept_an_enabled_surface_with_an_openrouter_key() -> None:
+    settings = Settings(
+        _env_file=None,
+        clerk_jwks_url="https://clerk.example.test/.well-known/jwks.json",
+        clerk_issuer="https://clerk.example.test",
+        openrouter_api_key=SecretStr("sk-or-test"),
+    )
+    assert settings.clerk_jwks_url
+
+
+def test_settings_allow_an_empty_openrouter_key_when_no_surface_can_start_a_run() -> None:
+    """Player-only and local test setups never call OpenRouter at request time."""
+    assert Settings(_env_file=None).openrouter_api_key.get_secret_value() == ""
