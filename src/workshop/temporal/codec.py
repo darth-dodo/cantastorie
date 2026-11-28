@@ -22,8 +22,10 @@ class AesGcmPayloadCodec(PayloadCodec):
     """Encrypts each whole serialized payload, metadata included.
 
     The wire form is a random 96-bit nonce followed by the AES-GCM ciphertext
-    and tag. Payloads the server wrote itself (not encrypted by us) pass
-    through decode unchanged.
+    and tag. Decode refuses any payload this codec did not encrypt, so a
+    plaintext input or signal written straight to the namespace is never
+    accepted unauthenticated. The SDK's own metadata-only payloads (a ``None``
+    result, empty details) are encoded on the way out like any other.
     """
 
     def __init__(self, key: bytes) -> None:
@@ -44,7 +46,7 @@ class AesGcmPayloadCodec(PayloadCodec):
 
     def _decrypt(self, payload: Payload) -> Payload:
         if payload.metadata.get("encoding") != ENCRYPTED_ENCODING:
-            return payload
+            raise PayloadDecryptionError("payload is not encrypted with the app's codec")
         nonce, sealed = payload.data[:NONCE_BYTES], payload.data[NONCE_BYTES:]
         try:
             plain = self._aead.decrypt(nonce, sealed, None)

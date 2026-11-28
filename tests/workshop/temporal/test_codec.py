@@ -75,10 +75,26 @@ def test_a_tampered_payload_fails_to_decode() -> None:
         asyncio.run(codec.decode([tampered]))
 
 
-def test_a_payload_the_server_wrote_in_clear_passes_through_decode() -> None:
+@pytest.mark.parametrize(
+    "plain",
+    [
+        _payload("injected premise"),
+        DataConverter.default.payload_converter.to_payloads([None])[0],
+        Payload(metadata={"encoding": b"binary/plain"}, data=b""),
+        Payload(),
+    ],
+)
+def test_a_payload_not_encrypted_by_us_is_refused_on_decode(plain: Payload) -> None:
     codec = AesGcmPayloadCodec(os.urandom(32))
-    plain = _payload("terminated by operator")
-    assert asyncio.run(codec.decode([plain])) == [plain]
+    with pytest.raises(PayloadDecryptionError, match="not encrypted"):
+        asyncio.run(codec.decode([plain]))
+
+
+def test_metadata_only_payloads_the_sdk_makes_round_trip() -> None:
+    codec = AesGcmPayloadCodec(os.urandom(32))
+    null = DataConverter.default.payload_converter.to_payloads([None])[0]
+    assert _roundtrip(codec, null) == null
+    assert _roundtrip(codec, Payload()) == Payload()
 
 
 def test_codec_refuses_a_key_that_is_not_32_bytes() -> None:
