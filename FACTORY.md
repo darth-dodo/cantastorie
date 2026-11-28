@@ -158,6 +158,7 @@ Names only; values live in the places below and never in the repo. `.env.example
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_JWKS_URL`, `CLERK_ISSUER` | Render env, local `.env`. Gate the `/workshop` and `/parent` areas |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Render env, local `.env`. Error monitoring |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_ENDPOINT` | Render env, local `.env`. Pipeline and app tracing |
+| `PIPELINE_ENGINE`, `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_API_KEY`, `TEMPORAL_PAYLOAD_KEY` | Not set yet (ADR-012). The engine flag defaults to inprocess; temporal requires the four Temporal values, which will live in Render env (web and worker) and local .env; the API key and the payload key are credentials |
 | `RENDER_DEPLOY_HOOK_URL` | GitHub Actions secret. Used by the CI `deploy` job |
 | `RENDER_GIT_COMMIT` | Set by Render on every deploy (not secret) |
 | `CSP_REPORT_ONLY` | Render env, local `.env` (not secret; default `false`). `true` sends the Content-Security-Policy as report-only: the rollback switch |

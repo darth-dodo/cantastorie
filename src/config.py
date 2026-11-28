@@ -1,5 +1,7 @@
 """Application configuration loaded from environment variables and .env."""
 
+import base64
+import binascii
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
@@ -10,6 +12,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # OpenRouter's own routers (e.g. openrouter/auto) pick a model per request, so
 # they can land on the very family a judge must differ from.
 ROUTER_FAMILIES = frozenset({"openrouter"})
+
+PAYLOAD_KEY_BYTES = 32
+
+
+def decode_payload_key(value: str) -> bytes:
+    """The AES-256 key behind TEMPORAL_PAYLOAD_KEY, which is 32 bytes in base64."""
+    try:
+        key = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("TEMPORAL_PAYLOAD_KEY must be base64") from exc
+    if len(key) != PAYLOAD_KEY_BYTES:
+        raise ValueError(f"TEMPORAL_PAYLOAD_KEY must decode to {PAYLOAD_KEY_BYTES} bytes")
+    return key
 
 
 def model_family(model_id: str) -> str:
@@ -191,6 +206,17 @@ class Settings(BaseSettings):
     # at WARNING regardless; uvicorn keeps its own access/error handlers.
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
+    # Which engine executes a new run (ADR-012). inprocess keeps generation in
+    # the web process; temporal starts a workflow on Temporal Cloud instead.
+    # The Temporal settings are required only when the flag is on. Every
+    # payload is AES-GCM encrypted with temporal_payload_key (32 bytes, base64)
+    # before it leaves the app, so the engine never holds a premise in clear.
+    pipeline_engine: Literal["inprocess", "temporal"] = "inprocess"
+    temporal_address: str = ""
+    temporal_namespace: str = ""
+    temporal_api_key: SecretStr = SecretStr("")
+    temporal_payload_key: SecretStr = SecretStr("")
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _upper_log_level(cls, value: object) -> object:
@@ -219,6 +245,25 @@ class Settings(BaseSettings):
                 "R2_PENDING_BUCKET must name a private bucket separate from R2_BUCKET — "
                 "the public bucket serves every key, so pending/ content cannot live there"
             )
+        return self
+
+    @model_validator(mode="after")
+    def temporal_config_is_complete_if_the_engine_is_on(self) -> Self:
+        if self.pipeline_engine != "temporal":
+            return self
+        required = {
+            "TEMPORAL_ADDRESS": self.temporal_address,
+            "TEMPORAL_NAMESPACE": self.temporal_namespace,
+            "TEMPORAL_API_KEY": self.temporal_api_key.get_secret_value(),
+            "TEMPORAL_PAYLOAD_KEY": self.temporal_payload_key.get_secret_value(),
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError(
+                f"PIPELINE_ENGINE=temporal needs {', '.join(missing)}: "
+                "set every Temporal setting or keep the engine inprocess"
+            )
+        decode_payload_key(self.temporal_payload_key.get_secret_value())
         return self
 
     @model_validator(mode="after")
