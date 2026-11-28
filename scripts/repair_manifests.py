@@ -6,12 +6,16 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from src.config import Settings, get_settings
+from src.observability import redact_family_tokens
 from src.pipeline.models import Story
 from src.pipeline.publish import (
+    FAMILIES_SEGMENT,
     PUBLISHED_PREFIX,
     THEME_WASH,
     _build_client,
     _load_manifest,
+    _manifest_lane,
+    _publish_root,
     _write_manifest,
 )
 
@@ -38,21 +42,30 @@ def repair_manifests(
     for page in paginator.paginate(Bucket=settings.r2_bucket, Prefix=f"{PUBLISHED_PREFIX}/"):
         for item in page.get("Contents", []):
             key = item["Key"]
-            path = key.removeprefix(f"{PUBLISHED_PREFIX}/")
-            parts = path.split("/")
-            if len(parts) != 2 or parts[1] != "manifest.json":
+            # Shared shelf and family overlay manifests alike (M12); anything
+            # else, a malformed family key included, is skipped.
+            lane = _manifest_lane(key) if key.endswith("/manifest.json") else None
+            if lane is None:
                 continue
 
-            language = parts[0]
+            language, family_token = lane
+            root = _publish_root(family_token)
+            lane_base = (
+                public_base
+                if family_token is None
+                else f"{public_base}/{FAMILIES_SEGMENT}/{family_token}"
+            )
             changed = False
 
-            def mutate(manifest: dict[str, Any]) -> None:
+            def mutate(
+                manifest: dict[str, Any], root: str = root, lane_base: str = lane_base
+            ) -> None:
                 nonlocal changed
                 for entry in manifest.get("stories", []):
                     story_id = entry["id"]
                     story_bytes = client.get_object(
                         Bucket=settings.r2_bucket,
-                        Key=f"{PUBLISHED_PREFIX}/stories/{story_id}/story.json",
+                        Key=f"{root}/stories/{story_id}/story.json",
                     )["Body"].read()
                     story = Story.model_validate_json(story_bytes)
                     expected_wash = THEME_WASH[story.theme]
@@ -63,11 +76,11 @@ def repair_manifests(
                     for field in ("story", "cover"):
                         url = entry[field]
                         if not url.startswith(("http://", "https://")):
-                            entry[field] = f"{public_base}/{url.lstrip('/')}"
+                            entry[field] = f"{lane_base}/{url.lstrip('/')}"
                             changed = True
 
             if dry_run:
-                manifest, _ = _load_manifest(client, settings.r2_bucket, language)
+                manifest, _ = _load_manifest(client, settings.r2_bucket, language, root)
                 mutate(manifest)
             else:
                 # Same helper publish and unpublish write through (H5): IfMatch
@@ -76,7 +89,7 @@ def repair_manifests(
                     client,
                     settings.r2_bucket,
                     key,
-                    load=partial(_load_manifest, client, settings.r2_bucket, language),
+                    load=partial(_load_manifest, client, settings.r2_bucket, language, root),
                     mutate=mutate,
                     snapshot_bucket=settings.pending_bucket,
                 )
@@ -95,12 +108,12 @@ def main() -> int:
     try:
         repaired = repair_manifests(get_settings(), dry_run=args.dry_run)
     except Exception as error:
-        print(f"Manifest repair failed: {error}", file=sys.stderr)
+        print(redact_family_tokens(f"Manifest repair failed: {error}"), file=sys.stderr)
         return 1
 
     action = "Would repair" if args.dry_run else "Repaired"
     for key in repaired:
-        print(f"{action} {key}")
+        print(f"{action} {redact_family_tokens(key)}")
     print(f"{action} {len(repaired)} manifest(s).")
     return 0
 

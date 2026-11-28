@@ -74,6 +74,8 @@ def clerk_settings(
         clerk_secret_key=SecretStr("sk_test_xxx"),
         clerk_jwks_url=jwks_url,
         clerk_issuer=clerk_issuer,
+        # Clerk on means runs can start, so the app needs a key to boot (M3).
+        openrouter_api_key=SecretStr("sk-or-test"),
     )
 
 

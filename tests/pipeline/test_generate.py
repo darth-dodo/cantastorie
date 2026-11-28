@@ -182,6 +182,104 @@ def test_generate_stages_the_italian_spoken_prompts(tmp_path: Path, s3: S3Client
     assert stems == set(IT_UTTERANCES)
 
 
+def _counting_narration(spoken: list[str]) -> NarrationClient:
+    def handler(request: httpx.Request) -> httpx.Response:
+        text = json.loads(request.content)["input"]
+        spoken.append(text)
+        return httpx.Response(
+            200, content=f"mp3:{text}".encode(), headers={"Content-Type": "audio/mpeg"}
+        )
+
+    settings = Settings(_env_file=None, openrouter_api_key=SecretStr("sk-or-test"))
+    return NarrationClient(settings, transport=httpx.MockTransport(handler))
+
+
+def _italian_run(settings: Settings, narration: NarrationClient, run_nonce: str) -> str:
+    return generate_story(
+        "the_sleepy_sea",
+        "it",
+        settings,
+        write_model=TestModel(custom_output_args=_GOOD_DRAFT),
+        safety_model=TestModel(custom_output_args=_PASSING_REPORT),
+        revise_model=TestModel(custom_output_args=_GOOD_DRAFT),
+        narration_client=narration,
+        image_transport=_fake_images(),
+        image_safety_model=_calm_judge(),
+        run_nonce=run_nonce,
+    )
+
+
+def _prompt_calls(spoken: list[str]) -> int:
+    lines = set(IT_UTTERANCES.values())
+    return sum(1 for text in spoken if text in lines)
+
+
+def test_a_second_italian_story_does_not_rebuy_the_spoken_prompts(
+    tmp_path: Path, s3: S3Client
+) -> None:
+    """M17 (#188): the prompts are story-independent, so only the first Italian
+    run pays for them; another story's run makes no prompt TTS call."""
+    settings = _settings(tmp_path)
+    spoken: list[str] = []
+
+    _italian_run(settings, _counting_narration(spoken), "a" * 32)
+    assert _prompt_calls(spoken) == len(IT_UTTERANCES)
+
+    spoken.clear()
+    _italian_run(settings, _counting_narration(spoken), "b" * 32)
+    assert _prompt_calls(spoken) == 0
+
+
+def test_a_fresh_disk_does_not_rebuy_prompts_already_staged(tmp_path: Path, s3: S3Client) -> None:
+    """M17 (#188): a redeploy wipes the local cache, but prompts already staged
+    in the pending bucket are reused, not narrated again or staged twice."""
+    spoken: list[str] = []
+    _italian_run(_settings(tmp_path / "first"), _counting_narration(spoken), "a" * 32)
+    before = s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=f"{STAGED_PREFIX}/prompts/it/")
+
+    spoken.clear()
+    _italian_run(_settings(tmp_path / "second"), _counting_narration(spoken), "b" * 32)
+
+    after = s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=f"{STAGED_PREFIX}/prompts/it/")
+    assert _prompt_calls(spoken) == 0
+    assert [o["Key"] for o in after["Contents"]] == [o["Key"] for o in before["Contents"]]
+
+
+def test_a_changed_prompt_is_staged_again(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M17 (#188): the staged check compares content, not names. A prompt whose
+    text changed is narrated and staged again, even on a fresh disk."""
+    spoken: list[str] = []
+    _italian_run(_settings(tmp_path / "first"), _counting_narration(spoken), "a" * 32)
+    prefix = f"{STAGED_PREFIX}/prompts/it/"
+    before = {
+        o["Key"] for o in s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=prefix)["Contents"]
+    }
+
+    new_line = "Fine! Un'altra ancora?"
+    monkeypatch.setitem(IT_UTTERANCES, "end_prompt", new_line)  # type: ignore[arg-type]
+    spoken.clear()
+    _italian_run(_settings(tmp_path / "second"), _counting_narration(spoken), "b" * 32)
+
+    after = {o["Key"] for o in s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=prefix)["Contents"]}
+    assert new_line in spoken
+    assert [k for k in after - before if k.removeprefix(prefix).startswith("end_prompt.")]
+
+
+def test_prompts_staged_before_the_hash_was_recorded_are_kept(tmp_path: Path, s3: S3Client) -> None:
+    """M17 (#188): prompts staged without the narration-key metadata (before
+    it existed) count as current, so a run does not narrate them again."""
+    prefix = f"{STAGED_PREFIX}/prompts/it/"
+    for name in IT_UTTERANCES:
+        s3.put_object(Bucket=PENDING_BUCKET, Key=f"{prefix}{name}.0123456789abcdef.wav", Body=b"x")
+    spoken: list[str] = []
+
+    _italian_run(_settings(tmp_path), _counting_narration(spoken), "a" * 32)
+
+    assert _prompt_calls(spoken) == 0
+
+
 def test_rerunning_generate_reproduces_an_identical_staged_story(
     tmp_path: Path, s3: S3Client
 ) -> None:

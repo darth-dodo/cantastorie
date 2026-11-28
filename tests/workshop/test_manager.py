@@ -10,7 +10,7 @@ same seam discipline as generate_story's provider arguments.
 import asyncio
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 
 import boto3
@@ -19,6 +19,9 @@ from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
 from src.config import Settings
+from src.observability import timed_step
+from src.pipeline.models import Page, PageAudio, Story
+from src.pipeline.steps.revise import StoryRejectedError
 from src.workshop import manager as manager_module
 from src.workshop.manager import OPERATOR_TOKEN, RunCapExceeded, RunManager
 from src.workshop.records import RunRecord, RunStore, StoryRequest, new_run
@@ -120,6 +123,93 @@ def test_a_generation_error_lands_failed_with_the_reason(s3: S3Client) -> None:
     [record] = store.list_runs(family_token="family-abc")
     assert record.state == "failed"
     assert record.error == "narration provider unreachable"
+
+
+def _fail_inside(step: str) -> Callable[[StoryRequest, Settings, str], str]:
+    """A generate seam that clears write, then raises inside ``step``."""
+
+    def generate(req: StoryRequest, st: Settings, run_id: str) -> str:
+        with timed_step("write"):
+            pass
+        with timed_step(step):
+            raise RuntimeError(f"{step} provider said 400")
+        return "unreachable"
+
+    return generate
+
+
+def _execute_once(
+    s3: S3Client, generate: Callable[[StoryRequest, Settings, str], str]
+) -> RunRecord:
+    settings = _settings()
+    store = RunStore(settings, client=s3)
+    manager = RunManager(store, settings, generate=generate)
+
+    async def run() -> None:
+        record = await manager.submit("family-abc", REQUEST)
+        await manager.execute(record)
+
+    asyncio.run(run())
+    [record] = store.list_runs(family_token="family-abc")
+    return record
+
+
+def test_a_failure_inside_a_step_records_that_step(s3: S3Client) -> None:
+    """#172: the pipeline knows which step raised, so the record keeps it."""
+    record = _execute_once(s3, _fail_inside("narrate"))
+
+    assert record.state == "failed"
+    assert record.failed_step == "narrate"
+    assert record.error == "narrate provider said 400"
+
+
+@pytest.mark.parametrize(
+    ("step", "bead"),
+    [
+        ("revise", "revise"),
+        ("safety", "safety"),
+        ("illustrate", "illustrate"),
+        ("image_safety", "illustrate"),
+        ("narrate_prompts", "narrate"),
+        ("assemble", "assemble"),
+        ("stage", "assemble"),
+    ],
+)
+def test_a_failed_sub_step_rests_on_its_bead(s3: S3Client, step: str, bead: str) -> None:
+    """The six beads are the vocabulary; finer timed steps fold into them."""
+    assert _execute_once(s3, _fail_inside(step)).failed_step == bead
+
+
+def test_a_safety_rejection_outside_any_step_rests_at_safety(s3: S3Client) -> None:
+    story = Story(
+        id="the_sleepy_sea-it-x",
+        language="it",
+        title="t",
+        theme="the_sleepy_sea",
+        shape="linear",
+        pages=[
+            Page(
+                id="p1",
+                text=" ".join(["The water sings shh shh."] * 8),
+                audio=PageAudio(file="p1.mp3"),
+                image="p1.webp",
+            )
+        ],
+    )
+
+    def reject(req: StoryRequest, st: Settings, run_id: str) -> str:
+        raise StoryRejectedError(story, ["safety/calm: too loud"])
+
+    assert _execute_once(s3, reject).failed_step == "safety"
+
+
+def test_a_failure_outside_any_step_records_no_step(s3: S3Client) -> None:
+    """No guess: the rested screen falls back to the checkpoint heuristic."""
+
+    def explode(req: StoryRequest, st: Settings, run_id: str) -> str:
+        raise RuntimeError("bucket unreachable")
+
+    assert _execute_once(s3, explode).failed_step is None
 
 
 def test_a_generation_error_is_reported_to_sentry(

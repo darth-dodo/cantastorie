@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  CHOICE_AUTO_CONTINUE_MS,
+  CHOICE_NUDGE_MS,
   createPlayback,
   STALL_POLL_MS,
   STALL_TIMEOUT_MS,
@@ -525,6 +527,176 @@ describe("Spoken option labels (AI-428) — the overlay speaks label 0 then labe
     await openToChoice(story);
     expect(store.state.choiceOpen).toBe(true);
     expect(labelsSpoken()).toEqual([]);
+  });
+});
+
+describe("Choice nudge and auto-continue (M31, #186): 30 seconds idle nudges, 10 more auto-continue", () => {
+  // product.md -> "Choice behavior, precisely": after 30 seconds idle the
+  // spoken nudge plays; after 10 more seconds, the first option
+  // auto-continues, so a child who fell asleep mid-choice still gets a story.
+  const NUDGE_PROMPT = "/p/choice-nudge.wav";
+  let onChoiceNudge;
+  let onAutoChoose;
+
+  function choiceStory() {
+    const pages = fixtureStory(3).pages;
+    pages[2].choice = {
+      options: [
+        { label: "a", next_page: "a1" },
+        { label: "b", next_page: "b1" },
+      ],
+    };
+    return { id: "nudge", title: "Nudge", pages, pagesFrom: () => [] };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = createStore();
+    engine = fakeEngine();
+    onChoiceNudge = vi.fn();
+    onAutoChoose = vi.fn((i) => store.choose(i));
+    playback = createPlayback({
+      store,
+      engine,
+      prefetcher,
+      prompts: { ...PROMPTS, choice_nudge: NUDGE_PROMPT },
+      isHidden,
+      onChoiceNudge,
+      onAutoChoose,
+    });
+  });
+
+  afterEach(() => {
+    store.toShelf();
+    expect(vi.getTimerCount()).toBe(0); // no nudge clock outlives the choice
+    vi.useRealTimers();
+  });
+
+  async function openToChoice() {
+    await playback.openStory(choiceStory());
+    engine.endPrompt(); // "Si parte!" ends; page 1 narrates
+    engine.endNarration(); // p1 -> p2
+    engine.endNarration(); // p2 -> p3 (the choice page)
+    engine.endNarration(); // p3 audio ends -> the choice opens
+    expect(store.state.choiceOpen).toBe(true);
+  }
+
+  const nudgesSpoken = () => promptsSpoken().filter((url) => url === NUDGE_PROMPT);
+
+  it("exports the product's timings: 30 seconds to the nudge, 10 more to auto-continue", () => {
+    expect(CHOICE_NUDGE_MS).toBe(30_000);
+    expect(CHOICE_AUTO_CONTINUE_MS).toBe(10_000);
+  });
+
+  it("after 30 seconds with no tap the nudge speaks and the cards nudge, never before", async () => {
+    await openToChoice();
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS - 1);
+    expect(nudgesSpoken()).toEqual([]);
+    expect(onChoiceNudge).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(nudgesSpoken()).toEqual([NUDGE_PROMPT]);
+    expect(onChoiceNudge).toHaveBeenCalledTimes(1);
+    expect(store.state.choiceOpen).toBe(true); // the nudge only asks
+  });
+
+  it("10 seconds after the nudge the first option is picked and the story carries on", async () => {
+    await openToChoice();
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS + CHOICE_AUTO_CONTINUE_MS - 1);
+    expect(onAutoChoose).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(onAutoChoose).toHaveBeenCalledTimes(1);
+    expect(onAutoChoose).toHaveBeenCalledWith(0);
+    expect(store.state.choiceOpen).toBe(false);
+    expect(store.state.choices).toEqual([0]);
+  });
+
+  it("a tap on the overlay restarts the idle clock: the nudge waits 30 seconds from the tap", async () => {
+    await openToChoice();
+    vi.advanceTimersByTime(25_000);
+    playback.choiceActivity(); // the child touched the overlay, not a card
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS - 1);
+    expect(nudgesSpoken()).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(nudgesSpoken()).toEqual([NUDGE_PROMPT]);
+
+    // A tap after the nudge cancels the pending auto-continue as well.
+    vi.advanceTimersByTime(5_000);
+    playback.choiceActivity();
+    vi.advanceTimersByTime(CHOICE_AUTO_CONTINUE_MS);
+    expect(onAutoChoose).not.toHaveBeenCalled();
+  });
+
+  it("a tap that restarts the idle clock clears the card glow (#186)", async () => {
+    const onChoiceActivity = vi.fn();
+    playback.dispose();
+    playback = createPlayback({
+      store,
+      engine,
+      prefetcher,
+      prompts: { ...PROMPTS, choice_nudge: NUDGE_PROMPT },
+      isHidden,
+      onChoiceNudge,
+      onChoiceActivity,
+      onAutoChoose,
+    });
+    await openToChoice();
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS);
+    expect(onChoiceNudge).toHaveBeenCalledTimes(1);
+
+    playback.choiceActivity();
+    expect(onChoiceActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it("a tapped card closes the overlay and cancels both timers", async () => {
+    await openToChoice();
+    vi.advanceTimersByTime(10_000);
+    store.choose(1);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS + CHOICE_AUTO_CONTINUE_MS);
+    expect(nudgesSpoken()).toEqual([]);
+    expect(onAutoChoose).not.toHaveBeenCalled();
+  });
+
+  it("leaving the player cancels both timers", async () => {
+    await openToChoice();
+    store.exitStory();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS + CHOICE_AUTO_CONTINUE_MS);
+    expect(onChoiceNudge).not.toHaveBeenCalled();
+    expect(onAutoChoose).not.toHaveBeenCalled();
+  });
+
+  it("a language without a recorded nudge still nudges the cards and auto-continues, silently", async () => {
+    playback.dispose();
+    playback = createPlayback({ store, engine, prefetcher, prompts: PROMPTS, isHidden, onChoiceNudge, onAutoChoose });
+    await openToChoice();
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS);
+    expect(onChoiceNudge).toHaveBeenCalledTimes(1);
+    expect(promptsSpoken()).toEqual([PROMPTS.story_start]);
+    vi.advanceTimersByTime(CHOICE_AUTO_CONTINUE_MS);
+    expect(onAutoChoose).toHaveBeenCalledWith(0);
+  });
+
+  it("the recorded nudge banks with the story on the cover tap", async () => {
+    const story = choiceStory();
+    await playback.openStory(story);
+    expect(prefetcher.prefetchStory).toHaveBeenCalledWith(story, [
+      PROMPTS.story_start,
+      PROMPTS.end,
+      PROMPTS.audio_retry,
+      NUDGE_PROMPT,
+    ]);
+  });
+
+  it("an instance retired by a language switch never nudges or auto-continues", async () => {
+    await openToChoice();
+    playback.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(CHOICE_NUDGE_MS + CHOICE_AUTO_CONTINUE_MS);
+    expect(onChoiceNudge).not.toHaveBeenCalled();
+    expect(onAutoChoose).not.toHaveBeenCalled();
   });
 });
 

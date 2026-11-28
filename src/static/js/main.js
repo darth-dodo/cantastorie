@@ -284,10 +284,31 @@ export async function init(
   }
 
   let stories = manifest?.stories ?? fallbackShelf;
-  let prefetcher = createPrefetcher({ engine, fetchFn });
-  let playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
+  // The spoken prompts stay decoded across story switches; any other
+  // story's buffers are dropped when a cover opens (M19).
+  const makePrefetcher = () =>
+    createPrefetcher({
+      engine,
+      fetchFn,
+      keepAudio: [...Object.values(manifest?.prompts ?? {}), offlinePromptUrl()],
+    });
+  let prefetcher = makePrefetcher();
+  // The idle choice (M31): the cards nudge on screen beside the spoken nudge,
+  // and the auto-continue follows the first option exactly as a tap would.
+  const makePlayback = () =>
+    createPlayback({
+      store,
+      engine,
+      prefetcher,
+      prompts: manifest?.prompts ?? {},
+      onChoiceNudge: () => app.querySelector(".overlay .options")?.classList.add("nudge"),
+      onChoiceActivity: () => app.querySelector(".overlay .options")?.classList.remove("nudge"),
+      onAutoChoose: (i) => onChoose(i),
+    });
+  let playback = makePlayback();
 
   let activeStory = null;
+  let activePristinePages = null; // the open story's original, unextended path
   const storyCache = new Map();
 
   // Every cover open (and a language switch) bumps the sequence. An open
@@ -349,6 +370,7 @@ export async function init(
       }
       if (superseded()) return;
       activeStory = loaded;
+      activePristinePages = loaded.pages;
       // A save left mid-branch replays here: fold the recorded picks over the
       // loaded story so the arm the child chose is back on the played path
       // BEFORE playback.openStory runs — its unfinished check (page <
@@ -363,6 +385,7 @@ export async function init(
     // Only a cover with no story.json at all (the dev/mock shelf) runs on
     // the page timer.
     activeStory = null;
+    activePristinePages = null;
     playback.clearStory();
     store.openStory({ pageCount: PAGE_COUNT, choicePage: CHOICE_PAGE });
   }
@@ -375,15 +398,16 @@ export async function init(
     openSeq += 1; // a cover still loading in the old language is dropped
     storyCache.clear();
     activeStory = null;
+    activePristinePages = null;
     playback.clearStory();
     manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
-    prefetcher = createPrefetcher({ engine, fetchFn });
+    prefetcher = makePrefetcher();
     // Retire the old instance before its replacement subscribes: left
     // subscribed, it would still react to the store and speak the old
     // language's prompts (M23).
     playback.dispose();
-    playback = createPlayback({ store, engine, prefetcher, prompts: manifest?.prompts ?? {} });
+    playback = makePlayback();
     store.toShelf();
     shown = { screen: null, choiceOpen: false, resumeOpen: false, audioError: false, settingsOpen };
     render(store.state);
@@ -459,6 +483,25 @@ export async function init(
     store.choose(i);
   }
 
+  // "Start over" on the resume offer: the rebuilt branching path is dropped
+  // for the story's original pages BEFORE the store restarts, so page 0 opens
+  // on the unextended path and its first choice comes round again (#189).
+  function resetToPristinePath() {
+    if (activeStory && activePristinePages) playback.resetPath([...activePristinePages]);
+  }
+
+  function onRestart() {
+    resetToPristinePath();
+    store.resumeRestart();
+  }
+
+  // "Again" on the end screen starts over the same way: the choice comes
+  // round again instead of the old arm playing straight on (#208).
+  function onAgain() {
+    resetToPristinePath();
+    store.replay();
+  }
+
   function render(state) {
     save(state);
 
@@ -519,13 +562,17 @@ export async function init(
           const choiceView = activeStory
             ? activeStory.pages[store.state.choicePage].choice
             : undefined;
-          playerScreen.appendChild(buildChoiceOverlay(choiceView, store, onChoose));
+          const choiceOverlay = buildChoiceOverlay(choiceView, store, onChoose);
+          // Any touch on the overlay means the child is awake: the idle
+          // clock before the nudge starts again.
+          choiceOverlay.addEventListener("pointerdown", () => playback.choiceActivity());
+          playerScreen.appendChild(choiceOverlay);
         }
-        if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store, RESUMES[lang] ?? RESUMES.en));
+        if (state.resumeOpen) playerScreen.appendChild(buildResumeOverlay(store, RESUMES[lang] ?? RESUMES.en, onRestart));
         if (state.audioError) playerScreen.appendChild(buildAudioError(store));
       } else {
         playerScreen = null;
-        app.appendChild(buildEnd(store, ENDS[lang] ?? ENDS.en));
+        app.appendChild(buildEnd(store, ENDS[lang] ?? ENDS.en, onAgain));
       }
       shown = { screen: state.screen, choiceOpen: state.choiceOpen, resumeOpen: state.resumeOpen, audioError: state.audioError, settingsOpen };
 

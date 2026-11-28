@@ -11,9 +11,11 @@ Every step is a pure cache lookup on a re-run, so a repeated generate re-buys
 nothing.
 
 The gloss step is slice 6 and the audit is AI-378 — neither runs here. A run
-stages the spoken prompts only for Italian. Every language's prompts are
-published by the operator's ``cantastorie publish-prompts`` (H6, AI-481;
-src/pipeline/prompts.py), which keeps them out of each story's TTS bill.
+stages the spoken prompts only for Italian, and only when the pending bucket
+does not already hold all five, narrated through the shared prompt cache, so
+the prompts are bought once, not once per story (M17). Every language's
+prompts are published by the operator's ``cantastorie publish-prompts`` (H6,
+AI-481; src/pipeline/prompts.py), which keeps them out of each story's TTS bill.
 
 The provider seams (models, narration client, image transport) are injectable
 so the whole run is exercised with zero network.
@@ -25,19 +27,24 @@ from typing import TYPE_CHECKING, Literal
 
 from src.observability import timed_step, typed_traceable
 from src.pipeline.cache import ArtifactCache
-from src.pipeline.publish import _build_client, stage_story
+from src.pipeline.prompts import prompt_cache
+from src.pipeline.publish import STAGED_PREFIX, _build_client, stage_story
 from src.pipeline.steps.assemble import assemble_story
 from src.pipeline.steps.image_safety import illustrate_safely
 from src.pipeline.steps.narrate import (
+    NARRATION_KEY_METADATA,
     narrate_choice_labels,
     narrate_pages,
     synthesize_utterances,
+    utterance_narration_key,
 )
 from src.pipeline.steps.revise import author_story
+from src.pipeline.steps.utterance_texts import UTTERANCE_TEXTS
 from src.pipeline.steps.write import derive_story_id
 
 if TYPE_CHECKING:
     import httpx
+    from mypy_boto3_s3 import S3Client
     from pydantic_ai.models import Model
 
     from src.config import Settings
@@ -95,11 +102,13 @@ def generate_story(
         assembled = assemble_story(story, illustrations)
 
     s3 = _build_client(settings)
-    if language == "it":
+    if language == "it" and not _prompts_already_staged(s3, settings, language):
+        # The prompts are story-independent, so they share publish-prompts'
+        # cache rather than this story's (M17): only the first run pays.
         with timed_step("narrate_prompts", story_id=story_id):
             synthesize_utterances(
                 settings,
-                cache,
+                prompt_cache(settings),
                 out_dir=settings.staging_dir,
                 language=language,
                 client=narration_client,
@@ -108,3 +117,33 @@ def generate_story(
 
     with timed_step("stage", story_id=story_id):
         return stage_story(assembled, settings, client=s3)
+
+
+def _prompts_already_staged(s3: S3Client, settings: Settings, language: Language) -> bool:
+    """Whether pending/staged/prompts/{lang}/ already holds every current prompt.
+
+    Story publish copies that prefix, so once all five are there a new run
+    has nothing to add: narrating again would only buy the same lines. Each
+    staged prompt carries the hash of the text and voice it was narrated
+    from, so a prompt whose text or voice changed counts as missing. A prompt
+    staged before that hash was recorded carries none and counts as current;
+    publish-prompts refreshes those.
+    """
+    prefix = f"{STAGED_PREFIX}/prompts/{language}/"
+    staged: dict[str, list[str]] = {}
+    for page in s3.get_paginator("list_objects_v2").paginate(
+        Bucket=settings.pending_bucket, Prefix=prefix
+    ):
+        for item in page.get("Contents", []):
+            name = item["Key"].removeprefix(prefix).split(".", 1)[0]
+            staged.setdefault(name, []).append(item["Key"])
+
+    def current(name: str, text: str) -> bool:
+        expected = utterance_narration_key(text, language, settings)
+        for key in staged.get(name, []):
+            metadata = s3.head_object(Bucket=settings.pending_bucket, Key=key).get("Metadata", {})
+            if metadata.get(NARRATION_KEY_METADATA, expected) == expected:
+                return True
+        return False
+
+    return all(current(name, text) for name, text in UTTERANCE_TEXTS[language].items())

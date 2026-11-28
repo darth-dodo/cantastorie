@@ -24,7 +24,13 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, PrivateAttr, ValidationError, model_validator
 
 from src.pipeline.models import PREMISE_MAX_LENGTH, Language, Theme
-from src.pipeline.publish import CLIENT_CONFIG, STAGED_PREFIX, child_prefixes, parallel_map
+from src.pipeline.publish import (
+    CLIENT_CONFIG,
+    CONFLICT_CODES,
+    STAGED_PREFIX,
+    child_prefixes,
+    parallel_map,
+)
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -63,8 +69,6 @@ _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 USAGE_DIR = "_usage"
 # Conditional-write attempts before an increment gives up under contention.
 _COUNTER_ATTEMPTS = 5
-# R2 answers a lost conditional write with 412, or 409 when two land at once.
-_CONFLICT_CODES = frozenset({"PreconditionFailed", "ConditionalRequestConflict", "412", "409"})
 
 
 def _as_legacy_id_list(value: Any, key: str) -> list[str]:
@@ -131,6 +135,9 @@ class RunRecord(BaseModel):
     # digests existed has none, so it does not count until reviewed again.
     reviewed_digest: str | None = None
     error: str | None = None
+    # The bead a failed run stopped on (#172); None when the failure fell
+    # outside any step, or for records saved before it was kept.
+    failed_step: str | None = None
     created_at: datetime
     updated_at: datetime
     _etag: str | None = PrivateAttr(default=None)
@@ -168,6 +175,7 @@ class RunRecord(BaseModel):
         *,
         error: str | None = None,
         story_id: str | None = None,
+        failed_step: str | None = None,
     ) -> RunRecord:
         if state not in _TRANSITIONS[self.state]:
             raise InvalidTransition(f"{self.state} → {state} is not in the run lifecycle")
@@ -176,6 +184,7 @@ class RunRecord(BaseModel):
                 "state": state,
                 # A retry starts clean; a failure carries its reason.
                 "error": error if state == "failed" else None,
+                "failed_step": failed_step if state == "failed" else None,
                 "story_id": self.story_id if story_id is None else story_id,
                 # A freshly staged story has not been seen yet.
                 "reviewed": False if state == "staged" else self.reviewed,
@@ -307,7 +316,7 @@ class RunStore:
                         IfMatch=etag,
                     )
             except ClientError as error:
-                if str(error.response.get("Error", {}).get("Code")) in _CONFLICT_CODES:
+                if str(error.response.get("Error", {}).get("Code")) in CONFLICT_CODES:
                     continue
                 raise
             return count + 1

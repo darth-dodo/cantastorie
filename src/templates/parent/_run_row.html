@@ -16,6 +16,10 @@
 {% for step in step_names %}{% if step in steps %}{% set ns.last = loop.index0 %}{% endif %}{% endfor %}
 {% set current_idx = ns.last + 1 %}
 {% set current_step = step_names[current_idx] if current_idx < 6 else "assemble" %}
+{% if record.state == "failed" and record.failed_step in step_names %}
+  {% set current_step = record.failed_step %}
+  {% set current_idx = step_names.index(record.failed_step) %}
+{% endif %}
 {% set title = record.request.premise if record.request.premise else record.request.theme.replace("_", " ") %}
 <div class="ws-run-card ws-run-row{% if record.state == 'staged' %} ws-run-card--staged{% endif %}"
      data-run-id="{{ record.id }}" data-state="{{ record.state }}"

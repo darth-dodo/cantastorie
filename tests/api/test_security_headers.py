@@ -29,6 +29,7 @@ CLERK_ENV = {
     "CLERK_SECRET_KEY": "sk_test_xxx",
     "CLERK_JWKS_URL": "https://test.clerk.test/.well-known/jwks.json",
     "CLERK_ISSUER": "https://test.clerk.test",
+    "OPENROUTER_API_KEY": "sk-or-test",
 }
 THIRD_PARTY_MARKERS = ("clerk", "challenges.cloudflare.com", "google", "gstatic")
 

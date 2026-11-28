@@ -209,6 +209,8 @@ async def _dashboard_ctx(
     def _fail_step(record: RunRecord) -> str | None:
         if record.state != "failed":
             return None
+        if record.failed_step is not None:
+            return record.failed_step
         done = set(_checkpointed_steps(record, settings))
         for s in step_order:
             if s not in done:

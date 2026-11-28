@@ -214,11 +214,28 @@ def run_context(run_id: str) -> Iterator[None]:
         _current_run_id.reset(token)
 
 
+# The attribute timed_step stamps on an exception raised inside it (#172).
+_FAILED_STEP_ATTR = "pipeline_step"
+
+
+def failed_step(error: BaseException) -> str | None:
+    """The innermost timed step an exception was raised inside, if any."""
+    step = getattr(error, _FAILED_STEP_ATTR, None)
+    return step if isinstance(step, str) else None
+
+
 @contextlib.contextmanager
 def timed_step(step: str, **fields: object) -> Iterator[None]:
-    """Log ``step_finished`` with ``duration_ms`` when the step returns."""
+    """Log ``step_finished`` with ``duration_ms`` when the step returns. An
+    exception raised inside carries the step's name for failed_step()."""
     started = time.perf_counter()
-    yield
+    try:
+        yield
+    except Exception as error:
+        if failed_step(error) is None:
+            with contextlib.suppress(AttributeError):
+                setattr(error, _FAILED_STEP_ATTR, step)
+        raise
     extra: dict[str, object] = {
         "event": "step_finished",
         "step": step,

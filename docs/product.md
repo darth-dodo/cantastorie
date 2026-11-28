@@ -84,7 +84,7 @@ The bands are descriptive personas, not settings. The app behaves identically fo
 |---------|--------|-------------|
 | **Curated shelf** | ✅ Shipped | Cover grid showing only the active language's approved stories: the bundled launch set plus this family's published stories |
 | **Voice-first player** | ✅ Shipped | Full-bleed watercolor pages, play-pause plus prev/next page buttons, auto page turns, exact-position resume |
-| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at a branch point; a tap follows the chosen arm to its own ending. The idle **Choice nudge**, auto-continue and spoken confirmation are not yet built (AI-370) |
+| **Picture choices** | ✅ Shipped | Two picture options with spoken labels at a branch point; a tap follows the chosen arm to its own ending. An idle choice nudges the cards after 30 seconds and auto-continues on the first option 10 seconds later (M31); the spoken **Choice nudge** line plays once its prompt is recorded, and the spoken confirmation is not yet built (AI-370) |
 | **Reading mode** | ⏳ Planned | Parent-enabled story text with karaoke word highlighting and tap-word English glosses |
 | **Launch library** | 🔄 In progress | 19 stories: 3 linear + 2 branching per Tier 1 language, 2 linear + 1 branching per Tier 2 language — trial stories published; the narrator voice is final (2026-10-10), so the curated set is unblocked |
 | **10 languages** | 🔄 In progress | Italian and Spanish flagship; English, Greek, German, Bulgarian, Russian, Marathi, Hindi and Japanese alongside. Per-language manifests, the settings switch and spoken prompts are live for all ten. Hindi and Japanese were added 2026-10-10 (AI-508) and have no stories yet |

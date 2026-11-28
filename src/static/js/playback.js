@@ -5,9 +5,9 @@
 // ramps make every turn a gentle crossfade. The end screen speaks the
 // end prompt; replay starts the loop over from page 1.
 //
-// Choice pages are respected but not owned here: audio end on one opens
-// the store's overlay and playback simply waits (the overlay, nudge, and
-// auto-continue are AI-370).
+// Choice pages: audio end on one opens the store's overlay and playback
+// waits for the tap. An idle choice is nudged after 30 seconds and the first
+// option auto-continues 10 seconds later (M31, #186).
 //
 // A voice that freezes without failing (a suspended audio context, B9) is
 // caught by the stall watchdog: the story holds its exact spot and the
@@ -24,6 +24,12 @@ export const STORY_START_LOAD_TIMEOUT_MS = 3000;
 export const STALL_TIMEOUT_MS = 2500;
 export const STALL_POLL_MS = 500;
 
+// product.md -> "Choice behavior, precisely": after 30 seconds idle the nudge
+// plays; after 10 more seconds the first option auto-continues, so a child
+// who fell asleep mid-choice still gets a complete, gentle story.
+export const CHOICE_NUDGE_MS = 30_000;
+export const CHOICE_AUTO_CONTINUE_MS = 10_000;
+
 export function createPlayback({
   store,
   engine,
@@ -32,7 +38,15 @@ export function createPlayback({
   // Wrapped, not captured: the globals are looked up on each call.
   setIntervalFn = (fn, ms) => globalThis.setInterval(fn, ms),
   clearIntervalFn = (id) => globalThis.clearInterval(id),
+  setTimeoutFn = (fn, ms) => globalThis.setTimeout(fn, ms),
+  clearTimeoutFn = (id) => globalThis.clearTimeout(id),
   isHidden = () => globalThis.document?.hidden === true,
+  // The idle choice: the screen nudges the cards, and the auto-continue
+  // picks an option the way a tap would (main.js's onChoose).
+  onChoiceNudge = () => {},
+  // A tap restarted the idle clock: the screen drops the nudge.
+  onChoiceActivity = () => {},
+  onAutoChoose = (optionIndex) => store.choose(optionIndex),
 }) {
   let story = null;
   let narratingPage = null; // page index whose voice is live or held
@@ -47,6 +61,37 @@ export function createPlayback({
   let watchedPage = null; // the page the stall clock is counting for
   let lastPosition = null; // null: no sample yet since the clock reset
   let stalledMs = 0;
+
+  // The idle-choice clock: one pending timeout, first for the nudge, then
+  // for the auto-continue. Any tap on the overlay starts it over.
+  let choiceTimerId = null;
+
+  function stopChoiceClock() {
+    if (choiceTimerId === null) return;
+    clearTimeoutFn(choiceTimerId);
+    choiceTimerId = null;
+  }
+
+  function startChoiceClock() {
+    stopChoiceClock();
+    choiceTimerId = setTimeoutFn(nudgeChoice, CHOICE_NUDGE_MS);
+  }
+
+  function nudgeChoice() {
+    choiceTimerId = null;
+    if (disposed || !store.state.choiceOpen) return;
+    onChoiceNudge();
+    if (prompts.choice_nudge && engine.unlocked) {
+      engine.playPrompt(prompts.choice_nudge).catch(() => {});
+    }
+    choiceTimerId = setTimeoutFn(autoContinueChoice, CHOICE_AUTO_CONTINUE_MS);
+  }
+
+  function autoContinueChoice() {
+    choiceTimerId = null;
+    if (disposed || !store.state.choiceOpen) return;
+    onAutoChoose(0);
+  }
 
   function resetStallClock() {
     watchedPage = narratingPage;
@@ -197,7 +242,12 @@ export function createPlayback({
     // otherwise waits out the choice.
     const choiceOpening = state.choiceOpen && !choiceWasOpen;
     choiceWasOpen = state.choiceOpen;
-    if (choiceOpening && story) speakLabels(story.pages[state.choicePage]);
+    if (choiceOpening && story) {
+      speakLabels(story.pages[state.choicePage]);
+      startChoiceClock();
+    }
+    // A tapped card, leaving the player, or any other close ends the wait.
+    if (!state.choiceOpen || state.screen !== "player") stopChoiceClock();
 
     if (state.screen !== "player") {
       const entering = state.screen !== prevScreen;
@@ -255,6 +305,15 @@ export function createPlayback({
       narratingPage = null;
       starting = false; // a start prompt landing later releases nothing
       stopWatchdog();
+      stopChoiceClock();
+    },
+
+    // A tap anywhere on the open choice overlay: the child is awake, so the
+    // 30 seconds of idle start again (a pending auto-continue is dropped).
+    choiceActivity() {
+      if (disposed || choiceTimerId === null || !store.state.choiceOpen) return;
+      onChoiceActivity();
+      startChoiceClock();
     },
 
     // A branch option was tapped (AI-428): append the chosen arm's pages to
@@ -274,11 +333,26 @@ export function createPlayback({
       });
     },
 
+    // "Start over" on the resume offer (#189): the played path goes back to
+    // the story's original pages, dropping every arm the resume replay
+    // appended, and the next branch is the first one again. main.js calls
+    // this BEFORE store.resumeRestart(), as onChoose extends before choose().
+    resetPath(pages) {
+      if (!story) return;
+      story.pages = pages;
+      const choiceIndex = pages.findIndex((page) => page.choice);
+      store.extendShape({
+        pageCount: pages.length,
+        choicePage: choiceIndex === -1 ? null : choiceIndex,
+      });
+    },
+
     // A cover without a published story.json: the page timer stands in.
     clearStory() {
       story = null;
       narratingPage = null;
       updateWatchdog(store.state); // a retired instance must never wake the bird
+      stopChoiceClock();
     },
 
     // The cover tap: prefetch everything (spoken prompts included — the
@@ -292,7 +366,12 @@ export function createPlayback({
       story = loaded;
       narratingPage = null;
       updateWatchdog(store.state);
-      const promptUrls = [prompts.story_start, prompts.end, prompts.audio_retry].filter(Boolean);
+      const promptUrls = [
+        prompts.story_start,
+        prompts.end,
+        prompts.audio_retry,
+        prompts.choice_nudge,
+      ].filter(Boolean);
       prefetcher?.prefetchStory(loaded, promptUrls); // fire and forget; load() dedupes
 
       const choiceIndex = loaded.pages.findIndex((page, i) => i >= choiceSearchFrom && page.choice);

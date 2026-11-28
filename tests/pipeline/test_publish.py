@@ -14,6 +14,7 @@ from typing import Any
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 
@@ -556,6 +557,111 @@ def test_unpublish_retries_a_manifest_conflict_without_losing_a_concurrent_publi
     unpublish_story(to_remove, settings, client=s3)
 
     assert sorted(entry["id"] for entry in _manifest(s3)["stories"]) == [concurrent]
+
+
+def test_a_fresh_manifest_create_does_not_clobber_a_concurrent_create(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#181: two writers that both find no manifest must not overwrite each other.
+
+    The create carries IfNoneMatch="*", so when a concurrent publish creates
+    the manifest between this publish's read and its write, the create fails
+    its precondition and retries against the manifest that now exists. The
+    retried write is snapshotted like any other.
+    """
+    settings = _settings(tmp_path)
+    stage_story(_assembled(tmp_path, story_id="story-one"), settings, client=s3)
+    _stage_prompts(s3)
+
+    put_object = s3.put_object
+    manifest_key = "published/it/manifest.json"
+    creates: list[dict[str, Any]] = []
+    raced = False
+
+    def race_a_concurrent_create(**kwargs: Any) -> dict[str, Any]:
+        nonlocal raced
+        if kwargs["Key"] == manifest_key:
+            creates.append(kwargs)
+            if not raced:
+                raced = True
+                put_object(
+                    Bucket=BUCKET,
+                    Key=manifest_key,
+                    Body=json.dumps(
+                        {"language": "it", "prompts": {}, "stories": [{"id": "concurrent"}]}
+                    ).encode(),
+                    ContentType="application/json",
+                )
+        return put_object(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", race_a_concurrent_create)
+
+    result = publish_story("story-one", settings, client=s3)
+
+    assert creates[0]["IfNoneMatch"] == "*"
+    assert "IfNoneMatch" not in creates[1]
+    assert sorted(entry["id"] for entry in _manifest(s3)["stories"]) == ["concurrent", "story-one"]
+    assert sorted(result.manifest_story_ids) == ["concurrent", "story-one"]
+    latest = s3.get_object(Bucket=PENDING_BUCKET, Key=f"snapshots/manifests/latest/{manifest_key}")
+    assert json.loads(latest["Body"].read()) == _manifest(s3)
+
+
+def test_a_fresh_manifest_create_retries_a_409_conditional_request_conflict(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#181: R2 can answer a racing IfNoneMatch create with 409
+    ConditionalRequestConflict instead of 412; that is a conflict too, so the
+    create retries against the manifest that now exists (as records.py does)."""
+    settings = _settings(tmp_path)
+    stage_story(_assembled(tmp_path, story_id="story-one"), settings, client=s3)
+    _stage_prompts(s3)
+
+    put_object = s3.put_object
+    manifest_key = "published/it/manifest.json"
+    creates: list[dict[str, Any]] = []
+
+    def conflict_on_the_create(**kwargs: Any) -> dict[str, Any]:
+        if kwargs["Key"] == manifest_key:
+            creates.append(kwargs)
+            if len(creates) == 1:
+                put_object(
+                    Bucket=BUCKET,
+                    Key=manifest_key,
+                    Body=json.dumps(
+                        {"language": "it", "prompts": {}, "stories": [{"id": "concurrent"}]}
+                    ).encode(),
+                    ContentType="application/json",
+                )
+                raise ClientError(
+                    {
+                        "Error": {"Code": "ConditionalRequestConflict", "Message": "conflict"},
+                        "ResponseMetadata": {"HTTPStatusCode": 409},
+                    },
+                    "PutObject",
+                )
+        return put_object(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", conflict_on_the_create)
+
+    result = publish_story("story-one", settings, client=s3)
+
+    assert creates[0]["IfNoneMatch"] == "*"
+    assert "IfNoneMatch" not in creates[1]
+    assert sorted(result.manifest_story_ids) == ["concurrent", "story-one"]
+
+
+def test_a_fresh_manifest_create_snapshots_what_it_wrote(tmp_path: Path, s3: S3Client) -> None:
+    """#181 with #201: the create path, now conditional, still records a snapshot."""
+    settings = _settings(tmp_path)
+    stage_story(_assembled(tmp_path, story_id="story-one"), settings, client=s3)
+    _stage_prompts(s3)
+
+    publish_story("story-one", settings, client=s3)
+
+    manifest_key = "published/it/manifest.json"
+    latest = s3.get_object(Bucket=PENDING_BUCKET, Key=f"snapshots/manifests/latest/{manifest_key}")
+    assert json.loads(latest["Body"].read()) == _manifest(s3)
+    assert _keys(s3, f"snapshots/manifests/history/{manifest_key}/", bucket=PENDING_BUCKET)
 
 
 def test_publishing_a_second_story_appends_to_the_manifest(tmp_path: Path, s3: S3Client) -> None:
