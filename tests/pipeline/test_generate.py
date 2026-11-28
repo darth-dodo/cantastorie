@@ -245,6 +245,28 @@ def test_a_fresh_disk_does_not_rebuy_prompts_already_staged(tmp_path: Path, s3: 
     assert [o["Key"] for o in after["Contents"]] == [o["Key"] for o in before["Contents"]]
 
 
+def test_a_changed_prompt_is_staged_again(
+    tmp_path: Path, s3: S3Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M17 (#188): the staged check compares content, not names. A prompt whose
+    text changed is narrated and staged again, even on a fresh disk."""
+    spoken: list[str] = []
+    _italian_run(_settings(tmp_path / "first"), _counting_narration(spoken), "a" * 32)
+    prefix = f"{STAGED_PREFIX}/prompts/it/"
+    before = {
+        o["Key"] for o in s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=prefix)["Contents"]
+    }
+
+    new_line = "Fine! Un'altra ancora?"
+    monkeypatch.setitem(IT_UTTERANCES, "end_prompt", new_line)  # type: ignore[arg-type]
+    spoken.clear()
+    _italian_run(_settings(tmp_path / "second"), _counting_narration(spoken), "b" * 32)
+
+    after = {o["Key"] for o in s3.list_objects_v2(Bucket=PENDING_BUCKET, Prefix=prefix)["Contents"]}
+    assert new_line in spoken
+    assert [k for k in after - before if k.removeprefix(prefix).startswith("end_prompt.")]
+
+
 def test_rerunning_generate_reproduces_an_identical_staged_story(
     tmp_path: Path, s3: S3Client
 ) -> None:

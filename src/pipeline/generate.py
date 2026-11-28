@@ -32,9 +32,11 @@ from src.pipeline.publish import STAGED_PREFIX, _build_client, stage_story
 from src.pipeline.steps.assemble import assemble_story
 from src.pipeline.steps.image_safety import illustrate_safely
 from src.pipeline.steps.narrate import (
+    NARRATION_KEY_METADATA,
     narrate_choice_labels,
     narrate_pages,
     synthesize_utterances,
+    utterance_narration_key,
 )
 from src.pipeline.steps.revise import author_story
 from src.pipeline.steps.utterance_texts import UTTERANCE_TEXTS
@@ -118,17 +120,30 @@ def generate_story(
 
 
 def _prompts_already_staged(s3: S3Client, settings: Settings, language: Language) -> bool:
-    """Whether pending/staged/prompts/{lang}/ already holds every prompt.
+    """Whether pending/staged/prompts/{lang}/ already holds every current prompt.
 
     Story publish copies that prefix, so once all five are there a new run
-    has nothing to add: narrating again would only buy the same lines.
+    has nothing to add: narrating again would only buy the same lines. Each
+    staged prompt carries the hash of the text and voice it was narrated
+    from, so a prompt whose text or voice changed counts as missing.
     """
     prefix = f"{STAGED_PREFIX}/prompts/{language}/"
-    staged = {
-        item["Key"].removeprefix(prefix).split(".", 1)[0]
-        for page in s3.get_paginator("list_objects_v2").paginate(
-            Bucket=settings.pending_bucket, Prefix=prefix
+    staged: dict[str, list[str]] = {}
+    for page in s3.get_paginator("list_objects_v2").paginate(
+        Bucket=settings.pending_bucket, Prefix=prefix
+    ):
+        for item in page.get("Contents", []):
+            name = item["Key"].removeprefix(prefix).split(".", 1)[0]
+            staged.setdefault(name, []).append(item["Key"])
+
+    def current(name: str, text: str) -> bool:
+        expected = utterance_narration_key(text, language, settings)
+        return any(
+            s3.head_object(Bucket=settings.pending_bucket, Key=key)
+            .get("Metadata", {})
+            .get(NARRATION_KEY_METADATA)
+            == expected
+            for key in staged.get(name, [])
         )
-        for item in page.get("Contents", [])
-    }
-    return set(UTTERANCE_TEXTS[language]) <= staged
+
+    return all(current(name, text) for name, text in UTTERANCE_TEXTS[language].items())

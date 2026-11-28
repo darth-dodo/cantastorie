@@ -60,6 +60,16 @@ def _narration_inputs(
     return inputs
 
 
+# Object metadata on a staged prompt: the hash of the inputs it was narrated
+# from (text, voice, model), so a changed prompt is told apart from its name.
+NARRATION_KEY_METADATA = "narration-key"
+
+
+def utterance_narration_key(text: str, language: Language, settings: Settings) -> str:
+    """The content hash a spoken prompt's audio is cached and staged under."""
+    return cache_key(_narration_inputs(text, language, settings))
+
+
 def cached_utterance_audio(
     text: str, language: Language, settings: Settings, cache: ArtifactCache
 ) -> bytes | None:
@@ -68,7 +78,7 @@ def cached_utterance_audio(
     A pure lookup — never a TTS call — so a dry run can say which prompts a
     real run would pay for.
     """
-    key = cache_key(_narration_inputs(text, language, settings))
+    key = utterance_narration_key(text, language, settings)
     return cache.load(UTTERANCE_STEP, key, AUDIO_SUFFIX)
 
 
@@ -206,12 +216,17 @@ def synthesize_utterances(
         from src.pipeline.publish import CONTENT_TYPES, STAGED_PREFIX  # noqa: PLC0415
 
         bucket = settings.pending_bucket
-        for _name, path in produced.items():
+        for name, path in produced.items():
             s3_client.put_object(
                 Bucket=bucket,
                 Key=f"{STAGED_PREFIX}/prompts/{language}/{path.name}",
                 Body=path.read_bytes(),
                 ContentType=CONTENT_TYPES.get(path.suffix, "application/octet-stream"),
+                Metadata={
+                    NARRATION_KEY_METADATA: utterance_narration_key(
+                        utterances[name], language, settings
+                    )
+                },
             )
 
     return produced
