@@ -267,6 +267,19 @@ def test_a_changed_prompt_is_staged_again(
     assert [k for k in after - before if k.removeprefix(prefix).startswith("end_prompt.")]
 
 
+def test_prompts_staged_before_the_hash_was_recorded_are_kept(tmp_path: Path, s3: S3Client) -> None:
+    """M17 (#188): prompts staged without the narration-key metadata (before
+    it existed) count as current, so a run does not narrate them again."""
+    prefix = f"{STAGED_PREFIX}/prompts/it/"
+    for name in IT_UTTERANCES:
+        s3.put_object(Bucket=PENDING_BUCKET, Key=f"{prefix}{name}.0123456789abcdef.wav", Body=b"x")
+    spoken: list[str] = []
+
+    _italian_run(_settings(tmp_path), _counting_narration(spoken), "a" * 32)
+
+    assert _prompt_calls(spoken) == 0
+
+
 def test_rerunning_generate_reproduces_an_identical_staged_story(
     tmp_path: Path, s3: S3Client
 ) -> None:

@@ -125,7 +125,9 @@ def _prompts_already_staged(s3: S3Client, settings: Settings, language: Language
     Story publish copies that prefix, so once all five are there a new run
     has nothing to add: narrating again would only buy the same lines. Each
     staged prompt carries the hash of the text and voice it was narrated
-    from, so a prompt whose text or voice changed counts as missing.
+    from, so a prompt whose text or voice changed counts as missing. A prompt
+    staged before that hash was recorded carries none and counts as current;
+    publish-prompts refreshes those.
     """
     prefix = f"{STAGED_PREFIX}/prompts/{language}/"
     staged: dict[str, list[str]] = {}
@@ -138,12 +140,10 @@ def _prompts_already_staged(s3: S3Client, settings: Settings, language: Language
 
     def current(name: str, text: str) -> bool:
         expected = utterance_narration_key(text, language, settings)
-        return any(
-            s3.head_object(Bucket=settings.pending_bucket, Key=key)
-            .get("Metadata", {})
-            .get(NARRATION_KEY_METADATA)
-            == expected
-            for key in staged.get(name, [])
-        )
+        for key in staged.get(name, []):
+            metadata = s3.head_object(Bucket=settings.pending_bucket, Key=key).get("Metadata", {})
+            if metadata.get(NARRATION_KEY_METADATA, expected) == expected:
+                return True
+        return False
 
     return all(current(name, text) for name, text in UTTERANCE_TEXTS[language].items())
