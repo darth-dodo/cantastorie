@@ -6,6 +6,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from src.config import Settings, get_settings
+from src.observability import redact_family_tokens
 from src.pipeline.models import Story
 from src.pipeline.publish import (
     FAMILIES_SEGMENT,
@@ -107,12 +108,12 @@ def main() -> int:
     try:
         repaired = repair_manifests(get_settings(), dry_run=args.dry_run)
     except Exception as error:
-        print(f"Manifest repair failed: {error}", file=sys.stderr)
+        print(redact_family_tokens(f"Manifest repair failed: {error}"), file=sys.stderr)
         return 1
 
     action = "Would repair" if args.dry_run else "Repaired"
     for key in repaired:
-        print(f"{action} {key}")
+        print(f"{action} {redact_family_tokens(key)}")
     print(f"{action} {len(repaired)} manifest(s).")
     return 0
 

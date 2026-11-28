@@ -1,14 +1,18 @@
 import json
+import logging
+import sys
 from collections.abc import Iterator
 from typing import Any
 
 import boto3
 import pytest
+import scripts.repair_manifests as repair_script
 from moto import mock_aws
 from mypy_boto3_s3 import S3Client
 from scripts.repair_manifests import repair_manifests
 
 from src.config import Settings
+from src.observability import family_hash
 from src.pipeline.snapshots import HISTORY_PREFIX, latest_key
 
 BUCKET = "cantastorie-published"
@@ -192,10 +196,7 @@ def test_repair_manifests_snapshots_the_manifest_it_wrote(s3: S3Client) -> None:
 FAMILY = "a" * 32
 
 
-def test_repair_manifests_walks_family_overlay_manifests(s3: S3Client) -> None:
-    """M12 (#188): a family overlay manifest is repaired from its own lane,
-    reading the story from the family's stories/ and resolving relative URLs
-    against the family's public base."""
+def _put_family_manifest(s3: S3Client) -> str:
     family_root = f"published/families/{FAMILY}"
     manifest = {
         "language": "it",
@@ -225,6 +226,14 @@ def test_repair_manifests_walks_family_overlay_manifests(s3: S3Client) -> None:
         Key=f"{family_root}/stories/{STORY_ID}/story.json",
         Body=json.dumps(story).encode(),
     )
+    return manifest_key
+
+
+def test_repair_manifests_walks_family_overlay_manifests(s3: S3Client) -> None:
+    """M12 (#188): a family overlay manifest is repaired from its own lane,
+    reading the story from the family's stories/ and resolving relative URLs
+    against the family's public base."""
+    manifest_key = _put_family_manifest(s3)
 
     repaired = repair_manifests(_settings(), client=s3)
 
@@ -242,3 +251,47 @@ def test_repair_manifests_ignores_a_malformed_family_key(s3: S3Client) -> None:
     s3.put_object(Bucket=BUCKET, Key="published/families/not-a-token/it/manifest.json", Body=b"{}")
 
     assert repair_manifests(_settings(), client=s3) == []
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_repair_output_names_a_family_by_its_hash_never_its_token(
+    s3: S3Client,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+    dry_run: bool,
+) -> None:
+    """M12 (#188): repair output carries the family hash only, never a raw token."""
+    _put_family_manifest(s3)
+    monkeypatch.setattr(repair_script, "get_settings", _settings)
+    monkeypatch.setattr(repair_script, "_build_client", lambda _settings: s3)
+    monkeypatch.setattr(sys, "argv", ["repair_manifests", *(["--dry-run"] if dry_run else [])])
+
+    with caplog.at_level(logging.INFO):
+        assert repair_script.main() == 0
+
+    captured = capsys.readouterr()
+    output = captured.out + captured.err + caplog.text
+    assert FAMILY not in output
+    assert family_hash(FAMILY) in captured.out
+
+
+def test_repair_failure_line_names_a_family_by_its_hash_never_its_token(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def failing(*_args: object, **_kwargs: object) -> list[str]:
+        raise RuntimeError(f"NoSuchKey: published/families/{FAMILY}/it/manifest.json")
+
+    monkeypatch.setattr(repair_script, "get_settings", _settings)
+    monkeypatch.setattr(repair_script, "repair_manifests", failing)
+    monkeypatch.setattr(sys, "argv", ["repair_manifests"])
+
+    with caplog.at_level(logging.INFO):
+        assert repair_script.main() == 1
+
+    captured = capsys.readouterr()
+    output = captured.out + captured.err + caplog.text
+    assert FAMILY not in output
+    assert family_hash(FAMILY) in captured.err
