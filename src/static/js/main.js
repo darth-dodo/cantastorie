@@ -284,7 +284,15 @@ export async function init(
   }
 
   let stories = manifest?.stories ?? fallbackShelf;
-  let prefetcher = createPrefetcher({ engine, fetchFn });
+  // The spoken prompts stay decoded across story switches; any other
+  // story's buffers are dropped when a cover opens (M19).
+  const makePrefetcher = () =>
+    createPrefetcher({
+      engine,
+      fetchFn,
+      keepAudio: [...Object.values(manifest?.prompts ?? {}), offlinePromptUrl()],
+    });
+  let prefetcher = makePrefetcher();
   // The idle choice (M31): the cards nudge on screen beside the spoken nudge,
   // and the auto-continue follows the first option exactly as a tap would.
   const makePlayback = () =>
@@ -393,7 +401,7 @@ export async function init(
     playback.clearStory();
     manifest = await fetchShelf(lang);
     stories = manifest?.stories ?? fallbackShelf;
-    prefetcher = createPrefetcher({ engine, fetchFn });
+    prefetcher = makePrefetcher();
     // Retire the old instance before its replacement subscribes: left
     // subscribed, it would still react to the store and speak the old
     // language's prompts (M23).

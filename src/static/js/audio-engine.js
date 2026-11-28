@@ -175,6 +175,17 @@ export function createAudioEngine({
       return buffers.get(url);
     },
 
+    // Budget tablets (M19): decoded PCM is large, so a story switch keeps
+    // only the URLs it names (the open story and the spoken prompts) and
+    // drops every other buffer. A voice already playing holds its own
+    // reference to its buffer, so nothing audible is cut.
+    retainOnly(urls) {
+      const keep = new Set(urls);
+      for (const url of buffers.keys()) {
+        if (!keep.has(url)) buffers.delete(url);
+      }
+    },
+
     async playNarration(url, { offset = 0, onEnded } = {}) {
       ensureContext();
       if (prompt) {
